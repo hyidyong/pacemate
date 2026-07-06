@@ -106,22 +106,26 @@ export function AppHeader({
               >
                 <div className="flex flex-col gap-3">
                   <h3 className="font-bold text-emerald-800 text-sm mb-1 border-b border-emerald-100 pb-2">학습 및 진도</h3>
-                  <Link href="/dashboard" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">대시보드 홈</Link>
-                  <Link href="/roadmap" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">나의 로드맵</Link>
-                  <Link href="/courses" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">수강 과목 목록</Link>
+                  <Link href="/dashboard" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">대시보드 홈</Link>
+                  <Link href="/roadmap" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">나의 로드맵</Link>
+                  <Link href="/courses" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">수강 과목 목록</Link>
                 </div>
                 <div className="flex flex-col gap-3">
                   <h3 className="font-bold text-emerald-800 text-sm mb-1 border-b border-emerald-100 pb-2">상담 및 지원</h3>
-                  <Link href="/chatbot" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">AI 튜터에게 질문</Link>
-                  <Link href="/counseling" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">교수님 상담 신청</Link>
-                  <Link href="/support" className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">운영팀 문의</Link>
+                  <Link href="/chatbot" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">AI 튜터에게 질문</Link>
+                  <Link href="/counseling" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">교수님 상담 신청</Link>
+                  <Link href="/support" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">운영팀 문의</Link>
                 </div>
                 <div className="flex flex-col gap-3 bg-emerald-50 -my-6 -mr-6 p-6">
                   <h3 className="font-bold text-emerald-800 text-sm mb-1">PaceMate 커뮤니티</h3>
                   <p className="text-xs text-emerald-600 mb-2 leading-relaxed">
                     다른 학생들과 함께 공부 팁을 나누고 질문해 보세요!
                   </p>
-                  <Link href="/community" className="mt-auto bg-emerald-600 text-white text-xs font-bold py-2 px-4 rounded-xl text-center hover:bg-emerald-700 transition-colors">
+                  <Link 
+                    href="/community" 
+                    onClick={() => setIsMegaMenuOpen(false)}
+                    className="mt-auto bg-emerald-600 text-white text-xs font-bold py-2 px-4 rounded-xl text-center hover:bg-emerald-700 transition-colors block w-full relative z-10"
+                  >
                     커뮤니티 바로가기
                   </Link>
                 </div>
