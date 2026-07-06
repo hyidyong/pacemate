@@ -167,10 +167,19 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     </li>
                   ))}
             </ul>
-            <div className="inline-actions">
+            <div className="inline-actions flex flex-col gap-2">
               <Button asChild variant="outline">
                 <Link href="/onboarding">온보딩 다시 선택</Link>
               </Button>
+              {!isAdminLogin ? (
+                <Button asChild variant="ghost">
+                  <Link href="/login?role=admin">관리자용 로그인으로 전환</Link>
+                </Button>
+              ) : (
+                <Button asChild variant="ghost">
+                  <Link href="/login">일반 로그인으로 돌아가기</Link>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

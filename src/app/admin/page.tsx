@@ -45,11 +45,6 @@ export default async function AdminPage({
           <Button asChild variant="outline">
             <Link href="/roadmap">학생 로드맵 확인</Link>
           </Button>
-          <form action={clearDemoSession}>
-            <Button type="submit" variant="outline">
-              로그아웃
-            </Button>
-          </form>
         </div>
       </section>
 
@@ -110,6 +105,14 @@ export default async function AdminPage({
             ))}
           </div>
         </section>
+      </section>
+
+      <section className="section flex justify-center mt-8 mb-12">
+        <form action={clearDemoSession} className="w-full max-w-[200px]">
+          <Button type="submit" variant="outline" className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+            로그아웃
+          </Button>
+        </form>
       </section>
     </AppShell>
   );
