@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CircleHelp, GraduationCap, MessageSquareText, ShieldCheck, UserRound, Bot } from "lucide-react";
+import { CircleHelp, GraduationCap, MessageSquareText, ShieldCheck, UserRound, Bot, Sparkles } from "lucide-react";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
 import { appRoutes } from "@/lib/navigation";
 import {
