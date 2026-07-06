@@ -119,9 +119,6 @@ export default async function RoadmapPage() {
               <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </Button>
-          <Button asChild variant="outline">
-            <Link href="/onboarding">온보딩 수정</Link>
-          </Button>
         </div>
       </section>
 

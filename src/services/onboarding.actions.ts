@@ -112,9 +112,12 @@ export async function saveStudentOnboarding(formData: FormData) {
       interests: csv(formData.get("interests")),
       weak_basics: csv(formData.get("weakBasics")),
       completed_courses_text: text(formData.get("completedCourses")) || null,
+      is_onboarded: true,
     },
     { onConflict: "profile_id" },
   );
+
+  const returnTo = text(formData.get("returnTo"));
 
   if (error) {
     redirect(`/onboarding?error=${encodeURIComponent(error.message)}`);
@@ -123,7 +126,8 @@ export async function saveStudentOnboarding(formData: FormData) {
   revalidatePath("/onboarding");
   revalidatePath("/dashboard");
   revalidatePath("/roadmap");
-  redirect("/roadmap");
+  revalidatePath("/mypage");
+  redirect(returnTo || "/roadmap");
 }
 
 async function ensureDefaultSchoolAndDepartment(profileId: string) {

@@ -86,11 +86,11 @@ export async function createDemoSession(formData: FormData) {
   if (role === "student") {
     const { data: studentData } = await supabase
       .from("student_profiles")
-      .select("target_career")
+      .select("is_onboarded")
       .eq("profile_id", profileId)
       .maybeSingle();
 
-    if (!studentData?.target_career) {
+    if (!studentData?.is_onboarded) {
       redirect("/onboarding");
     }
   } else if (role === "assistant") {

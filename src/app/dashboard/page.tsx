@@ -159,38 +159,6 @@ export default async function DashboardPage() {
 
       <ScrollRevealList>
         <section className="section dashboard-grid">
-          <ScrollRevealItem>
-            <HoverGlowCard glowColor="rgba(16, 185, 129, 0.15)">
-              <Card className="border-0 shadow-none">
-                <CardHeader>
-                  <span className="icon-box">
-                    <Icon aria-hidden="true" />
-                  </span>
-                  <CardTitle>프로필</CardTitle>
-                  <CardDescription>
-                    Supabase `profiles`에 저장된 데모 사용자입니다.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="detail-grid">
-                    <div className="detail-item">
-                      <span>이름</span>
-                      <strong>{profile.name}</strong>
-                    </div>
-                    <div className="detail-item">
-                      <span>식별자</span>
-                      <strong>{profile.identifier}</strong>
-                    </div>
-                    <div className="detail-item">
-                      <span>역할</span>
-                      <strong>{profile.role}</strong>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </HoverGlowCard>
-          </ScrollRevealItem>
-
           {profile.role === "student" && (
             <ScrollRevealItem>
               <div className="md:hidden">

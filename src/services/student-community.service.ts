@@ -75,6 +75,7 @@ export type MyPageData = {
   scrapedPosts: CommunityPostRecord[];
   commentedPosts: CommunityPostRecord[];
   likedPosts: CommunityPostRecord[];
+  savedProfile?: any;
 };
 
 const defaultSchoolName = "계명대학교";
@@ -114,7 +115,17 @@ export async function getMyPageData(
     getLikedPosts(profile?.id),
   ]);
 
-  return { schoolName, profile, courses, myCourses, myPosts, scrapedPosts, commentedPosts, likedPosts };
+  let savedProfile = null;
+  if (profile?.id && profile.role === "student") {
+    const { data } = await supabase
+      .from("student_profiles")
+      .select("*")
+      .eq("profile_id", profile.id)
+      .maybeSingle();
+    savedProfile = data;
+  }
+
+  return { schoolName, profile, courses, myCourses, myPosts, scrapedPosts, commentedPosts, likedPosts, savedProfile };
 }
 
 export async function getCommunityData(
