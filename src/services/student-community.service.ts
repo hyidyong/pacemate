@@ -1,0 +1,325 @@
+import { supabase } from "@/lib/supabase/client";
+import type { DemoProfile } from "@/services/session.service";
+
+export type CourseRecord = {
+  id: string;
+  school_id: string | null;
+  code: string;
+  name: string;
+  credit: number;
+  category: string | null;
+  description: string | null;
+  prerequisite_text: string | null;
+};
+
+export type StudentCourseRecord = {
+  id: string;
+  status: "completed" | "interested" | "recommended";
+  is_favorite: boolean;
+  schedule_day: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  classroom: string | null;
+  semester_label: string;
+  course: CourseRecord;
+};
+
+export type CommunityPostRecord = {
+  id: string;
+  author_id: string | null;
+  category: string;
+  board_key: string;
+  title: string;
+  content: string;
+  course_id: string | null;
+  school_id: string | null;
+  display_mode: string;
+  anonymous_alias: string | null;
+  view_count: number;
+  is_resolved: boolean;
+  created_at: string;
+  course: Pick<CourseRecord, "id" | "code" | "name"> | null;
+  author: { id: string; name: string; role: string } | null;
+  likes: number;
+  scraps: number;
+  comments: number;
+  is_liked: boolean;
+  is_scrapped: boolean;
+};
+
+export type CommunityCommentRecord = {
+  id: string;
+  post_id: string;
+  author_id: string | null;
+  content: string;
+  display_mode: string;
+  anonymous_alias: string | null;
+  created_at: string;
+  author: { id: string; name: string; role: string } | null;
+};
+
+export type CommunityData = {
+  schoolName: string;
+  profile: DemoProfile | null;
+  courses: CourseRecord[];
+  myCourses: StudentCourseRecord[];
+  posts: CommunityPostRecord[];
+};
+
+export type MyPageData = {
+  schoolName: string;
+  profile: DemoProfile | null;
+  courses: CourseRecord[];
+  myCourses: StudentCourseRecord[];
+  myPosts: CommunityPostRecord[];
+  scrapedPosts: CommunityPostRecord[];
+  commentedPosts: CommunityPostRecord[];
+  likedPosts: CommunityPostRecord[];
+};
+
+const defaultSchoolName = "계명대학교";
+
+export async function ensureProfileSchool(profile: DemoProfile | null) {
+  if (!profile || profile.school_id) {
+    return;
+  }
+
+  const { data: school } = await supabase
+    .from("schools")
+    .select("id")
+    .eq("name", defaultSchoolName)
+    .maybeSingle();
+
+  if (school?.id) {
+    await supabase
+      .from("profiles")
+      .update({ school_id: school.id })
+      .eq("id", profile.id);
+  }
+}
+
+export async function getMyPageData(
+  profile: DemoProfile | null,
+): Promise<MyPageData> {
+  await ensureProfileSchool(profile);
+  const [schoolName, courses, myCourses] = await Promise.all([
+    getSchoolName(profile),
+    getCourses(),
+    getMyCourses(profile?.id),
+  ]);
+  const [myPosts, scrapedPosts, commentedPosts, likedPosts] = await Promise.all([
+    getMyPosts(profile?.id),
+    getScrapedPosts(profile?.id),
+    getCommentedPosts(profile?.id),
+    getLikedPosts(profile?.id),
+  ]);
+
+  return { schoolName, profile, courses, myCourses, myPosts, scrapedPosts, commentedPosts, likedPosts };
+}
+
+export async function getCommunityData(
+  profile: DemoProfile | null,
+): Promise<CommunityData> {
+  await ensureProfileSchool(profile);
+  const [schoolName, courses, myCourses, posts] = await Promise.all([
+    getSchoolName(profile),
+    getCourses(),
+    getMyCourses(profile?.id),
+    getPosts(profile?.id),
+  ]);
+
+  return { schoolName, profile, courses, myCourses, posts };
+}
+
+async function getSchoolName(profile: DemoProfile | null) {
+  if (profile?.school_id) {
+    const { data } = await supabase
+      .from("schools")
+      .select("name")
+      .eq("id", profile.school_id)
+      .maybeSingle();
+
+    if (data?.name) {
+      return data.name;
+    }
+  }
+
+  return defaultSchoolName;
+}
+
+async function getCourses(): Promise<CourseRecord[]> {
+  const { data, error } = await supabase
+    .from("courses")
+    .select(
+      "id, school_id, code, name, credit, category, description, prerequisite_text",
+    )
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to load courses: ${error.message}`);
+  }
+
+  return (data ?? []) as CourseRecord[];
+}
+
+async function getMyCourses(
+  profileId?: string,
+): Promise<StudentCourseRecord[]> {
+  if (!profileId) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("student_courses")
+    .select(
+      "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text)",
+    )
+    .eq("student_id", profileId)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load my courses: ${error.message}`);
+  }
+
+  return (data ?? []) as unknown as StudentCourseRecord[];
+}
+
+async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
+  const { data, error } = await supabase
+    .from("posts")
+    .select(
+      "id, author_id, category, board_key, title, content, course_id, school_id, display_mode, anonymous_alias, view_count, is_resolved, created_at, course:courses(id, code, name), author:profiles(id, name, role)",
+    )
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(80);
+
+  if (error) {
+    throw new Error(`Failed to load posts: ${error.message}`);
+  }
+
+  const posts = (data ?? []) as unknown as Array<
+    Omit<CommunityPostRecord, "likes" | "scraps" | "comments" | "is_liked" | "is_scrapped">
+  >;
+
+  if (!posts.length) {
+    return [];
+  }
+
+  const postIds = posts.map((post) => post.id);
+  const { data: reactions } = await supabase
+    .from("post_reactions")
+    .select("post_id, user_id, type")
+    .in("post_id", postIds);
+
+  const { data: comments } = await supabase
+    .from("comments")
+    .select("post_id")
+    .eq("status", "active")
+    .in("post_id", postIds);
+
+  const counts = new Map<string, { likes: number; scraps: number }>();
+  const myReactions = new Map<string, { liked: boolean; scrapped: boolean }>();
+  for (const reaction of reactions ?? []) {
+    const current = counts.get(reaction.post_id) ?? { likes: 0, scraps: 0 };
+    if (reaction.type === "like") {
+      current.likes += 1;
+    }
+    if (reaction.type === "scrap") {
+      current.scraps += 1;
+    }
+    counts.set(reaction.post_id, current);
+
+    if (profileId && reaction.user_id === profileId) {
+      const mine = myReactions.get(reaction.post_id) ?? { liked: false, scrapped: false };
+      if (reaction.type === "like") {
+        mine.liked = true;
+      }
+      if (reaction.type === "scrap") {
+        mine.scrapped = true;
+      }
+      myReactions.set(reaction.post_id, mine);
+    }
+  }
+
+  const commentCounts = new Map<string, number>();
+  for (const comment of comments ?? []) {
+    commentCounts.set(comment.post_id, (commentCounts.get(comment.post_id) ?? 0) + 1);
+  }
+
+  return posts.map((post) => ({
+    ...post,
+    likes: counts.get(post.id)?.likes ?? 0,
+    scraps: counts.get(post.id)?.scraps ?? 0,
+    comments: commentCounts.get(post.id) ?? 0,
+    is_liked: myReactions.get(post.id)?.liked ?? false,
+    is_scrapped: myReactions.get(post.id)?.scrapped ?? false,
+  }));
+}
+
+export async function getPostComments(postIds: string[]): Promise<Record<string, CommunityCommentRecord[]>> {
+  if (!postIds.length) {
+    return {};
+  }
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select("id, post_id, author_id, content, display_mode, anonymous_alias, created_at, author:profiles(id, name, role)")
+    .eq("status", "active")
+    .in("post_id", postIds)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to load comments: ${error.message}`);
+  }
+
+  const grouped: Record<string, CommunityCommentRecord[]> = {};
+  for (const comment of (data ?? []) as unknown as CommunityCommentRecord[]) {
+    grouped[comment.post_id] = [...(grouped[comment.post_id] ?? []), comment];
+  }
+
+  return grouped;
+}
+
+async function getScrapedPosts(profileId?: string): Promise<CommunityPostRecord[]> {
+  if (!profileId) {
+    return [];
+  }
+
+  const { data } = await supabase
+    .from("post_reactions")
+    .select("post_id")
+    .eq("user_id", profileId)
+    .eq("type", "scrap");
+
+  const postIds = (data ?? []).map((item) => item.post_id).filter(Boolean);
+  if (!postIds.length) {
+    return [];
+  }
+
+  const posts = await getPosts(profileId);
+  const scrapedIds = new Set(postIds);
+  return posts.filter((post) => scrapedIds.has(post.id));
+}
+
+async function getMyPosts(profileId?: string): Promise<CommunityPostRecord[]> {
+  if (!profileId) return [];
+  const posts = await getPosts(profileId);
+  return posts.filter((post) => post.author_id === profileId);
+}
+
+async function getLikedPosts(profileId?: string): Promise<CommunityPostRecord[]> {
+  if (!profileId) return [];
+  const { data } = await supabase.from("post_reactions").select("post_id").eq("user_id", profileId).eq("type", "like");
+  const postIds = new Set((data ?? []).map(item => item.post_id));
+  const posts = await getPosts(profileId);
+  return posts.filter((post) => postIds.has(post.id));
+}
+
+async function getCommentedPosts(profileId?: string): Promise<CommunityPostRecord[]> {
+  if (!profileId) return [];
+  const { data } = await supabase.from("comments").select("post_id").eq("author_id", profileId).eq("status", "active");
+  const postIds = new Set((data ?? []).map(item => item.post_id));
+  const posts = await getPosts(profileId);
+  return posts.filter((post) => postIds.has(post.id));
+}
