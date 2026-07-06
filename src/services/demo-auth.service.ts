@@ -2,189 +2,99 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { authProvider } from "@/lib/auth";
+import { getRoleByUserId } from "@/lib/db";
 import { getRoleHomePath } from "@/services/session.service";
-import crypto from "crypto";
-
-const roleLabels = {
-  student: "학생",
-  professor: "교수",
-  assistant: "조교",
-  admin: "관리자",
-} as const;
-
-type DemoRole = keyof typeof roleLabels;
-type StudentType =
-  | "freshman"
-  | "transfer"
-  | "cross_major"
-  | "double_major"
-  | "current_student";
-
-const allowedStudentTypes = new Set<StudentType>([
-  "freshman",
-  "transfer",
-  "cross_major",
-  "double_major",
-  "current_student",
-]);
-
-const adminLoginKey = process.env.PACEMATE_ADMIN_LOGIN_KEY ?? "PACEMATE-ADMIN-2026";
-
-function normalizeRole(value: FormDataEntryValue | null): DemoRole {
-  if (
-    value === "student" ||
-    value === "professor" ||
-    value === "assistant" ||
-    value === "admin"
-  ) {
-    return value;
-  }
-
-  return "student";
-}
+import { supabase } from "@/lib/supabase/client";
+import demoUsers from "@/config/demo-users.json";
 
 function normalizeRequiredText(value: FormDataEntryValue | null, fallback = "") {
   const text = typeof value === "string" ? value.trim() : "";
   return text || fallback;
 }
 
-function normalizePendingStudentTypes(value?: string) {
-  return (value ?? "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item): item is StudentType => allowedStudentTypes.has(item as StudentType));
-}
-
-function hashPassword(password: string) {
-  return crypto.createHash("sha256").update(password).digest("hex");
-}
-
 export async function createDemoSession(formData: FormData) {
   const cookieStore = await cookies();
-  const pendingRole = cookieStore.get("pacemate_pending_role")?.value;
-  const role = normalizeRole(formData.get("role") || pendingRole || null);
-  const adminKey = normalizeRequiredText(formData.get("adminKey"));
-  const identifier =
-    role === "admin" ? "pacemate-admin" : normalizeRequiredText(formData.get("identifier"));
-  const name =
-    role === "admin"
-      ? "관리자"
-      : normalizeRequiredText(formData.get("name"), `${roleLabels[role]} 사용자`);
+  const identifier = normalizeRequiredText(formData.get("identifier"));
   const password = normalizeRequiredText(formData.get("password"));
 
   if (!identifier) {
     redirect("/login?error=identifier");
   }
 
-  if (role !== "admin" && !password) {
+  if (!password) {
     redirect("/login?error=password_required");
   }
 
-  if (role === "admin" && adminKey !== adminLoginKey) {
-    redirect("/login?role=admin&error=admin_key");
-  }
+  // 1. Auth Provider를 통한 인증
+  const authResult = await authProvider.login(identifier, password);
+  let profileId = authResult?.id;
 
-  const { data: existingProfile, error: readError } = await supabase
-    .from("profiles")
-    .select("id, identifier, name, role")
-    .eq("identifier", identifier)
-    .maybeSingle();
-
-  if (readError) {
-    redirect("/login?error=read");
-  }
-
-  let profile = existingProfile;
-
-  if (profile) {
-    if (role !== "admin" && profile.role !== role) {
-      // Update role in DB to match what the user selected in the demo login screen
-      await supabase.from("profiles").update({ role }).eq("id", profile.id);
-      profile.role = role as any;
+  // 데모 편의: DB에 유저가 없으면 demoUsers.json에서 찾아 생성해줌
+  if (!profileId) {
+    const demoUser = demoUsers.find((u) => u.identifier === identifier);
+    if (demoUser && demoUser.password === password) {
+      const { data: newProfile, error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          identifier: demoUser.identifier,
+          name: demoUser.name,
+          role: demoUser.role,
+        })
+        .select("id")
+        .single();
+        
+      if (!insertError && newProfile) {
+        profileId = newProfile.id;
+      }
+    } else {
+      // 데모 유저도 아니면 로그인 실패
+      redirect("/login?error=invalid_password");
     }
-    // Temporarily disabled password hashing verification because the column is not in the database yet
-    // if (role !== "admin") {
-    //   const hashed = hashPassword(password);
-    //   if (profile.password_hash && profile.password_hash !== hashed) {
-    //     redirect("/login?error=invalid_password");
-    //   }
-    //   if (!profile.password_hash) {
-    //     await supabase.from("profiles").update({ password_hash: hashed }).eq("id", profile.id);
-    //   }
-    // }
-  } else {
-    profile = await createProfile({ identifier, name, role, password });
   }
 
-  if (!profile) {
-    redirect("/login?error=create");
-    throw new Error("create profile failed");
+  if (!profileId) {
+    redirect("/login?error=invalid_password");
+    throw new Error("Login failed");
   }
 
-  cookieStore.set("pacemate_profile_id", profile!.id, {
+  // 2. RBAC 적용 (로그인 성공 후 DB에서 Role 조회)
+  const role = await getRoleByUserId(profileId);
+  if (!role) {
+    redirect("/login?error=read");
+    throw new Error("Role not found");
+  }
+
+  // 세션 설정
+  cookieStore.set("pacemate_profile_id", profileId, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
   });
-  cookieStore.set("pacemate_role", profile!.role, {
+  cookieStore.set("pacemate_role", role, {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
   });
 
-  await applyPendingOnboarding(profile!.id, role, cookieStore.get("pacemate_pending_student_types")?.value);
-  cookieStore.delete("pacemate_pending_role");
-  cookieStore.delete("pacemate_pending_student_types");
-
-  // Redirection Logic
-  if (profile!.role === "student") {
-    // Check if onboarded (target_career is not null when onboarded)
+  // Redirection Logic (기존 로직 유지)
+  if (role === "student") {
     const { data: studentData } = await supabase
       .from("student_profiles")
       .select("target_career")
-      .eq("profile_id", profile!.id)
+      .eq("profile_id", profileId)
       .maybeSingle();
 
     if (!studentData?.target_career) {
       redirect("/onboarding");
     }
-  } else if (profile!.role === "assistant") {
+  } else if (role === "assistant") {
     if (!cookieStore.get("pacemate_advising_professor_id")) {
       redirect("/onboarding?step=assistant-lab");
     }
   }
 
-  redirect(getRoleHomePath(profile!.role));
-}
-
-async function createProfile({
-  identifier,
-  name,
-  role,
-  password,
-}: {
-  identifier: string;
-  name: string;
-  role: DemoRole;
-  password?: string;
-}) {
-  const insertData: any = { identifier, name, role };
-  // if (role !== "admin" && password) {
-  //   insertData.password_hash = hashPassword(password);
-  // }
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .insert(insertData)
-    .select("id, identifier, name, role")
-    .single();
-
-  if (error) {
-    redirect("/login?error=create");
-  }
-
-  return data;
+  redirect(getRoleHomePath(role as any));
 }
 
 export async function clearDemoSession() {
@@ -192,28 +102,4 @@ export async function clearDemoSession() {
   cookieStore.delete("pacemate_profile_id");
   cookieStore.delete("pacemate_role");
   redirect("/login");
-}
-
-async function applyPendingOnboarding(
-  profileId: string,
-  role: DemoRole,
-  rawStudentTypes?: string,
-) {
-  if (role !== "student") {
-    return;
-  }
-
-  const userTypes = normalizePendingStudentTypes(rawStudentTypes);
-
-  if (!userTypes.length) {
-    return;
-  }
-
-  await supabase.from("student_profiles").upsert(
-    {
-      profile_id: profileId,
-      user_types: userTypes,
-    },
-    { onConflict: "profile_id" },
-  );
 }

@@ -1,0 +1,34 @@
+[
+  {
+    "identifier": "student1@pacemate.edu",
+    "password": "password123",
+    "name": "김학생",
+    "role": "student",
+    "school": "한국대학교",
+    "department": "컴퓨터공학과"
+  },
+  {
+    "identifier": "prof1@pacemate.edu",
+    "password": "password123",
+    "name": "이교수",
+    "role": "professor",
+    "school": "한국대학교",
+    "department": "소프트웨어학과"
+  },
+  {
+    "identifier": "assistant1@pacemate.edu",
+    "password": "password123",
+    "name": "박조교",
+    "role": "assistant",
+    "school": "한국대학교",
+    "department": "소프트웨어학과"
+  },
+  {
+    "identifier": "admin1@pacemate.edu",
+    "password": "password123",
+    "name": "최관리자",
+    "role": "admin",
+    "school": "한국대학교",
+    "department": "운영지원팀"
+  }
+]
