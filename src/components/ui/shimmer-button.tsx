@@ -19,7 +19,7 @@ export const ShimmerButton = React.forwardRef<HTMLButtonElement, ShimmerButtonPr
           "relative inline-flex h-12 items-center justify-center overflow-hidden rounded-xl bg-emerald-600 px-6 font-semibold text-white transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:bg-emerald-700 hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)]",
           className
         )}
-        {...props}
+        {...(props as any)}
       >
         <span className="relative z-10 flex items-center gap-2">{children}</span>
         

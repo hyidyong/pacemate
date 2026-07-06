@@ -45,7 +45,7 @@ export function ScrollReveal({ children, width = "100%" }: ScrollRevealProps) {
             If we want true stagger, we should map over children, but let's provide a wrapper
             that applies the item variant to this div itself for simple usage,
             and export the Item component for complex lists. */}
-        <motion.div variants={itemVariants}>{children}</motion.div>
+        <motion.div variants={itemVariants as any}>{children}</motion.div>
       </motion.div>
     </div>
   );
@@ -88,5 +88,7 @@ export function ScrollRevealItem({ children }: { children: React.ReactNode }) {
     },
   };
 
-  return <motion.div variants={itemVariants}>{children}</motion.div>;
+  return (
+    <motion.div variants={itemVariants as any}>{children}</motion.div>
+  );
 }
