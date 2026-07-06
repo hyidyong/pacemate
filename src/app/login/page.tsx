@@ -28,6 +28,8 @@ const errorMessages: Record<string, string> = {
   create: "로그인 처리 중 문제가 발생했습니다.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const [params, profile] = await Promise.all([searchParams, getDemoProfile()]);
   if (profile) {

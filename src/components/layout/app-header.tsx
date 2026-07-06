@@ -221,7 +221,10 @@ export function AppHeader({
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="flex items-center gap-3 text-lg font-medium text-gray-700 hover:text-emerald-600 p-2 rounded-lg hover:bg-emerald-50 transition-colors"
                   >
-                    {Icon && <Icon size={20} />}
+                    {Icon && (
+                      // @ts-expect-error Icon types may not strictly include size in all unions
+                      <Icon size={20} />
+                    )}
                     {route.label}
                   </Link>
                 );

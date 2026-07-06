@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { OnboardingStartForm } from "@/components/onboarding/onboarding-start-form";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { saveStudentOnboarding, saveAssistantOnboarding } from "@/services/onboarding.actions";
 import { getStudentOnboardingProfile, type StudentType } from "@/services/onboarding.service";
 import { redirectNonStudent } from "@/services/role-guard.service";
-import { getDemoProfile } from "@/services/session.service";
+import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
 
 type OnboardingPageProps = {
   searchParams?: Promise<{
