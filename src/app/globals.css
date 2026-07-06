@@ -1,3 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --animate-shimmer: shimmer 2s infinite;
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}
+
 :root {
   --background: #f9fbf9;
   --foreground: #17201a;

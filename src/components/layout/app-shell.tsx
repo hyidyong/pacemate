@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CircleHelp, GraduationCap, MessageSquareText, ShieldCheck, UserRound, Bot, Sparkles } from "lucide-react";
+import { AppHeader } from "@/components/layout/app-header";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
 import { appRoutes } from "@/lib/navigation";
 import {
@@ -51,82 +52,16 @@ export async function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="app-shell">
-      <header className="site-header hidden md:flex">
-        <Link href={homeHref} className="brand" aria-label="PaceMate home">
-          <span>
-            <strong>PaceMate</strong>
-            <small>AI 학사 어시스턴트</small>
-          </span>
-        </Link>
-        <nav className="nav-links" aria-label="Primary navigation">
-          {desktopRoutes.map((route) => (
-            <Link href={route.href} key={route.href}>
-              {route.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="header-actions" aria-label="Quick navigation">
-          {isAuthenticated ? (
-            <Link
-              href="/support"
-              className="header-action-link header-icon-link hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200"
-              aria-label="문의하기"
-            >
-              <CircleHelp aria-hidden="true" />
-              <span className="sr-only">문의하기</span>
-            </Link>
-          ) : null}
-          {isAuthenticated ? (
-            <NotificationMenu notifications={notifications} unreadCount={unreadCount} />
-          ) : null}
-          {isAuthenticated && !isProfessor && !isOperator ? (
-            <>
-              <Link href="/chatbot" className="header-action-link header-icon-link hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200" aria-label="AI 튜터">
-                <Bot aria-hidden="true" />
-                <span className="sr-only">AI 튜터</span>
-              </Link>
-              <Link href="/community" className="header-action-link header-action-community hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
-                <MessageSquareText aria-hidden="true" />
-                <span>커뮤니티</span>
-              </Link>
-              <Link
-                href="/mypage"
-                className="header-action-link header-icon-link header-action-primary hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200"
-                aria-label="마이페이지로 이동"
-              >
-                <UserRound aria-hidden="true" />
-                <span className="sr-only">마이페이지</span>
-              </Link>
-            </>
-          ) : null}
-          {isAuthenticated && isProfessor ? (
-            <Link href="/professor" className="header-action-link header-action-primary header-action-professor hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
-              <GraduationCap aria-hidden="true" />
-              <span>교수 홈</span>
-            </Link>
-          ) : null}
-          {isAuthenticated && isOperator ? (
-            <Link href="/admin" className="header-action-link header-action-primary hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
-              <ShieldCheck aria-hidden="true" />
-              <span>운영 홈</span>
-            </Link>
-          ) : null}
-        </div>
-      </header>
-      
-      {/* Mobile Header (simplified) */}
-      <header className="site-header flex md:hidden px-4 justify-between">
-        <Link href={homeHref} className="brand" aria-label="PaceMate home">
-          <span>
-            <strong>PaceMate</strong>
-          </span>
-        </Link>
-        <div className="flex items-center gap-2">
-          {isAuthenticated ? (
-            <NotificationMenu notifications={notifications} unreadCount={unreadCount} />
-          ) : null}
-        </div>
-      </header>
+      <AppHeader
+        isAuthenticated={isAuthenticated}
+        isProfessor={isProfessor}
+        isOperator={isOperator}
+        homeHref={homeHref}
+        desktopRoutes={desktopRoutes}
+        mobileRoutes={mobileRoutes}
+        notifications={notifications}
+        unreadCount={unreadCount}
+      />
 
       <main className="pb-[70px] md:pb-0">{children}</main>
 

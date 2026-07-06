@@ -85,7 +85,7 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
           <Sparkles size={24} strokeWidth={2.5} />
         </div>
         <div className="ai-tutor-header-text">
-          <h2>Zenspike AI Tutor</h2>
+          <h2>PaceMate AI Tutor</h2>
           <p>PaceMate 프리미엄 학습 어시스턴트</p>
         </div>
       </div>

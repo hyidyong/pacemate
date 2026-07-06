@@ -16,6 +16,11 @@ import { getDemoProfile } from "@/services/session.service";
 import { WeeklyMissions } from "@/components/roadmap/weekly-missions";
 import { supabase } from "@/lib/supabase/client";
 
+// Import Micro-Interactions
+import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
+import { HoverGlowCard } from "@/components/ui/hover-glow-card";
+import { ShimmerButton } from "@/components/ui/shimmer-button";
+
 const roleCopy = {
   student: {
     title: "학생 대시보드",
@@ -57,22 +62,24 @@ export default async function DashboardPage() {
   if (!profile) {
     return (
       <AppShell>
-        <section className="screen-hero">
-          <span className="status-line">로그인이 필요합니다</span>
-          <h1>개인화 대시보드</h1>
-          <p>
-            데모 로그인을 완료하면 역할별 대시보드와 다음 작업을 확인할 수
-            있습니다.
-          </p>
-          <div className="actions">
-            <Button asChild>
+        <ScrollReveal>
+          <section className="screen-hero">
+            <span className="status-line">로그인이 필요합니다</span>
+            <h1>개인화 대시보드</h1>
+            <p>
+              데모 로그인을 완료하면 역할별 대시보드와 다음 작업을 확인할 수
+              있습니다.
+            </p>
+            <div className="actions">
               <Link href="/login" data-testid="dashboard-login-link">
-                데모 로그인
-                <ArrowRight size={16} aria-hidden="true" />
+                <ShimmerButton>
+                  데모 로그인
+                  <ArrowRight size={16} aria-hidden="true" />
+                </ShimmerButton>
               </Link>
-            </Button>
-          </div>
-        </section>
+            </div>
+          </section>
+        </ScrollReveal>
       </AppShell>
     );
   }
@@ -115,86 +122,108 @@ export default async function DashboardPage() {
 
   return (
     <AppShell>
-      <section className="screen-hero">
-        <span className="status-line">현재 사용자: {profile.name}</span>
-        <h1>{copy.title}</h1>
-        <p>{copy.description}</p>
-        <div className="actions">
-          <Button asChild>
+      <ScrollReveal>
+        <section className="screen-hero">
+          <span className="status-line">현재 사용자: {profile.name}</span>
+          <h1>{copy.title}</h1>
+          <p>{copy.description}</p>
+          <div className="actions">
             <Link href={copy.primaryHref} data-testid="dashboard-primary-action">
-              {copy.primaryLabel}
-              <ArrowRight size={16} aria-hidden="true" />
+              <ShimmerButton>
+                {copy.primaryLabel}
+                <ArrowRight size={16} aria-hidden="true" />
+              </ShimmerButton>
             </Link>
-          </Button>
-          <form action={clearDemoSession}>
-            <Button type="submit" variant="outline" data-testid="dashboard-logout">
-              로그아웃
-            </Button>
-          </form>
-        </div>
-      </section>
-
-      <NotificationStrip notifications={notifications} />
-
-      <section className="section dashboard-grid">
-        <Card>
-          <CardHeader>
-            <span className="icon-box">
-              <Icon aria-hidden="true" />
-            </span>
-            <CardTitle>프로필</CardTitle>
-            <CardDescription>
-              Supabase `profiles`에 저장된 데모 사용자입니다.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="detail-grid">
-              <div className="detail-item">
-                <span>이름</span>
-                <strong>{profile.name}</strong>
-              </div>
-              <div className="detail-item">
-                <span>식별자</span>
-                <strong>{profile.identifier}</strong>
-              </div>
-              <div className="detail-item">
-                <span>역할</span>
-                <strong>{profile.role}</strong>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {profile.role === "student" && (
-          <div className="md:hidden">
-            <Link href="/courses" className="block p-5 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl text-white shadow-md hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold mb-1">과목 및 강의 계획 관리</h3>
-                  <p className="text-emerald-50 text-sm">수강 과목 로드맵 및 상세 정보</p>
-                </div>
-                <ArrowRight size={24} className="opacity-80" />
-              </div>
-            </Link>
+            <form action={clearDemoSession}>
+              <Button type="submit" variant="outline" data-testid="dashboard-logout">
+                로그아웃
+              </Button>
+            </form>
           </div>
-        )}
-      </section>
+        </section>
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <NotificationStrip notifications={notifications} />
+      </ScrollReveal>
+
+      <ScrollRevealList>
+        <section className="section dashboard-grid">
+          <ScrollRevealItem>
+            <HoverGlowCard glowColor="rgba(16, 185, 129, 0.15)">
+              <Card className="border-0 shadow-none">
+                <CardHeader>
+                  <span className="icon-box">
+                    <Icon aria-hidden="true" />
+                  </span>
+                  <CardTitle>프로필</CardTitle>
+                  <CardDescription>
+                    Supabase `profiles`에 저장된 데모 사용자입니다.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="detail-grid">
+                    <div className="detail-item">
+                      <span>이름</span>
+                      <strong>{profile.name}</strong>
+                    </div>
+                    <div className="detail-item">
+                      <span>식별자</span>
+                      <strong>{profile.identifier}</strong>
+                    </div>
+                    <div className="detail-item">
+                      <span>역할</span>
+                      <strong>{profile.role}</strong>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </HoverGlowCard>
+          </ScrollRevealItem>
+
+          {profile.role === "student" && (
+            <ScrollRevealItem>
+              <div className="md:hidden">
+                <Link href="/courses" className="block p-5 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl text-white shadow-md hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold mb-1">과목 및 강의 계획 관리</h3>
+                      <p className="text-emerald-50 text-sm">수강 과목 로드맵 및 상세 정보</p>
+                    </div>
+                    <ArrowRight size={24} className="opacity-80" />
+                  </div>
+                </Link>
+              </div>
+            </ScrollRevealItem>
+          )}
+        </section>
+      </ScrollRevealList>
 
       {profile.role === "student" && coursesData.length > 0 && (
-        <section className="section" style={{ marginTop: "32px" }}>
-          <h2 style={{ fontSize: "1.25rem", fontWeight: "bold", marginBottom: "16px" }}>수강 중인 과목 학습 관리 (스마트 로드맵)</h2>
-          {coursesData.map((c) => (
-            <div key={c.courseId} style={{ marginBottom: "24px" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: "600", borderBottom: "2px solid var(--color-border)", paddingBottom: "8px" }}>{c.courseName}</h3>
-              <WeeklyMissions 
-                studentId={profile.id}
-                courseId={c.courseId}
-                currentWeek={c.currentWeek}
-                initialGuide={c.initialGuide}
-              />
-            </div>
-          ))}
-        </section>
+        <ScrollRevealList>
+          <section className="section" style={{ marginTop: "32px" }}>
+            <ScrollRevealItem>
+              <h2 style={{ fontSize: "1.25rem", fontWeight: "bold", marginBottom: "16px" }}>수강 중인 과목 학습 관리 (스마트 로드맵)</h2>
+            </ScrollRevealItem>
+            {coursesData.map((c) => (
+              <ScrollRevealItem key={c.courseId}>
+                <div style={{ marginBottom: "24px" }}>
+                  <h3 style={{ fontSize: "1.1rem", fontWeight: "600", borderBottom: "2px solid var(--color-border)", paddingBottom: "8px" }}>{c.courseName}</h3>
+                  <HoverGlowCard glowColor="rgba(59, 130, 246, 0.1)">
+                    <div className="p-4 bg-white/50">
+                      <WeeklyMissions 
+                        studentId={profile.id}
+                        courseId={c.courseId}
+                        currentWeek={c.currentWeek}
+                        initialGuide={c.initialGuide}
+                      />
+                    </div>
+                  </HoverGlowCard>
+                </div>
+              </ScrollRevealItem>
+            ))}
+          </section>
+        </ScrollRevealList>
       )}
     </AppShell>
   );
