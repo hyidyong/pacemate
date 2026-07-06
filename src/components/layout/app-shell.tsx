@@ -31,13 +31,12 @@ export async function AppShell({ children }: AppShellProps) {
       ? ["/professor"]
       : isOperator
         ? ["/admin"]
-        : ["/dashboard", "/mypage", "/chatbot", "/counseling", "/community"];
+        : ["/dashboard", "/mypage", "/counseling", "/community"]; // chatbot은 FAB 버튼으로만 접근
   const mobileRoutes = appRoutes.filter((route) => mobileRouteHrefs.includes(route.href));
 
   const mobileTabLabels: Record<string, string> = {
     "/dashboard": "홈",
     "/mypage": "일정",
-    "/chatbot": "질문",
     "/counseling": "상담",
     "/community": "커뮤니티"
   };
@@ -57,7 +56,7 @@ export async function AppShell({ children }: AppShellProps) {
 
       {isAuthenticated && !isProfessor && !isOperator && (
         <nav 
-          className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-gray-100 grid grid-cols-5 items-center justify-items-center h-[60px]"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-gray-100 grid grid-cols-4 items-center justify-items-center h-[60px]"
           aria-label="Mobile primary navigation"
         >
           {mobileRoutes.map((route) => {
