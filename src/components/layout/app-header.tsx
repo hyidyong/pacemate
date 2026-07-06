@@ -102,7 +102,7 @@ export function AppHeader({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[600px] bg-white rounded-2xl shadow-2xl border border-emerald-100 p-6 grid grid-cols-3 gap-6 overflow-hidden"
+                className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[600px] bg-white rounded-2xl shadow-2xl border border-emerald-100 p-6 grid grid-cols-3 gap-6 overflow-hidden z-[100]"
               >
                 <div className="flex flex-col gap-3">
                   <h3 className="font-bold text-emerald-800 text-sm mb-1 border-b border-emerald-100 pb-2">학습 및 진도</h3>
