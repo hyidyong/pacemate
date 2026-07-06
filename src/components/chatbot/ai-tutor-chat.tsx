@@ -2,9 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Send, Bot, User, AlertCircle, Sparkles, Hand } from "lucide-react";
+import { Send, Bot, User, AlertCircle, Sparkles, Hand, Menu, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { askAiTutor } from "@/services/ai-tutor.actions";
+import { useAppStore, type ChatSession } from "@/store/app-store";
+// TODO: Supabase integration for loading/saving messages from db
 
 type Message = {
   id: string;
@@ -17,10 +20,18 @@ type Message = {
 
 export function AiTutorChat({ studentId }: { studentId: string }) {
   const router = useRouter();
+  const { 
+    isChatSidebarOpen, 
+    setIsChatSidebarOpen,
+    cachedSessions,
+    activeChatSessionId,
+    setActiveChatSessionId
+  } = useAppStore();
+
   const [messages, setMessages] = useState<Message[]>([{
     id: "welcome",
     role: "ai",
-    content: "안녕하세요! PaceMate AI 학습 튜터입니다. 궁금한 점을 편하게 물어보세요. (예: 이번 과제 제출 기한이 언제인가요?)",
+    content: "안녕하세요! PaceMate AI 학습 튜터입니다. 궁금한 점을 편하게 물어보세요.",
   }]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -29,6 +40,13 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  // 스와이프로 뒤로가기 (Framer Motion drag)
+  const handleDragEnd = (e: any, info: any) => {
+    if (info.offset.x > 100 && info.velocity.x > 200) {
+      router.back();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,117 +96,190 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
   };
 
   return (
-    <div className="ai-tutor-container">
-      {/* Header */}
-      <div className="ai-tutor-header">
-        <div className="ai-tutor-header-icon">
-          <Sparkles size={24} strokeWidth={2.5} />
-        </div>
-        <div className="ai-tutor-header-text">
-          <h2>PaceMate AI Tutor</h2>
-          <p>PaceMate 프리미엄 학습 어시스턴트</p>
-        </div>
-      </div>
+    <motion.div 
+      className="flex h-full w-full bg-white relative"
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={{ right: 0.5, left: 0 }}
+      onDragEnd={handleDragEnd}
+    >
+      {/* Sidebar Overlay */}
+      <AnimatePresence>
+        {isChatSidebarOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsChatSidebarOpen(false)}
+              className="absolute inset-0 bg-black z-40 md:hidden"
+            />
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+              className="absolute md:relative z-50 w-[280px] h-full bg-gray-50 border-r border-gray-200 flex flex-col"
+            >
+              <div className="p-4 flex items-center justify-between border-b border-gray-200 bg-white">
+                <span className="font-semibold text-gray-800">채팅 기록</span>
+                <Button variant="ghost" size="icon" onClick={() => setIsChatSidebarOpen(false)} className="md:hidden">
+                  <ArrowLeft size={18} />
+                </Button>
+              </div>
+              <div className="p-3">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-2 border-dashed border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300"
+                  onClick={() => {
+                    setMessages([{ id: "welcome", role: "ai", content: "안녕하세요! PaceMate AI 학습 튜터입니다. 궁금한 점을 편하게 물어보세요." }]);
+                    setIsChatSidebarOpen(false);
+                  }}
+                >
+                  <Plus size={16} />
+                  새 대화 시작
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-2">
+                {cachedSessions.map(session => (
+                  <div key={session.id} className="p-3 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 cursor-pointer group flex justify-between items-center transition-colors">
+                    <div className="truncate text-sm text-gray-700">
+                      {session.title}
+                    </div>
+                    <button className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
-      {/* Chat Area */}
-      <div className="ai-tutor-chat-area">
-        {messages.map((m) => (
-          <div key={m.id} className={`ai-tutor-message-row ${m.role === "user" ? "is-user" : "is-ai"}`}>
-            <div className="ai-tutor-message-content">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-full bg-white relative w-full">
+        {/* Header */}
+        <div className="h-[60px] flex items-center px-4 border-b border-gray-100 bg-white/95 backdrop-blur-sm z-10 shrink-0 gap-3 sticky top-0">
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="mr-1 -ml-2 text-gray-500">
+            <ArrowLeft size={20} />
+          </Button>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-sm">
+            <Sparkles size={16} strokeWidth={2.5} />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-sm font-bold text-gray-800 leading-tight">PaceMate AI Tutor</h2>
+            <p className="text-[11px] text-gray-500">프리미엄 학습 어시스턴트</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => setIsChatSidebarOpen(!isChatSidebarOpen)} className="text-gray-500">
+            <Menu size={20} />
+          </Button>
+        </div>
+
+        {/* Chat Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50/50">
+          {messages.map((m) => (
+            <div key={m.id} className={`flex gap-3 max-w-3xl mx-auto w-full ${m.role === "user" ? "flex-row-reverse" : ""}`}>
               {/* Avatar */}
-              <div className={`ai-tutor-avatar ${m.role === "user" ? "is-user" : "is-ai"}`}>
-                {m.role === "user" ? <User size={18} strokeWidth={2.5} /> : <Bot size={20} strokeWidth={2.5} />}
+              <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center shadow-sm ${m.role === "user" ? "bg-gray-100 text-gray-600" : "bg-emerald-100 text-emerald-600"}`}>
+                {m.role === "user" ? <User size={16} strokeWidth={2.5} /> : <Bot size={18} strokeWidth={2.5} />}
               </div>
               
               {/* Message Content */}
-              <div className="ai-tutor-bubble-wrapper">
-                <div className="ai-tutor-bubble">
-                  <p>{m.content}</p>
+              <div className={`flex flex-col gap-2 max-w-[80%] ${m.role === "user" ? "items-end" : "items-start"}`}>
+                <div className={`px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed shadow-sm ${
+                  m.role === "user" 
+                    ? "bg-emerald-600 text-white rounded-tr-sm" 
+                    : "bg-white text-gray-800 border border-gray-100 rounded-tl-sm"
+                }`}>
+                  <p className="whitespace-pre-wrap break-words">{m.content}</p>
                 </div>
                 
                 {/* Meta badges */}
                 {(m.category || m.isEscalated) && (
-                  <div className="ai-tutor-meta">
-                    <div className="ai-tutor-badges">
+                  <div className="flex flex-col gap-1.5 mt-1 items-start">
+                    <div className="flex items-center gap-1.5">
                       {m.category && (
-                        <span className="ai-tutor-badge-category">
+                        <span className="text-[11px] font-medium bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md border border-emerald-100">
                           {m.category}
                         </span>
                       )}
                       {m.isEscalated && (
-                        <div className="ai-tutor-badge-escalated">
+                        <div className="flex items-center gap-1 text-[11px] font-semibold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
                           <AlertCircle size={12} strokeWidth={3} />
-                          <span>신뢰도 낮음 감지</span>
+                          <span>신뢰도 낮음</span>
                         </div>
                       )}
                     </div>
                     {m.isEscalated && m.originalQuestion && (
                       <button 
-                        className="ai-tutor-ask-button"
+                        className="flex items-center gap-1.5 text-xs text-rose-600 bg-white border border-rose-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-rose-50 transition-colors mt-1"
                         onClick={() => handleAskProfessor(m.originalQuestion!)}
                       >
                         <Hand size={14} />
-                        교수님/조교에게 질문하기
+                        교수님/조교에게 직접 질문하기
                       </button>
                     )}
                   </div>
                 )}
               </div>
             </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="ai-tutor-message-row is-ai">
-            <div className="ai-tutor-message-content">
-              <div className="ai-tutor-avatar is-ai">
-                <Bot size={20} strokeWidth={2.5} />
+          ))}
+          {isLoading && (
+            <div className="flex gap-3 max-w-3xl mx-auto w-full">
+              <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center shadow-sm bg-emerald-100 text-emerald-600">
+                <Bot size={18} strokeWidth={2.5} />
               </div>
-              <div className="ai-tutor-loading-dots">
-                <div className="ai-tutor-loading-dot" />
-                <div className="ai-tutor-loading-dot" />
-                <div className="ai-tutor-loading-dot" />
+              <div className="px-4 py-3 rounded-2xl bg-white border border-gray-100 rounded-tl-sm flex items-center gap-1.5">
+                <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0 }} className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
               </div>
             </div>
-          </div>
-        )}
-        <div ref={chatEndRef} />
-      </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
 
-      {/* Input Area (Floating Pill Style) */}
-      <div className="ai-tutor-input-area">
-        <form onSubmit={handleSubmit} className="ai-tutor-form">
-          <textarea
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e as unknown as React.FormEvent);
-                e.currentTarget.style.height = 'auto';
-              }
-            }}
-            placeholder="학습에 관해 무엇이든 물어보세요..."
-            className="ai-tutor-textarea"
-            disabled={isLoading}
-            rows={1}
-            style={{ height: '48px' }}
-          />
-          <button 
-            type="submit" 
-            className={`ai-tutor-submit ${input.trim() && !isLoading ? 'is-active' : 'is-disabled'}`} 
-            disabled={isLoading || !input.trim()}
-          >
-            <Send size={20} />
-          </button>
-        </form>
-        <p className="ai-tutor-footer">
-          AI 튜터는 실수를 할 수 있습니다. 중요한 평가 사항은 꼭 조교나 교수님께 확인하세요.
-        </p>
+        {/* Input Area */}
+        <div className="p-3 bg-white border-t border-gray-100 shrink-0 pb-safe">
+          <form onSubmit={handleSubmit} className="relative max-w-3xl mx-auto flex items-end gap-2">
+            <textarea
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e as unknown as React.FormEvent);
+                  e.currentTarget.style.height = '48px';
+                }
+              }}
+              placeholder="학습에 관해 무엇이든 물어보세요..."
+              className="flex-1 min-h-[48px] max-h-[120px] bg-gray-100 border-transparent rounded-2xl px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:bg-white transition-all resize-none overflow-y-auto placeholder:text-gray-400"
+              disabled={isLoading}
+              rows={1}
+              style={{ height: '48px' }}
+            />
+            <button 
+              type="submit" 
+              className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center transition-all ${
+                input.trim() && !isLoading 
+                  ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-700 hover:scale-105 active:scale-95' 
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }`} 
+              disabled={isLoading || !input.trim()}
+            >
+              <Send size={20} className={input.trim() && !isLoading ? "translate-x-[1px] -translate-y-[1px]" : ""} />
+            </button>
+          </form>
+          <p className="text-center text-[10px] text-gray-400 mt-2 max-w-3xl mx-auto pb-1">
+            AI 튜터는 실수를 할 수 있습니다. 중요한 평가 사항은 꼭 조교나 교수님께 확인하세요.
+          </p>
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

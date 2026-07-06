@@ -15,6 +15,7 @@ import { getNotificationsForProfile } from "@/services/notifications.service";
 import { getDemoProfile } from "@/services/session.service";
 import { WeeklyMissions } from "@/components/roadmap/weekly-missions";
 import { supabase } from "@/lib/supabase/client";
+import { TodayTimetableWidget } from "@/components/dashboard/today-timetable-widget";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
@@ -146,6 +147,15 @@ export default async function DashboardPage() {
       <ScrollReveal>
         <NotificationStrip notifications={notifications} />
       </ScrollReveal>
+
+      {/* 학생 전용: 오늘 시간표 위젯 */}
+      {profile.role === "student" && (
+        <ScrollReveal>
+          <section className="px-4 mb-8 max-w-4xl mx-auto w-full">
+            <TodayTimetableWidget />
+          </section>
+        </ScrollReveal>
+      )}
 
       <ScrollRevealList>
         <section className="section dashboard-grid">

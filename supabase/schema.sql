@@ -967,3 +967,33 @@ create policy "demo manage course_weekly_missions" on public.course_weekly_missi
 create policy "demo manage student_mission_progress" on public.student_mission_progress for all to anon, authenticated using (true) with check (true);
 
 
+
+-- 시간표 테이블
+create table public.timetables (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  course_name text not null,
+  day_of_week text not null, -- 'mon','tue','wed','thu','fri'
+  start_time time not null,
+  end_time time not null,
+  room text,
+  color text default '#22c55e',
+  created_at timestamptz not null default now()
+);
+
+-- chat_sessions에 title 컬럼 추가 (존재하지 않으면 추가)
+do $$$
+begin
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='chat_sessions' and column_name='title') then
+    alter table public.chat_sessions add column title text default '새 대화';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='chat_sessions' and column_name='profile_id') then
+    alter table public.chat_sessions add column profile_id uuid references public.profiles(id) on delete cascade;
+  end if;
+end
+$$$;
+
+-- RLS
+alter table public.timetables enable row level security;
+create policy "own timetables" on public.timetables
+  for all using (profile_id = current_setting('app.profile_id', true)::uuid);

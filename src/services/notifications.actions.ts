@@ -25,6 +25,16 @@ export async function markNotificationReadAndGo(formData: FormData) {
   redirect(targetHref);
 }
 
+export async function markNotificationAsRead(notificationId: string) {
+  if (!notificationId) return;
+  await supabase
+    .from("user_notifications")
+    .update({ is_read: true })
+    .eq("id", notificationId);
+  revalidatePath("/notifications");
+  revalidatePath("/dashboard");
+}
+
 export async function markAllNotificationsRead() {
   const profile = await getDemoProfile();
   if (!profile) {
