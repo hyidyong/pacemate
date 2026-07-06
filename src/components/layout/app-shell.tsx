@@ -57,8 +57,6 @@ export async function AppShell({ children }: AppShellProps) {
         isProfessor={isProfessor}
         isOperator={isOperator}
         homeHref={homeHref}
-        desktopRoutes={desktopRoutes}
-        mobileRoutes={mobileRoutes}
         notifications={notifications}
         unreadCount={unreadCount}
       />

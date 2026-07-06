@@ -15,17 +15,14 @@ import {
   ChevronDown
 } from "lucide-react";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
+import { appRoutes } from "@/lib/navigation";
 import type { UserNotification } from "@/services/notifications.service";
-
-type Route = { href: string; label: string; icon?: any };
 
 interface AppHeaderProps {
   isAuthenticated: boolean;
   isProfessor: boolean;
   isOperator: boolean;
   homeHref: string;
-  desktopRoutes: Route[];
-  mobileRoutes: Route[];
   notifications: UserNotification[];
   unreadCount: number;
 }
@@ -35,22 +32,38 @@ export function AppHeader({
   isProfessor,
   isOperator,
   homeHref,
-  desktopRoutes,
-  mobileRoutes,
   notifications,
   unreadCount,
 }: AppHeaderProps) {
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  const desktopRoutes = !isAuthenticated
+    ? []
+    : isProfessor
+      ? appRoutes.filter((route) => route.href === "/professor")
+      : isOperator
+        ? appRoutes.filter((route) => route.href === "/admin")
+        : appRoutes
+            .filter((route) => !["/community", "/mypage", "/professor", "/admin"].includes(route.href))
+            .slice(0, 6);
+
+  const mobileRouteHrefs = !isAuthenticated
+    ? []
+    : isProfessor
+      ? ["/professor"]
+      : isOperator
+        ? ["/admin"]
+        : ["/dashboard", "/mypage", "/chatbot", "/counseling", "/community"];
+  const mobileRoutes = appRoutes.filter((route) => mobileRouteHrefs.includes(route.href));
+
   return (
     <>
       {/* --- DESKTOP HEADER --- */}
-      <header className="site-header hidden md:flex relative z-50">
+      <header className="hidden md:flex items-center justify-between gap-5 py-4 pb-7 relative z-50">
         <Link href={homeHref} className="brand" aria-label="PaceMate home">
           <span>
             <strong>PaceMate</strong>
-            <small>AI 학사 어시스턴트</small>
           </span>
         </Link>
 
@@ -157,7 +170,7 @@ export function AppHeader({
       </header>
 
       {/* --- MOBILE HEADER --- */}
-      <header className="site-header flex md:hidden px-4 justify-between relative z-50">
+      <header className="flex md:hidden items-center justify-between gap-5 py-4 pb-7 px-4 relative z-50">
         <Link href={homeHref} className="brand" aria-label="PaceMate home">
           <span>
             <strong>PaceMate</strong>
