@@ -7,11 +7,6 @@ import { Button } from "@/components/ui/button";
 export function DemoLoginButton() {
   const [isOpen, setIsOpen] = useState(false);
 
-  // 개발 환경이 아니면 렌더링하지 않음 (선택 사항)
-  if (process.env.NODE_ENV !== "development") {
-    return null;
-  }
-
   const handleDemoLogin = (identifier: string, pass: string) => {
     // 폼 요소 선택 후 값 채우고 submit 트리거
     const idInput = document.querySelector('input[name="identifier"]') as HTMLInputElement;
@@ -22,10 +17,12 @@ export function DemoLoginButton() {
       idInput.value = identifier;
       pwInput.value = pass;
       
-      // Submit 버튼 클릭 발생시킴 (action 동작을 위해)
+      // Next.js Server Action을 정상적으로 트리거하기 위해 requestSubmit 사용
       const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
       if (submitBtn) {
-        submitBtn.click();
+        form.requestSubmit(submitBtn);
+      } else {
+        form.requestSubmit();
       }
     }
   };

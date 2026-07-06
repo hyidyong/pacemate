@@ -77,6 +77,11 @@ export async function createDemoSession(formData: FormData) {
     path: "/",
   });
 
+  // 온보딩 중 저장된 정보가 있다면 적용
+  await applyPendingOnboarding(profileId, role as any, cookieStore.get("pacemate_pending_student_types")?.value);
+  cookieStore.delete("pacemate_pending_role");
+  cookieStore.delete("pacemate_pending_student_types");
+
   // Redirection Logic (기존 로직 유지)
   if (role === "student") {
     const { data: studentData } = await supabase
@@ -102,4 +107,29 @@ export async function clearDemoSession() {
   cookieStore.delete("pacemate_profile_id");
   cookieStore.delete("pacemate_role");
   redirect("/login");
+}
+
+type StudentType = "freshman" | "transfer" | "cross_major" | "double_major" | "current_student";
+const allowedStudentTypes = new Set<StudentType>(["freshman", "transfer", "cross_major", "double_major", "current_student"]);
+
+function normalizePendingStudentTypes(value?: string) {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item): item is StudentType => allowedStudentTypes.has(item as StudentType));
+}
+
+async function applyPendingOnboarding(profileId: string, role: string, rawStudentTypes?: string) {
+  if (role !== "student") return;
+
+  const userTypes = normalizePendingStudentTypes(rawStudentTypes);
+  if (!userTypes.length) return;
+
+  await supabase.from("student_profiles").upsert(
+    {
+      profile_id: profileId,
+      user_types: userTypes,
+    },
+    { onConflict: "profile_id" }
+  );
 }
