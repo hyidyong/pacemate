@@ -9,6 +9,8 @@ import { getNotificationsForProfile } from "@/services/notifications.service";
 import { requireRoles } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 
+import { clearDemoSession } from "@/services/demo-auth.service";
+
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage({
@@ -43,6 +45,11 @@ export default async function AdminPage({
           <Button asChild variant="outline">
             <Link href="/roadmap">학생 로드맵 확인</Link>
           </Button>
+          <form action={clearDemoSession}>
+            <Button type="submit" variant="outline">
+              로그아웃
+            </Button>
+          </form>
         </div>
       </section>
 
