@@ -1,14 +1,29 @@
 import Link from "next/link";
 import { ArrowLeft, MessageSquareText } from "lucide-react";
+import dynamicImport from "next/dynamic";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProfessorNotificationSummary } from "@/components/professor/professor-notification-summary";
-import { ProfessorWorkspace } from "@/components/professor/professor-workspace";
 import { Button } from "@/components/ui/button";
 import { getNotificationsForProfile } from "@/services/notifications.service";
 import { getProfessorPageData } from "@/services/professor.service";
 import { requireRoles } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 import { clearDemoSession } from "@/services/demo-auth.service";
+
+// ✅ [Opt 4] ProfessorWorkspace(50KB)를 Lazy Load — 교수 페이지 초기 JS 대폭 감소
+const ProfessorWorkspace = dynamicImport(
+  () => import("@/components/professor/professor-workspace").then((m) => ({ default: m.ProfessorWorkspace })),
+  {
+    loading: () => (
+      <section className="section">
+        <div className="community-empty">
+          <p>워크스페이스 불러오는 중...</p>
+        </div>
+      </section>
+    ),
+  }
+);
+
 export const dynamic = "force-dynamic";
 
 const professorTabs = ["overview", "roadmap", "questions", "counseling"] as const;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import dynamic from "next/dynamic";
 import {
   CircleHelp,
   GraduationCap,
@@ -17,6 +17,16 @@ import {
 import { NotificationMenu } from "@/components/notifications/notification-menu";
 import { appRoutes } from "@/lib/navigation";
 import type { UserNotification } from "@/services/notifications.service";
+
+// ✅ Lazy load framer-motion — 헤더에서 초기 번들 ~160KB 절감
+const MotionDiv = dynamic(
+  () => import("framer-motion").then((m) => ({ default: m.motion.div })),
+  { ssr: false }
+);
+const AnimatePresence = dynamic(
+  () => import("framer-motion").then((m) => ({ default: m.AnimatePresence })),
+  { ssr: false }
+);
 
 interface AppHeaderProps {
   isAuthenticated: boolean;
@@ -87,7 +97,7 @@ export function AppHeader({
           {/* Mega Menu Dropdown */}
           <AnimatePresence>
             {isMegaMenuOpen && isAuthenticated && !isProfessor && !isOperator && (
-              <motion.div
+              <MotionDiv
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -115,7 +125,7 @@ export function AppHeader({
                     커뮤니티 바로가기
                   </Link>
                 </div>
-              </motion.div>
+              </MotionDiv>
             )}
           </AnimatePresence>
         </nav>
@@ -193,7 +203,7 @@ export function AppHeader({
       {/* Mobile Hamburger Drawer Menu */}
       <AnimatePresence>
         {isMobileMenuOpen && (
-          <motion.div
+          <MotionDiv
             initial={{ opacity: 0, x: "100%" }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: "100%" }}
@@ -236,7 +246,7 @@ export function AppHeader({
                 마이페이지
               </Link>
             </div>
-          </motion.div>
+          </MotionDiv>
         )}
       </AnimatePresence>
     </>

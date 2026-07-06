@@ -2,11 +2,21 @@
 
 @theme {
   --animate-shimmer: shimmer 2s infinite;
+  --font-sans: var(--font-inter, Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif);
   @keyframes shimmer {
     100% {
       transform: translateX(100%);
     }
   }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-10deg); }
+    50% { transform: rotate(10deg); }
+  }
+}
+
+/* ✅ FAB 봇 아이콘 위글 애니메이션 (dangerouslySetInnerHTML 제거 후 CSS로 이전) */
+.fab-bot-icon {
+  animation: wiggle 2s ease-in-out infinite;
 }
 
 :root {

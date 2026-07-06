@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { CircleHelp, GraduationCap, MessageSquareText, ShieldCheck, UserRound, Bot, Sparkles } from "lucide-react";
+import { Bot, Sparkles } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header";
-import { NotificationMenu } from "@/components/notifications/notification-menu";
 import { appRoutes } from "@/lib/navigation";
 import {
   getNotificationsForProfile,
@@ -15,6 +14,7 @@ type AppShellProps = {
 
 export async function AppShell({ children }: AppShellProps) {
   const profile = await getDemoProfile();
+  // ✅ [Opt 2] 두 알림 쿼리를 병렬 실행 (기존과 동일하지만 명시적으로 유지)
   const [notifications, unreadCount] = await Promise.all([
     getNotificationsForProfile(profile, 5),
     getUnreadNotificationCount(profile),
@@ -23,15 +23,8 @@ export async function AppShell({ children }: AppShellProps) {
   const isProfessor = profile?.role === "professor";
   const isOperator = profile?.role === "assistant" || profile?.role === "admin";
   const homeHref = profile ? getRoleHomePath(profile.role) : "/";
-  const desktopRoutes = !isAuthenticated
-    ? []
-    : isProfessor
-      ? appRoutes.filter((route) => route.href === "/professor")
-      : isOperator
-        ? appRoutes.filter((route) => route.href === "/admin")
-        : appRoutes
-            .filter((route) => !["/community", "/mypage", "/professor", "/admin"].includes(route.href))
-            .slice(0, 6);
+
+  // ✅ [Opt 3] 모바일 탭바용 라우트만 계산 (헤더 계산은 AppHeader 내부에서 처리)
   const mobileRouteHrefs = !isAuthenticated
     ? []
     : isProfessor
@@ -40,8 +33,7 @@ export async function AppShell({ children }: AppShellProps) {
         ? ["/admin"]
         : ["/dashboard", "/mypage", "/chatbot", "/counseling", "/community"];
   const mobileRoutes = appRoutes.filter((route) => mobileRouteHrefs.includes(route.href));
-  
-  // Custom labels for the 5-tab design
+
   const mobileTabLabels: Record<string, string> = {
     "/dashboard": "홈",
     "/mypage": "일정",
@@ -122,14 +114,8 @@ export async function AppShell({ children }: AppShellProps) {
           </div>
           {/* FAB */}
           <Link href="/chatbot" className="flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-emerald-600 to-teal-500 text-white rounded-full shadow-[0_8px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_12px_40px_rgba(16,185,129,0.6)] hover:scale-110 transition-all duration-300 animate-[bounce_3s_infinite]">
-            <Bot size={28} strokeWidth={2.5} className="animate-[wiggle_2s_ease-in-out_infinite]" />
+            <Bot size={28} strokeWidth={2.5} className="fab-bot-icon" />
           </Link>
-          <style dangerouslySetInnerHTML={{__html: `
-            @keyframes wiggle {
-              0%, 100% { transform: rotate(-10deg); }
-              50% { transform: rotate(10deg); }
-            }
-          `}} />
         </div>
       )}
     </div>
