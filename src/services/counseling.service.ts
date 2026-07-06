@@ -247,7 +247,7 @@ type AdminTaskRow = {
 
 async function getAdminTasksRows(): Promise<AdminTaskRow[]> {
   const { data, error } = await supabase
-    .from("professor_admin_task")
+    .from("professor_admin_tasks")
     .select("professor_id, title, day_of_week, start_time, end_time");
 
   if (error) {

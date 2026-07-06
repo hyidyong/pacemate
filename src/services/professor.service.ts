@@ -208,7 +208,7 @@ async function getAdminTasks(
   professorId: string,
 ): Promise<ProfessorAdminTaskRecord[]> {
   const { data, error } = await supabase
-    .from("professor_admin_task")
+    .from("professor_admin_tasks")
     .select("id, title, day_of_week, start_time, end_time")
     .eq("professor_id", professorId)
     .order("day_of_week", { ascending: true })

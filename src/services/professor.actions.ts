@@ -340,7 +340,7 @@ export async function addProfessorAdminTask(formData: FormData) {
     return { ok: false, message: "교수 정보를 찾을 수 없습니다." };
   }
 
-  const { error } = await supabase.from("professor_admin_task").insert({
+  const { error } = await supabase.from("professor_admin_tasks").insert({
     professor_id: professorId,
     title,
     day_of_week: day,
@@ -361,7 +361,7 @@ export async function deleteProfessorAdminTask(formData: FormData) {
 
   if (!taskId) return { ok: false, message: "작업 ID가 없습니다." };
 
-  const { error } = await supabase.from("professor_admin_task").delete().eq("id", taskId);
+  const { error } = await supabase.from("professor_admin_tasks").delete().eq("id", taskId);
 
   if (error) return { ok: false, message: error.message };
 
