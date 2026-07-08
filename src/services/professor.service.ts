@@ -47,6 +47,7 @@ export type ProfessorCounselingRequest = {
   professor_note: string | null;
   suggested_start: string | null;
   suggested_end: string | null;
+  location: string | null;
   student?: { name: string; identifier: string };
 };
 
@@ -242,7 +243,7 @@ async function getCounselingRequests(
 ): Promise<ProfessorCounselingRequest[]> {
   const { data, error } = await supabase
     .from("counseling_requests")
-    .select("id, student_id, requested_start, requested_end, topic, status, professor_note, suggested_start, suggested_end, student:profiles(name, identifier)")
+    .select("id, student_id, requested_start, requested_end, topic, status, professor_note, location, suggested_start, suggested_end, student:profiles(name, identifier)")
     .eq("professor_id", professorId)
     .order("requested_start", { ascending: true })
     .limit(12);

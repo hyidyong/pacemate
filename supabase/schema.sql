@@ -1,4 +1,4 @@
-﻿create extension if not exists pgcrypto;
+create extension if not exists pgcrypto;
 
 create type public.user_role as enum ('student', 'professor', 'assistant', 'admin');
 create type public.student_type as enum ('freshman', 'transfer', 'cross_major', 'double_major', 'current_student');
@@ -348,6 +348,7 @@ create table public.counseling_requests (
   topic text not null,
   status public.counseling_status not null default 'pending',
   professor_note text,
+  location text,
   suggested_start timestamptz,
   suggested_end timestamptz,
   created_at timestamptz not null default now(),

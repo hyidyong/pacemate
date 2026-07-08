@@ -188,7 +188,6 @@ export function ProfessorWorkspace({
     });
   }
 
-  // Handle blackout toggling from calendar
   function handleToggleBlackout(slot: { day: number; specificDate?: string; start: string; end: string; isBlackout: boolean; id?: string; rawSlot?: any }) {
     if (slot.id) {
       if (slot.rawSlot?.type === "admin_blackout") {
@@ -221,6 +220,31 @@ export function ProfessorWorkspace({
         runAction(addProfessorAvailability, formData);
       }
     }
+  }
+
+  function handleAddAdminTask(task: { title: string; dayOfWeek: number; startTime: string; endTime: string }) {
+    const formData = new FormData();
+    formData.set("professorId", professor.id);
+    formData.set("title", task.title);
+    formData.set("dayOfWeek", String(task.dayOfWeek));
+    formData.set("startTime", task.startTime);
+    formData.set("endTime", task.endTime);
+    runAction(addProfessorAdminTask, formData);
+  }
+
+  function handleUpdateCounseling(requestId: string, note: string, location: string) {
+    const formData = new FormData();
+    formData.set("requestId", requestId);
+    formData.set("professorNote", note);
+    formData.set("location", location);
+    runAction((fd) => import("@/services/professor.actions").then(m => m.updateCounselingDetails(fd)), formData);
+  }
+
+  function handleCancelCounseling(requestId: string) {
+    const formData = new FormData();
+    formData.set("requestId", requestId);
+    formData.set("status", "cancelled");
+    runAction((fd) => import("@/services/professor.actions").then(m => m.updateCounselingStatus(fd)), formData);
   }
 
   // Dashboard stats
@@ -268,7 +292,10 @@ export function ProfessorWorkspace({
             counselingRequests={counselingRequests}
             teachingSlots={teachingSlots}
             onToggleBlackout={handleToggleBlackout}
+            onAddAdminTask={handleAddAdminTask}
             onOpenTask={changeTab}
+            onUpdateCounseling={handleUpdateCounseling}
+            onCancelCounseling={handleCancelCounseling}
           />
         );
       case "manual-schedule":
@@ -440,7 +467,10 @@ function ScheduleCalendarSub({
   counselingRequests,
   teachingSlots,
   onToggleBlackout,
+  onAddAdminTask,
   onOpenTask,
+  onUpdateCounseling,
+  onCancelCounseling,
 }: {
   adminStats: ProfessorAdminStat[];
   adminTasks: ProfessorAdminTaskRecord[];
@@ -449,7 +479,10 @@ function ScheduleCalendarSub({
   counselingRequests: ProfessorCounselingRequest[];
   teachingSlots: ProfessorTeachingSlot[];
   onToggleBlackout: (slot: any) => void;
+  onAddAdminTask: (task: any) => void;
   onOpenTask: (tab: ProfessorTab) => void;
+  onUpdateCounseling: (requestId: string, note: string, location: string) => void;
+  onCancelCounseling: (requestId: string) => void;
 }) {
   return (
     <>
@@ -509,6 +542,9 @@ function ScheduleCalendarSub({
           adminTasks={adminTasks}
           availability={availability}
           onToggleBlackout={onToggleBlackout}
+          onAddAdminTask={onAddAdminTask}
+          onUpdateCounseling={onUpdateCounseling}
+          onCancelCounseling={onCancelCounseling}
         />
       </section>
     </>
@@ -1274,49 +1310,49 @@ function PendingCounselingSub({
         <span>{localPending.length}건</span>
       </div>
       {localPending.length > 0 ? (
-        <div className="professor-request-list">
+        <div className="flex flex-col gap-4 mt-4">
           {localPending.map((request) => (
-            <article key={request.id} className="professor-question-card">
-              <div>
-                <strong>{request.student ? `${request.student.name} (${request.student.identifier})` : request.student_id}</strong>
-                <span className="professor-status-badge" data-status="PENDING">
-                  {counselingStatusLabels[request.status]}
-                </span>
+            <article key={request.id} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-amber-400"></div>
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2.5">
+                    <strong className="text-emerald-950 font-bold text-lg">{request.student ? `${request.student.name} (${request.student.identifier})` : request.student_id}</strong>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+                      {counselingStatusLabels[request.status]}
+                    </span>
+                  </div>
+                  <p className="text-gray-500 text-sm">{new Date(request.requested_start).toLocaleString("ko-KR", { dateStyle: "long", timeStyle: "short" })}</p>
+                </div>
+                <div className="text-right text-emerald-900/70 text-sm font-medium bg-emerald-50 px-3 py-1.5 rounded-md">
+                  {request.topic}
+                </div>
               </div>
-              <p>{request.topic}</p>
-              <p>{new Date(request.requested_start).toLocaleString("ko-KR")}</p>
 
               {rejectingId === request.id ? (
-                <div className="professor-reject-form">
-                  <label className="field">
-                    <span>거절 사유</span>
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100 flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-sm font-semibold text-emerald-950">거절 사유</span>
                     <textarea
                       rows={2}
                       value={rejectNote}
                       onChange={(e) => setRejectNote(e.target.value)}
                       placeholder="거절 사유를 입력하세요"
+                      className="w-full border border-gray-200 rounded-md p-2 text-sm text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
-                  </label>
-                  <label className="field">
-                    <span>추천 시간</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-sm font-semibold text-emerald-950">추천 시간 제안 (선택)</span>
                     <input
                       placeholder="예: 2026-07-14 11:00"
                       value={suggestedTime}
                       onChange={(e) => setSuggestedTime(e.target.value)}
+                      className="w-full border border-gray-200 rounded-md p-2 text-sm text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
-                  </label>
-                  <div className="professor-request-actions">
+                  </div>
+                  <div className="flex justify-end gap-2 mt-2">
                     <button
-                      className="button button-default button-sm"
-                      disabled={isPending}
-                      onClick={() => handleReject(request)}
-                      type="button"
-                    >
-                      <Send size={14} aria-hidden="true" />
-                      거절 안내 보내기
-                    </button>
-                    <button
-                      className="button button-outline button-sm"
+                      className="px-4 py-2 text-sm font-medium rounded-md border border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
                       type="button"
                       onClick={() => {
                         setRejectingId(null);
@@ -1326,12 +1362,29 @@ function PendingCounselingSub({
                     >
                       취소
                     </button>
+                    <button
+                      className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-800 hover:bg-emerald-900 shadow-sm disabled:opacity-50"
+                      disabled={isPending}
+                      onClick={() => handleReject(request)}
+                      type="button"
+                    >
+                      <Send size={14} aria-hidden="true" />
+                      거절 안내 보내기
+                    </button>
                   </div>
                 </div>
               ) : (
-                <div className="professor-request-actions">
+                <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-50">
                   <button
-                    className="button button-default button-sm"
+                    className="px-4 py-2 text-sm font-medium rounded-md border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-sm"
+                    disabled={isPending}
+                    onClick={() => setRejectingId(request.id)}
+                    type="button"
+                  >
+                    거절 안내 보내기
+                  </button>
+                  <button
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm disabled:opacity-50"
                     disabled={isPending}
                     onClick={() => handleApprove(request)}
                     type="button"
@@ -1339,21 +1392,13 @@ function PendingCounselingSub({
                     <Check size={14} aria-hidden="true" />
                     승인
                   </button>
-                  <button
-                    className="button button-outline button-sm"
-                    disabled={isPending}
-                    onClick={() => setRejectingId(request.id)}
-                    type="button"
-                  >
-                    거절 안내 보내기
-                  </button>
                 </div>
               )}
             </article>
           ))}
         </div>
       ) : (
-        <div className="community-empty">
+        <div className="mt-4 p-8 text-center bg-gray-50 border border-gray-100 rounded-xl text-gray-500">
           <p>대기 중인 상담 요청이 없습니다.</p>
         </div>
       )}
