@@ -338,6 +338,7 @@ export function ProfessorWorkspace({
             counselingRequests={currentCounselingRequests}
             teachingSlots={teachingSlots}
             notificationCounts={currentNotificationCounts}
+            pendingQuestionCount={pendingQuestionCount}
             onToggleBlackout={handleToggleBlackout}
             onAddAdminTask={handleAddAdminTask}
             onOpenTask={changeTab}
@@ -537,6 +538,7 @@ function ScheduleCalendarSub({
   counselingRequests,
   teachingSlots,
   notificationCounts,
+  pendingQuestionCount,
   onToggleBlackout,
   onAddAdminTask,
   onOpenTask,
@@ -553,6 +555,7 @@ function ScheduleCalendarSub({
     counseling: number;
     question: number;
   };
+  pendingQuestionCount: number;
   onToggleBlackout: (slot: any) => void;
   onAddAdminTask: (task: any) => void;
   onOpenTask: (tab: ProfessorTab) => void;
@@ -569,27 +572,27 @@ function ScheduleCalendarSub({
         </div>
 
         <div className="professor-notification-summary-grid">
-          {Math.max(currentNotificationCounts.counseling, currentCounselingRequests.filter((r) => r.status === "pending").length) > 0 ? (
+          {Math.max(notificationCounts.counseling, counselingRequests.filter((r) => r.status === "pending").length) > 0 ? (
             <Link
               href="/professor?tab=counseling&sub=pending-counseling"
               className="professor-notification-box professor-notification-box-urgent"
             >
               <div>
                 <p>상담 요청</p>
-                <strong>{Math.max(currentNotificationCounts.counseling, currentCounselingRequests.filter((r) => r.status === "pending").length)}건</strong>
+                <strong>{Math.max(notificationCounts.counseling, counselingRequests.filter((r) => r.status === "pending").length)}건</strong>
               </div>
               <span>바로가기</span>
             </Link>
           ) : null}
 
-          {Math.max(currentNotificationCounts.question, pendingQuestionCount) > 0 ? (
+          {Math.max(notificationCounts.question, pendingQuestionCount) > 0 ? (
             <Link
               href="/professor?tab=questions&sub=incoming-questions"
               className="professor-notification-box professor-notification-box-calm"
             >
               <div>
                 <p>질문 요청</p>
-                <strong>{Math.max(currentNotificationCounts.question, pendingQuestionCount)}건</strong>
+                <strong>{Math.max(notificationCounts.question, pendingQuestionCount)}건</strong>
               </div>
               <span>바로가기</span>
             </Link>

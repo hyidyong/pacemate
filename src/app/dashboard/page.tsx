@@ -15,6 +15,7 @@ import { getNotificationsForProfile } from "@/services/notifications.service";
 import { getDemoProfile } from "@/services/session.service";
 import { WeeklyMissions } from "@/components/roadmap/weekly-missions";
 import { supabase } from "@/lib/supabase/client";
+import { getMyCourses, type StudentCourseRecord } from "@/services/student-community.service";
 import { TodayTimetableWidget } from "@/components/dashboard/today-timetable-widget";
 
 // Import Micro-Interactions
@@ -91,7 +92,10 @@ export default async function DashboardPage() {
 
   // Fetch student courses if student
   let coursesData: any[] = [];
+  let myCourses: StudentCourseRecord[] = [];
   if (profile.role === "student") {
+    myCourses = await getMyCourses(profile.id);
+
     const { data } = await supabase
       .from("student_courses")
       .select(`
@@ -152,7 +156,7 @@ export default async function DashboardPage() {
       {profile.role === "student" && (
         <ScrollReveal>
           <section className="px-4 mb-8 max-w-4xl mx-auto w-full">
-            <TodayTimetableWidget />
+            <TodayTimetableWidget myCourses={myCourses} />
           </section>
         </ScrollReveal>
       )}

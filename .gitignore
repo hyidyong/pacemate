@@ -2,5 +2,15 @@
 .next/
 node_modules/
 tsconfig.tsbuildinfo
+.DS_Store
+.npm-cache/
 
 .vercel
+.env*
+
+env.local
+.env.local
+.envenv.local
+.env.local
+.env
+.env

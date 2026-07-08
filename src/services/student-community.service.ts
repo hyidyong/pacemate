@@ -173,7 +173,7 @@ async function getCourses(): Promise<CourseRecord[]> {
   return (data ?? []) as CourseRecord[];
 }
 
-async function getMyCourses(
+export async function getMyCourses(
   profileId?: string,
 ): Promise<StudentCourseRecord[]> {
   if (!profileId) {
