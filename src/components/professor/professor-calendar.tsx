@@ -42,7 +42,7 @@ export function ProfessorCalendar({
   const days = ["월", "화", "수", "목", "금"];
   const startHour = 9;
   const endHour = 18;
-  const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
+
 
   // Generate week dates based on currentDate
   const weekDates = useMemo(() => {
@@ -153,21 +153,28 @@ export function ProfessorCalendar({
         const endDate = new Date(req.suggested_end || req.requested_end);
         const day = startDate.getDay();
         if (day >= 1 && day <= 5) {
-          const startTime = `${startDate.getHours().toString().padStart(2, "0")}:${startDate.getMinutes().toString().padStart(2, "0")}`;
-          const endTime = `${endDate.getHours().toString().padStart(2, "0")}:${endDate.getMinutes().toString().padStart(2, "0")}`;
-          list.push({
-            id: req.id, // Keep the raw request ID
-            type: "counseling",
-            title: req.student?.name ? `${req.student.name} 학생 상담` : "학생 상담",
-            day: day,
-            startTime,
-            endTime,
-            color: "bg-emerald-100/80 shadow-sm", // Distinct styling
-            textColor: "text-emerald-950 font-semibold",
-            borderColor: "border-transparent",
-            details: req.topic,
-            rawReq: req, // Store the raw request object for the modal
-          });
+          const reqDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+          const targetDayDateObj = weekDates[day - 1]?.fullDate;
+          if (targetDayDateObj) {
+            const localDateStr = `${targetDayDateObj.getFullYear()}-${String(targetDayDateObj.getMonth() + 1).padStart(2, '0')}-${String(targetDayDateObj.getDate()).padStart(2, '0')}`;
+            if (localDateStr === reqDateStr) {
+              const startTime = `${startDate.getHours().toString().padStart(2, "0")}:${startDate.getMinutes().toString().padStart(2, "0")}`;
+              const endTime = `${endDate.getHours().toString().padStart(2, "0")}:${endDate.getMinutes().toString().padStart(2, "0")}`;
+              list.push({
+                id: req.id, // Keep the raw request ID
+                type: "counseling",
+                title: req.student?.name ? `${req.student.name} 학생 상담` : "학생 상담",
+                day: day,
+                startTime,
+                endTime,
+                color: "bg-emerald-100/80 shadow-sm", // Distinct styling
+                textColor: "text-emerald-950 font-semibold",
+                borderColor: "border-transparent",
+                details: req.topic,
+                rawReq: req, // Store the raw request object for the modal
+              });
+            }
+          }
         }
       });
 
@@ -199,6 +206,22 @@ export function ProfessorCalendar({
 
     return list;
   }, [teachingSlots, adminTasks, counselingRequests, availability, weekDates]);
+
+  const dynamicEndHour = useMemo(() => {
+    let max = endHour;
+    blocks.forEach((b) => {
+      const h = parseInt(b.endTime.split(":")[0]);
+      const m = parseInt(b.endTime.split(":")[1]);
+      const blockEnd = h + (m > 0 ? 1 : 0);
+      if (blockEnd > max) {
+        max = blockEnd;
+      }
+    });
+    return Math.min(max, 24);
+  }, [blocks, endHour]);
+
+  const rowHeight = 26;
+  const hours = Array.from({ length: dynamicEndHour - startHour + 1 }, (_, i) => startHour + i);
 
   function getGridRow(time: string) {
     const [h, m] = time.split(":").map(Number);
@@ -276,7 +299,7 @@ export function ProfessorCalendar({
   return (
     <div className="flex flex-col gap-4 font-sans">
       {/* Navigation & Actions */}
-      <div className="flex justify-between items-center bg-white/40 backdrop-blur-xl p-3 rounded-2xl border border-white/60 shadow-sm">
+      <div className="flex justify-between items-center bg-white/40 backdrop-blur-xl p-3 rounded-xl border border-white/60 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 bg-white/60 p-1 rounded-xl shadow-sm border border-white/80">
             <Button variant="ghost" size="icon" onClick={prevWeek} className="h-8 w-8 rounded-lg hover:bg-white/80">
@@ -319,11 +342,11 @@ export function ProfessorCalendar({
 
       {/* CSS Grid Calendar - Glassmorphism TimeBlocks Style */}
       <div 
-        className="relative bg-white/30 backdrop-blur-xl border border-white/50 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden"
+        className="relative bg-white/30 backdrop-blur-xl border border-white/50 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden"
         style={{
           display: "grid",
           gridTemplateColumns: "50px repeat(5, 1fr)",
-          gridTemplateRows: `40px repeat(${(endHour - startHour) * 4}, 15px)`,
+          gridTemplateRows: `40px repeat(${(dynamicEndHour - startHour) * 4}, ${rowHeight}px)`,
         }}
       >
         {/* Top-Left Empty Header */}
@@ -426,7 +449,9 @@ export function ProfessorCalendar({
                   {block.title}
                 </strong>
               </div>
-              <span className="text-[10px] opacity-70 mt-auto font-medium">({block.startTime})</span>
+              <span className="text-[10.5px] opacity-80 mt-auto font-semibold leading-none pb-[1px] tracking-tight whitespace-nowrap">
+                {block.startTime} - {block.endTime}
+              </span>
             </button>
           );
         })}
@@ -434,7 +459,7 @@ export function ProfessorCalendar({
 
       {/* Popover/Dialog for Add Admin / Blackout Interaction */}
       <Dialog open={!!activeSlotAction} onOpenChange={(open) => !open && setActiveSlotAction(null)}>
-        <DialogContent className="sm:max-w-md bg-white/80 backdrop-blur-2xl border-white/60 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] rounded-3xl p-6">
+        <DialogContent className="sm:max-w-md bg-white/80 backdrop-blur-2xl border-white/60 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] rounded-xl p-6">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
               <CalendarIcon className="w-5 h-5 text-gray-500" />
@@ -490,7 +515,7 @@ export function ProfessorCalendar({
 
       {/* Counseling Details Modal */}
       <Dialog open={!!selectedBlock && selectedBlock.type === "counseling"} onOpenChange={(open) => !open && setSelectedBlock(null)}>
-        <DialogContent className="sm:max-w-md bg-white/90 backdrop-blur-2xl border-white/60 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] rounded-3xl p-6">
+        <DialogContent className="sm:max-w-md bg-white/90 backdrop-blur-2xl border-white/60 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] rounded-xl p-6">
           <DialogHeader className="mb-2">
             <DialogTitle className="text-xl font-bold text-gray-800 flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
@@ -499,7 +524,7 @@ export function ProfessorCalendar({
           </DialogHeader>
 
           <div className="flex flex-col gap-4">
-            <div className="p-3 bg-gray-50/80 rounded-2xl border border-gray-100">
+            <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
               <p className="text-sm font-medium text-gray-500 flex items-center gap-1.5 mb-2">
                 <Clock size={14} className="text-gray-400" />
                 {selectedBlock?.day ? days[selectedBlock?.day - 1] + "요일" : ""} {selectedBlock?.startTime} ~ {selectedBlock?.endTime} (확정)
@@ -561,7 +586,7 @@ export function ProfessorCalendar({
       {/* Read-only details modal for course/admin slots */}
       {selectedBlock && selectedBlock.type !== "counseling" && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[9999] flex justify-center items-center p-4" onClick={() => setSelectedBlock(null)}>
-          <div className="bg-white/90 backdrop-blur-xl p-6 rounded-3xl max-w-[400px] w-full shadow-2xl border border-white/50" onClick={e => e.stopPropagation()}>
+          <div className="bg-white/90 backdrop-blur-xl p-6 rounded-xl max-w-[400px] w-full shadow-2xl border border-white/50" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h3 className="text-xl font-bold text-gray-800">{selectedBlock.title}</h3>
@@ -570,12 +595,12 @@ export function ProfessorCalendar({
                   {selectedBlock.day ? days[selectedBlock.day - 1] + "요일" : ""} {selectedBlock.startTime} ~ {selectedBlock.endTime}
                 </p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setSelectedBlock(null)} className="h-8 w-8 rounded-full bg-gray-100 hover:bg-gray-200">
+              <Button variant="ghost" size="icon" onClick={() => setSelectedBlock(null)} className="h-8 w-8 rounded-xl bg-gray-100 hover:bg-gray-200">
                 <X size={16} />
               </Button>
             </div>
             
-            <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 mb-6">
+            <div className="p-4 bg-gray-50/80 rounded-xl border border-gray-100 mb-6">
               <p className="text-sm text-gray-700 mb-2"><strong className="text-gray-900 font-semibold mr-1">상세:</strong> {selectedBlock.details}</p>
               <p className="text-sm text-gray-700"><strong className="text-gray-900 font-semibold mr-1">구분:</strong> {selectedBlock.type === "course" ? "강의" : selectedBlock.type === "admin" ? "행정 업무" : "기타"}</p>
             </div>

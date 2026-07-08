@@ -10,6 +10,7 @@ const buttonVariants = cva("button", {
       secondary: "button-secondary",
       ghost: "button-ghost",
       outline: "button-outline",
+      destructive: "button-destructive",
     },
     size: {
       default: "button-md",

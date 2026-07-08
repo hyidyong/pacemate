@@ -43,12 +43,12 @@ export type ProfessorCounselingRequest = {
   requested_start: string;
   requested_end: string;
   topic: string;
-  status: "pending" | "approved" | "rejected" | "cancelled";
+  location: string | null;
+  status: "pending" | "approved" | "rejected" | "cancelled" | "answered" | "ANSWERED" | "PENDING";
   professor_note: string | null;
   suggested_start: string | null;
   suggested_end: string | null;
-  location: string | null;
-  student?: { name: string; identifier: string };
+  student?: { name: string; identifier: string; major?: string };
 };
 
 export type ProfessorTeachingSlot = {
@@ -254,21 +254,85 @@ async function getCounselingRequests(
 
   const result = (data ?? []) as any[];
 
-  // 5명 이상 더미 학생 데이터 확충
-  const today = new Date();
-  const dateStr = (dayOffset: number) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + dayOffset);
-    return d.toISOString().split("T")[0];
-  };
-
   const dummyData: ProfessorCounselingRequest[] = [
-    { id: "dummy-1", student_id: "s1", requested_start: `${dateStr(1)}T10:00:00Z`, requested_end: `${dateStr(1)}T10:30:00Z`, topic: "중간고사 성적 이의신청", status: "pending", professor_note: null, suggested_start: null, suggested_end: null, student: { name: "김민준", identifier: "20240101" } },
-    { id: "dummy-2", student_id: "s2", requested_start: `${dateStr(2)}T14:00:00Z`, requested_end: `${dateStr(2)}T14:30:00Z`, topic: "진로 및 취업 상담", status: "pending", professor_note: null, suggested_start: null, suggested_end: null, student: { name: "이서연", identifier: "20230202" } },
-    { id: "dummy-3", student_id: "s3", requested_start: `${dateStr(3)}T11:00:00Z`, requested_end: `${dateStr(3)}T11:30:00Z`, topic: "대학원 진학 문의", status: "approved", professor_note: null, suggested_start: null, suggested_end: null, student: { name: "박지훈", identifier: "20220303" } },
-    { id: "dummy-4", student_id: "s4", requested_start: `${dateStr(4)}T15:00:00Z`, requested_end: `${dateStr(4)}T15:30:00Z`, topic: "수강신청 관련 상담", status: "approved", professor_note: null, suggested_start: null, suggested_end: null, student: { name: "최유진", identifier: "20250404" } },
-    { id: "dummy-5", student_id: "s5", requested_start: `${dateStr(1)}T13:00:00Z`, requested_end: `${dateStr(1)}T13:30:00Z`, topic: "졸업 논문 지도", status: "pending", professor_note: null, suggested_start: null, suggested_end: null, student: { name: "정다은", identifier: "20210505" } },
-    { id: "dummy-6", student_id: "s6", requested_start: `${dateStr(2)}T16:00:00Z`, requested_end: `${dateStr(2)}T16:30:00Z`, topic: "학업 부진 상담", status: "rejected", professor_note: "시간이 안 맞습니다. 다른 시간을 제안합니다.", suggested_start: `${dateStr(2)}T17:00:00Z`, suggested_end: `${dateStr(2)}T17:30:00Z`, student: { name: "강현우", identifier: "20240606" } },
+    {
+      id: "cReq1",
+      student_id: "s1",
+      requested_start: "2026-07-06T15:00:00Z",
+      requested_end: "2026-07-06T15:30:00Z",
+      topic: "수강신청 관련 상담",
+      location: null,
+      status: "pending",
+      professor_note: null,
+      suggested_start: null,
+      suggested_end: null,
+      student: { name: "김학생", identifier: "20230001", major: "법학" },
+    },
+    {
+      id: "cReq2",
+      student_id: "s2",
+      requested_start: "2026-07-07T10:00:00Z",
+      requested_end: "2026-07-07T10:30:00Z",
+      topic: "진로 상담",
+      location: null,
+      status: "pending",
+      professor_note: null,
+      suggested_start: null,
+      suggested_end: null,
+      student: { name: "이학생", identifier: "20230002", major: "법학" },
+    },
+    {
+      id: "cReq3",
+      student_id: "s3",
+      requested_start: "2026-07-07T10:30:00Z",
+      requested_end: "2026-07-07T11:00:00Z",
+      topic: "졸업 논문 방향성 논의",
+      location: "연구실",
+      status: "approved",
+      professor_note: null,
+      suggested_start: null,
+      suggested_end: null,
+      student: { name: "손희정", identifier: "20220003", major: "법학" },
+    },
+    {
+      id: "cReq4",
+      student_id: "s4",
+      requested_start: "2026-07-08T14:00:00Z",
+      requested_end: "2026-07-08T14:30:00Z",
+      topic: "학사 경고 면담",
+      location: "교무처",
+      status: "approved",
+      professor_note: null,
+      suggested_start: null,
+      suggested_end: null,
+      student: { name: "박학생", identifier: "20210004", major: "법학" },
+    },
+    {
+      id: "cReq5",
+      student_id: "s5",
+      requested_start: "2026-07-09T09:00:00Z",
+      requested_end: "2026-07-09T09:30:00Z",
+      topic: "대학원 진학 문의",
+      location: null,
+      status: "pending",
+      professor_note: null,
+      suggested_start: null,
+      suggested_end: null,
+      student: { name: "최학생", identifier: "20200005", major: "법학" },
+    },
+    {
+      id: "cReq6",
+      student_id: "s6",
+      requested_start: "2026-07-09T10:00:00Z",
+      requested_end: "2026-07-09T10:30:00Z",
+      topic: "수업 내용 질문",
+      location: null,
+      status: "rejected",
+      professor_note: "질문은 LMS 게시판을 이용해주세요.",
+      suggested_start: "2026-07-09T11:00:00Z",
+      suggested_end: "2026-07-09T11:30:00Z",
+      student: { name: "정학생", identifier: "20190006", major: "법학" },
+    },
   ];
 
   return [...result, ...dummyData] as ProfessorCounselingRequest[];

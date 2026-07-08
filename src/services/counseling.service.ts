@@ -1,4 +1,10 @@
 import { supabase } from "@/lib/supabase/client";
+import {
+  STUDENT_BOOKING_END_HOUR,
+  isWeekday,
+  localDateKey,
+  withHour,
+} from "@/lib/scheduling-policy";
 import type { DemoProfile } from "@/services/session.service";
 
 export type CounselingProfessor = {
@@ -43,7 +49,8 @@ export type StudentCounselingRequest = {
 
 type AvailabilityRow = {
   professor_id: string;
-  day_of_week: number;
+  day_of_week: number | null;
+  specific_date: string | null;
   start_time: string;
   end_time: string;
   slot_minutes: number;
@@ -122,7 +129,7 @@ async function getStudentRequests(
 async function getAvailabilityRows(): Promise<AvailabilityRow[]> {
   const { data, error } = await supabase
     .from("professor_availability")
-    .select("professor_id, day_of_week, start_time, end_time, slot_minutes, is_active, professor:professors(id, name, office, email)")
+    .select("professor_id, day_of_week, specific_date, start_time, end_time, slot_minutes, is_active, professor:professors(id, name, office, email)")
     .order("day_of_week", { ascending: true })
     .order("start_time", { ascending: true });
 
@@ -292,10 +299,7 @@ function buildAvailableSlots(
       const date = new Date(now);
       date.setDate(now.getDate() + offset);
 
-      // Check if it matches day_of_week
-      const isDayMatch = item.day_of_week !== null && date.getDay() === item.day_of_week;
-
-      if (!isDayMatch) {
+      if (!isWeekday(date) || !availabilityMatchesDate(item, date)) {
         continue;
       }
 
@@ -332,7 +336,7 @@ function buildAvailableSlots(
         const hasBlackoutConflict = blackoutAvailabilities.some(
           (blackout) => {
             if (blackout.professor_id !== item.professor_id) return false;
-            if (blackout.day_of_week !== date.getDay()) return false;
+            if (!availabilityMatchesDate(blackout, date)) return false;
             return overlapsTimeOnly(slot.start, slot.end, blackout.start_time, blackout.end_time);
           }
         );
@@ -358,9 +362,15 @@ function buildAvailableSlots(
 
 function splitAvailability(date: Date, item: AvailabilityRow) {
   const start = withTime(date, item.start_time);
-  const end = withTime(date, item.end_time);
+  const availabilityEnd = withTime(date, item.end_time);
+  const bookingEnd = withHour(date, STUDENT_BOOKING_END_HOUR);
+  const end = availabilityEnd < bookingEnd ? availabilityEnd : bookingEnd;
   const slots: Array<{ start: Date; end: Date }> = [];
   const cursor = new Date(start);
+
+  if (cursor >= bookingEnd || end <= cursor) {
+    return slots;
+  }
 
   while (cursor < end) {
     const slotEnd = new Date(cursor);
@@ -374,6 +384,14 @@ function splitAvailability(date: Date, item: AvailabilityRow) {
   }
 
   return slots;
+}
+
+function availabilityMatchesDate(item: AvailabilityRow, date: Date) {
+  if (item.specific_date) {
+    return item.specific_date === localDateKey(date);
+  }
+
+  return item.day_of_week === date.getDay();
 }
 
 function withTime(date: Date, time: string) {

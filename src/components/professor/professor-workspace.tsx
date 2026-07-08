@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   BookOpenText,
   CalendarClock,
@@ -25,6 +27,7 @@ import {
   addProfessorFaq,
   createRoadmapRevisionRequest,
   deleteProfessorAdminTask,
+  updateCounselingDetails,
   updateCounselingStatus,
   updateOwnCourseRoadmap,
   toggleProfessorAvailability,
@@ -58,6 +61,11 @@ type ProfessorWorkspaceProps = {
   counselingRequests: ProfessorCounselingRequest[];
   roadmapRequests: RoadmapRevisionRequest[];
   adminTasks: ProfessorAdminTaskRecord[];
+  notificationCounts: {
+    counseling: number;
+    question: number;
+  };
+  initialSub?: string;
 };
 
 type ProfessorTab = "schedule" | "roadmap" | "questions" | "counseling";
@@ -128,11 +136,14 @@ const initialDummyQuestions: DummyQuestion[] = [
   { id: "dq4", studentName: "\ucd5c\uc608\ub9b0", studentId: "20260012", major: "\ubc95\ud559\uacfc", courseName: "\ubbfc\ubc95\uc0ac\ub840\uc5f0\uc2b5", question: "\ucc44\uad8c\uc790\ub300\uc704\uad8c \ud589\uc0ac\uc758 \ubc94\uc704\uc5d0 \ub300\ud574 \uc88b\uc740 \ud310\ub840\uac00 \uc788\uc744\uae4c\uc694?", date: "2026-07-06", status: "PENDING" },
 ];
 
-const counselingStatusLabels: Record<ProfessorCounselingRequest["status"], string> = {
+const counselingStatusLabels: Record<ProfessorCounselingRequest["status"] | "ANSWERED" | "PENDING", string> = {
   pending: "\uc2b9\uc778 \ub300\uae30",
   approved: "\uc2b9\uc778 \uc644\ub8cc",
   rejected: "\uc2dc\uac04 \uc870\uc815",
   cancelled: "\ucde8\uc18c\ub428",
+  answered: "\ub2f5\ubcc0 \uc644\ub8cc",
+  ANSWERED: "\ub2f5\ubcc0 \uc644\ub8cc",
+  PENDING: "\uc2b9\uc778 \ub300\uae30",
 };
 
 function courseValue(course?: ProfessorCourse) {
@@ -142,6 +153,8 @@ function courseValue(course?: ProfessorCourse) {
 // ============== MAIN COMPONENT ==============
 export function ProfessorWorkspace({
   initialTab,
+  initialSub,
+  notificationCounts,
   professor,
   courses,
   teachingSlots,
@@ -151,12 +164,20 @@ export function ProfessorWorkspace({
   roadmapRequests,
   adminTasks,
 }: ProfessorWorkspaceProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ProfessorTab>(initialTab ?? "schedule");
-  const [activeSub, setActiveSub] = useState<SubMenu>(sidebarMenus[initialTab ?? "schedule"][0].id);
+  const [activeSub, setActiveSub] = useState<SubMenu>(() => {
+    const defaultItems = sidebarMenus[initialTab ?? "schedule"];
+    return initialSub && defaultItems.some((item) => item.id === initialSub)
+      ? initialSub
+      : defaultItems[0].id;
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState("");
+  const [currentCounselingRequests, setCurrentCounselingRequests] = useState<ProfessorCounselingRequest[]>(counselingRequests);
+  const [currentNotificationCounts, setCurrentNotificationCounts] = useState(notificationCounts);
   const [dummyQuestions, setDummyQuestions] = useState<DummyQuestion[]>(initialDummyQuestions);
   const [announcements, setAnnouncements] = useState<Array<{ question: string; answer: string; courseName: string }>>([]);
 
@@ -166,6 +187,24 @@ export function ProfessorWorkspace({
     setActiveSub(sidebarMenus[tab][0].id);
     setSidebarOpen(false);
   }
+
+  useEffect(() => {
+    setActiveTab(initialTab ?? "schedule");
+    const initialItems = sidebarMenus[initialTab ?? "schedule"];
+    setActiveSub(
+      initialSub && initialItems.some((item) => item.id === initialSub)
+        ? initialSub
+        : initialItems[0].id,
+    );
+  }, [initialSub, initialTab]);
+
+  useEffect(() => {
+    setCurrentCounselingRequests(counselingRequests);
+  }, [counselingRequests]);
+
+  useEffect(() => {
+    setCurrentNotificationCounts(notificationCounts);
+  }, [notificationCounts]);
 
   // Toast: shows message at top, auto-dismiss after 3s
   function showToast(msg: string) {
@@ -188,15 +227,15 @@ export function ProfessorWorkspace({
     });
   }
 
-  function handleToggleBlackout(slot: { day: number; specificDate?: string; start: string; end: string; isBlackout: boolean; id?: string; rawSlot?: any }) {
+  function handleToggleBlackout(slot: { type?: string; day: number; specificDate?: string; start: string; end: string; isBlackout: boolean; id?: string; rawSlot?: any }) {
     if (slot.id) {
-      if (slot.rawSlot?.type === "admin_blackout") {
+      if (slot.type === "admin_blackout" || slot.rawSlot?.type === "admin_blackout") {
         const formData = new FormData();
-        formData.set("taskId", slot.id);
+        formData.set("id", slot.id);
         runAction(deleteProfessorAdminTask, formData);
       } else {
         const formData = new FormData();
-        formData.set("availabilityId", slot.id);
+        formData.set("id", slot.id);
         formData.set("isActive", slot.isBlackout ? "true" : "false");
         runAction(toggleProfessorAvailability, formData);
       }
@@ -237,7 +276,7 @@ export function ProfessorWorkspace({
     formData.set("requestId", requestId);
     formData.set("professorNote", note);
     formData.set("location", location);
-    runAction((fd) => import("@/services/professor.actions").then(m => m.updateCounselingDetails(fd)), formData);
+    runAction(updateCounselingDetails, formData);
   }
 
   function handleCancelCounseling(requestId: string) {
@@ -249,7 +288,7 @@ export function ProfessorWorkspace({
 
   // Dashboard stats
   const adminStats = useMemo<ProfessorAdminStat[]>(() => {
-    const pendingCounselingCount = counselingRequests.filter((r) => r.status === "pending").length;
+    const pendingCounselingCount = currentCounselingRequests.filter((r) => r.status === "pending").length;
     const pendingRoadmapCount = roadmapRequests.filter((r) => r.status === "pending" || r.status === "assistant_reviewed").length;
     return [
       { label: "\uc0c1\ub2f4 \ub300\uae30", value: `${pendingCounselingCount}\uac74`, tone: pendingCounselingCount ? "urgent" : "calm" },
@@ -257,11 +296,11 @@ export function ProfessorWorkspace({
       { label: "\uc0c1\ub2f4 \uc2ac\ub86f", value: `${availability.length}\uac1c`, tone: availability.length ? "calm" : "normal" },
       { label: "\ub2f4\ub2f9 \uacfc\ubaa9", value: `${courses.length}\uac1c`, tone: "calm" },
     ];
-  }, [availability.length, counselingRequests, courses.length, roadmapRequests]);
+  }, [availability.length, currentCounselingRequests, courses.length, roadmapRequests]);
 
   // Dashboard tasks
   const dashboardTasks = useMemo<ProfessorAdminTask[]>(() => {
-    const pendingCounselingCount = counselingRequests.filter((r) => r.status === "pending").length;
+    const pendingCounselingCount = currentCounselingRequests.filter((r) => r.status === "pending").length;
     const pendingRoadmapCount = roadmapRequests.filter((r) => r.status === "pending" || r.status === "assistant_reviewed").length;
     const tasks: ProfessorAdminTask[] = [];
     if (pendingCounselingCount > 0) {
@@ -274,7 +313,14 @@ export function ProfessorWorkspace({
       tasks.push({ id: "faq-setup", title: "\ube48\ucd9c \uc9c8\ubb38 \ub2f5\ubcc0 \ub4f1\ub85d", description: "\ubc18\ubcf5 \uc9c8\ubb38\uc740 FAQ\ub85c \ub4f1\ub85d\ud574 \ud559\uc0dd\uc5d0\uac8c \ube60\ub974\uac8c \uc548\ub0b4\ud569\ub2c8\ub2e4.", countLabel: "\ubbf8\ub4f1\ub85d", priority: "setup", tab: "questions" });
     }
     return tasks;
-  }, [counselingRequests, faqs.length, roadmapRequests]);
+}, [currentCounselingRequests, faqs.length, roadmapRequests]);
+
+  const pendingCounselingRequestCount = currentCounselingRequests.filter((r) => r.status === "pending").length;
+  const pendingQuestionCount = dummyQuestions.filter((q) => q.status === "PENDING").length;
+  const sidebarBadgeCounts = {
+    pendingCounseling: Math.max(currentNotificationCounts.counseling, pendingCounselingRequestCount),
+    incomingQuestions: Math.max(currentNotificationCounts.question, pendingQuestionCount),
+  };
 
   // Current sidebar items for active tab
   const currentSidebarItems = sidebarMenus[activeTab];
@@ -289,8 +335,9 @@ export function ProfessorWorkspace({
             adminTasks={adminTasks}
             dashboardTasks={dashboardTasks}
             availability={availability}
-            counselingRequests={counselingRequests}
+            counselingRequests={currentCounselingRequests}
             teachingSlots={teachingSlots}
+            notificationCounts={currentNotificationCounts}
             onToggleBlackout={handleToggleBlackout}
             onAddAdminTask={handleAddAdminTask}
             onOpenTask={changeTab}
@@ -365,10 +412,14 @@ export function ProfessorWorkspace({
       case "pending-counseling":
         return (
           <PendingCounselingSub
-            counselingRequests={counselingRequests}
+            counselingRequests={currentCounselingRequests}
             isPending={isPending}
             runAction={runAction}
             showToast={showToast}
+            onRequestStatusChange={(updated) => {
+              setCurrentCounselingRequests((prev) => prev.map((request) => (request.id === updated.id ? updated : request)));
+              setCurrentNotificationCounts((prev) => ({ ...prev, counseling: Math.max(prev.counseling - 1, 0) }));
+            }}
           />
         );
       case "counseling-log":
@@ -383,76 +434,95 @@ export function ProfessorWorkspace({
   }
 
   return (
-    <section className="section professor-workspace" data-testid="professor-workspace">
-      {/* Toast */}
-      {toast ? (
-        <div className={`professor-toast professor-toast-show`}>{toast}</div>
-      ) : null}
-
-      {/* Profile card */}
-      <div className="professor-profile-card">
-        <span className="icon-box">
-          <GraduationCap aria-hidden="true" />
-        </span>
-        <div>
-          <h2>{professor.name} 교수</h2>
-          <p>
-            {professor.office ?? "연구실 미정"} · {professor.email ?? "이메일 미정"}
-          </p>
+    <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50/50 font-sans" data-testid="professor-workspace">
+      {/* Sidebar for PC / Top Navigation for Mobile */}
+      <aside className="lg:w-64 flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 flex flex-col z-20 sticky top-0 lg:h-screen shadow-sm">
+        <div className="p-5 lg:p-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-100/80 text-emerald-700 p-2.5 rounded-xl shadow-sm">
+              <GraduationCap size={22} strokeWidth={2.5} />
+            </div>
+            <div>
+              <h2 className="font-bold text-slate-800 text-lg tracking-tight">{professor.name} 교수</h2>
+              <p className="text-xs text-slate-500 font-medium">
+                {professor.office ?? "연구실 미정"}
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Top Header Navigation (Dropdown) */}
-      <nav className="flex items-center gap-8 mb-8 border-b border-gray-200" aria-label="교수 기능">
-        {professorTabs.map((tab) => (
-          <div key={tab.id} className="relative group pb-4">
-            <button
-              className={`text-lg font-bold transition-colors ${
-                activeTab === tab.id ? "text-emerald-700" : "text-gray-600 group-hover:text-emerald-600"
-              }`}
-              onClick={() => changeTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-            {activeTab === tab.id && (
-              <div className="absolute bottom-0 left-0 w-full h-[3px] bg-emerald-600 rounded-t-md" />
-            )}
-            <div className="absolute left-0 top-full mt-0 w-56 bg-white/95 backdrop-blur-md border border-gray-100 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 overflow-hidden transform origin-top translate-y-[-10px] group-hover:translate-y-0">
-              <div className="py-2">
+        
+        {/* Navigation Menus */}
+        <nav className="flex-1 lg:overflow-y-auto px-4 pb-4 lg:pb-6 flex lg:flex-col gap-3 lg:gap-2 overflow-x-auto scrollbar-hide border-b lg:border-none border-slate-100">
+          {professorTabs.map((tab) => (
+            <div key={tab.id} className="lg:mb-4 flex-shrink-0 flex lg:block items-center gap-2">
+              <div className="hidden lg:block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-2">
+                {tab.label}
+              </div>
+              <div className="flex lg:flex-col gap-1.5">
                 {sidebarMenus[tab.id].map((item) => {
                   const Icon = item.icon;
+                  const isActive = activeTab === tab.id && activeSub === item.id;
+                  const badgeCount =
+                    item.id === "pending-counseling"
+                      ? sidebarBadgeCounts.pendingCounseling
+                      : item.id === "incoming-questions"
+                      ? sidebarBadgeCounts.incomingQuestions
+                      : 0;
+
                   return (
-                    <button
+                    <Link
                       key={item.id}
-                      className={`flex items-center gap-3 w-full px-5 py-3 text-sm text-left hover:bg-emerald-50/80 transition-colors ${
-                        activeSub === item.id ? "bg-emerald-50 text-emerald-700 font-semibold" : "text-gray-700"
+                      href={`/professor?tab=${tab.id}&sub=${item.id}`}
+                      className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                        isActive
+                          ? "bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-600/10"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                       }`}
-                      onClick={() => {
-                        setActiveTab(tab.id);
-                        setActiveSub(item.id);
-                      }}
                     >
-                      <Icon size={16} strokeWidth={activeSub === item.id ? 2.5 : 2} />
-                      {item.label}
-                    </button>
+                      <Icon size={18} className={isActive ? "text-emerald-600" : "text-slate-400"} />
+                      <span>{item.label}</span>
+                      {badgeCount > 0 ? (
+                        <span className="badge-dot" aria-label={`${badgeCount}개의 알림`}>
+                          {badgeCount}
+                        </span>
+                      ) : null}
+                    </Link>
                   );
                 })}
               </div>
             </div>
+          ))}
+        </nav>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto w-full p-4 lg:p-8 max-w-7xl mx-auto">
+        {/* Content Header */}
+        <header className="mb-6 lg:mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 tracking-tight">
+              {currentSidebarItems.find((item) => item.id === activeSub)?.label}
+            </h1>
+            <p className="text-slate-500 mt-1 text-sm font-medium">
+              {professorTabs.find((t) => t.id === activeTab)?.label} 대시보드
+            </p>
           </div>
-        ))}
-      </nav>
+        </header>
 
-      {/* Content area */}
-      <div className="professor-content-area">
-        <div className="professor-content-header">
-          <h2>{currentSidebarItems.find((item) => item.id === activeSub)?.label}</h2>
+        {/* SubContent */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-4 lg:p-6 min-h-[600px]">
+          {renderSubContent()}
         </div>
-        {renderSubContent()}
-      </div>
+      </main>
 
-      {message ? <p className="mypage-message">{message}</p> : null}
-    </section>
+      {/* Toast */}
+      {toast ? (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-800 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 transform translate-y-0 opacity-100">
+          <Check size={18} className="text-emerald-400" />
+          <span className="text-sm font-medium tracking-wide">{toast}</span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -466,6 +536,7 @@ function ScheduleCalendarSub({
   availability,
   counselingRequests,
   teachingSlots,
+  notificationCounts,
   onToggleBlackout,
   onAddAdminTask,
   onOpenTask,
@@ -478,6 +549,10 @@ function ScheduleCalendarSub({
   availability: ProfessorAvailability[];
   counselingRequests: ProfessorCounselingRequest[];
   teachingSlots: ProfessorTeachingSlot[];
+  notificationCounts: {
+    counseling: number;
+    question: number;
+  };
   onToggleBlackout: (slot: any) => void;
   onAddAdminTask: (task: any) => void;
   onOpenTask: (tab: ProfessorTab) => void;
@@ -492,37 +567,60 @@ function ScheduleCalendarSub({
           <h2>오늘 처리할 행정업무</h2>
           <span>{dashboardTasks.length ? `${dashboardTasks.length}개` : "정리됨"}</span>
         </div>
-        <div className="professor-admin-stat-grid" aria-label="교수 업무 요약">
-          {adminStats.map((stat) => (
-            <div data-tone={stat.tone} key={stat.label}>
-              <span>{stat.label}</span>
-              <strong>{stat.value}</strong>
-            </div>
-          ))}
+
+        <div className="professor-notification-summary-grid">
+          {Math.max(currentNotificationCounts.counseling, currentCounselingRequests.filter((r) => r.status === "pending").length) > 0 ? (
+            <Link
+              href="/professor?tab=counseling&sub=pending-counseling"
+              className="professor-notification-box professor-notification-box-urgent"
+            >
+              <div>
+                <p>상담 요청</p>
+                <strong>{Math.max(currentNotificationCounts.counseling, currentCounselingRequests.filter((r) => r.status === "pending").length)}건</strong>
+              </div>
+              <span>바로가기</span>
+            </Link>
+          ) : null}
+
+          {Math.max(currentNotificationCounts.question, pendingQuestionCount) > 0 ? (
+            <Link
+              href="/professor?tab=questions&sub=incoming-questions"
+              className="professor-notification-box professor-notification-box-calm"
+            >
+              <div>
+                <p>질문 요청</p>
+                <strong>{Math.max(currentNotificationCounts.question, pendingQuestionCount)}건</strong>
+              </div>
+              <span>바로가기</span>
+            </Link>
+          ) : null}
         </div>
+
         {dashboardTasks.length ? (
-          <div className="professor-admin-task-list">
-            {dashboardTasks.map((task) => (
-              <button
-                className="professor-admin-task"
-                data-priority={task.priority}
-                key={task.id}
-                onClick={() => onOpenTask(task.tab)}
-                type="button"
-              >
-                <span className="professor-admin-task-icon">
-                  {task.tab === "counseling" ? <CalendarClock aria-hidden="true" /> : null}
-                  {task.tab === "roadmap" ? <PencilLine aria-hidden="true" /> : null}
-                  {task.tab === "questions" ? <MessageSquareText aria-hidden="true" /> : null}
-                </span>
-                <span>
-                  <strong>{task.title}</strong>
-                  <small>{task.description}</small>
-                </span>
-                <em>{task.countLabel}</em>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="professor-admin-task-list">
+              {dashboardTasks.map((task) => (
+                <button
+                  className="professor-admin-task"
+                  data-priority={task.priority}
+                  key={task.id}
+                  onClick={() => onOpenTask(task.tab)}
+                  type="button"
+                >
+                  <span className="professor-admin-task-icon">
+                    {task.tab === "roadmap" ? <PencilLine aria-hidden="true" /> : null}
+                    {task.tab === "questions" ? <MessageSquareText aria-hidden="true" /> : null}
+                  </span>
+                  <span>
+                    <strong>{task.title}</strong>
+                    <small>{task.description}</small>
+                  </span>
+                  <em>{task.countLabel}</em>
+                </button>
+              ))}
+            </div>
+
+          </>
         ) : (
           <div className="professor-admin-clear">
             <Check aria-hidden="true" />
@@ -532,10 +630,7 @@ function ScheduleCalendarSub({
       </section>
 
       {/* Calendar */}
-      <section className="professor-panel">
-        <div className="community-section-heading">
-          <h2>스마트 주간 캘린더</h2>
-        </div>
+      <section className="professor-panel mt-6">
         <ProfessorCalendar
           teachingSlots={teachingSlots}
           counselingRequests={counselingRequests}
@@ -997,12 +1092,12 @@ function CourseFaqSub({
         <HelpCircle size={18} aria-hidden="true" />
       </div>
       {allItems.length > 0 ? (
-        <div className="professor-faq-list">
+        <div className="flex flex-col gap-4 mt-4">
           {allItems.map((item) => (
-            <article key={item.id} className="professor-faq-card">
-              <strong>{item.question}</strong>
-              <p>{item.answer}</p>
-              <small>{item.courseName}</small>
+            <article key={item.id} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+              <strong className="text-emerald-950 font-bold text-lg block mb-2">{item.question}</strong>
+              <p className="text-gray-800 text-sm leading-relaxed mb-3">{item.answer}</p>
+              <small className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md">{item.courseName}</small>
             </article>
           ))}
         </div>
@@ -1064,57 +1159,51 @@ function IncomingQuestionsSub({
         <Inbox size={18} aria-hidden="true" />
       </div>
       {dummyQuestions.length > 0 ? (
-        <div className="professor-request-list">
+        <div className="flex flex-col gap-4 mt-4">
           {dummyQuestions.map((q) => (
-            <article key={q.id} className="professor-question-card">
-              <div>
-                <strong>{q.studentName}</strong>
-                <span className="professor-status-badge" data-status={q.status}>
+            <article key={q.id} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-2">
+                <strong className="text-emerald-950 font-bold text-lg">{q.studentName}</strong>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${q.status === "PENDING" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"}`}>
                   {q.status === "PENDING" ? "대기" : "답변 완료"}
                 </span>
               </div>
-              <p>{q.courseName} · {q.date}</p>
-              <p>{q.question}</p>
+              <p className="text-gray-500 text-sm mb-3">{q.courseName} · {q.date}</p>
+              <p className="text-gray-800 text-sm leading-relaxed">{q.question}</p>
 
               {q.status === "ANSWERED" && q.answer ? (
-                <div className="professor-faq-card">
-                  <strong>답변:</strong>
-                  <p>{q.answer}</p>
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <strong className="text-sm font-semibold text-emerald-950 mb-1 block">답변:</strong>
+                  <p className="text-sm text-gray-700 leading-relaxed">{q.answer}</p>
                 </div>
               ) : null}
 
               {q.status === "PENDING" ? (
-                <div className="professor-question-actions">
+                <div className="mt-4 pt-4 border-t border-gray-50">
                   {answeringId === q.id ? (
-                    <div className="professor-question-answer-form">
-                      <label className="field">
-                        <span>답변 입력</span>
+                    <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-sm font-semibold text-emerald-950">답변 입력</span>
                         <textarea
                           rows={3}
                           value={answerText}
                           onChange={(e) => setAnswerText(e.target.value)}
                           placeholder="답변을 입력하세요"
+                          className="w-full border border-gray-200 rounded-md p-2 text-sm text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         />
-                      </label>
-                      <label className="checkbox-row">
+                      </div>
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={registerAsNotice}
                           onChange={(e) => setRegisterAsNotice(e.target.checked)}
+                          className="rounded text-emerald-600 focus:ring-emerald-500"
                         />
-                        <span>공지사항으로 등록하기</span>
+                        <span>공지사항으로 함께 등록하기</span>
                       </label>
-                      <div className="professor-request-actions">
+                      <div className="flex justify-end gap-2 mt-2">
                         <button
-                          className="button button-default button-sm"
-                          type="button"
-                          onClick={() => handleSubmitAnswer(q)}
-                        >
-                          <Send size={14} aria-hidden="true" />
-                          제출
-                        </button>
-                        <button
-                          className="button button-outline button-sm"
+                          className="px-4 py-2 text-sm font-medium rounded-md border border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
                           type="button"
                           onClick={() => {
                             setAnsweringId(null);
@@ -1124,11 +1213,19 @@ function IncomingQuestionsSub({
                         >
                           취소
                         </button>
+                        <button
+                          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                          type="button"
+                          onClick={() => handleSubmitAnswer(q)}
+                        >
+                          <Send size={14} aria-hidden="true" />
+                          제출
+                        </button>
                       </div>
                     </div>
                   ) : (
                     <button
-                      className="button button-default button-sm"
+                      className="px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
                       type="button"
                       onClick={() => setAnsweringId(q.id)}
                     >
@@ -1247,11 +1344,13 @@ function PendingCounselingSub({
   isPending,
   runAction,
   showToast,
+  onRequestStatusChange,
 }: {
   counselingRequests: ProfessorCounselingRequest[];
   isPending: boolean;
   runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
   showToast: (msg: string) => void;
+  onRequestStatusChange: (updatedRequest: ProfessorCounselingRequest) => void;
 }) {
   const pendingRequests = counselingRequests.filter((r) => r.status === "pending");
   const [localPending, setLocalPending] = useState(pendingRequests);
@@ -1271,6 +1370,7 @@ function PendingCounselingSub({
     formData.set("professorNote", "가능한 시간입니다. 상담 때 뵙겠습니다.");
     runAction(updateCounselingStatus, formData, () => {
       setLocalPending((prev) => prev.filter((r) => r.id !== request.id));
+      onRequestStatusChange({ ...request, status: "approved" });
     });
     showToast("일정에 추가 했습니다");
   }
@@ -1300,6 +1400,7 @@ function PendingCounselingSub({
       setRejectingId(null);
       setRejectNote("");
       setSuggestedTime("");
+      onRequestStatusChange({ ...request, status: "rejected" });
     });
   }
 
@@ -1421,19 +1522,22 @@ function CounselingLogSub({
         <History size={18} aria-hidden="true" />
       </div>
       {logEntries.length > 0 ? (
-        <div className="professor-log-timeline">
+        <div className="flex flex-col gap-4 mt-4">
           {logEntries.map((entry) => (
-            <div key={entry.id} className="professor-log-entry">
-              <div>
-                <strong>{entry.topic}</strong>
-                <span className="professor-status-badge" data-status={entry.status}>
+            <div key={entry.id} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
+              <div className="flex justify-between items-start mb-2">
+                <strong className="text-emerald-950 font-bold">{entry.topic}</strong>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${entry.status === "approved" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>
                   {counselingStatusLabels[entry.status]}
                 </span>
               </div>
-              <p>학생: {entry.student ? `${entry.student.name} (${entry.student.identifier})` : entry.student_id}</p>
-              <p>{new Date(entry.requested_start).toLocaleString("ko-KR")}</p>
+              <p className="text-sm text-gray-600 mb-1">학생: <span className="font-medium text-emerald-900">{entry.student ? `${entry.student.name} (${entry.student.identifier})` : entry.student_id}</span></p>
+              <p className="text-sm text-gray-500">{new Date(entry.requested_start).toLocaleString("ko-KR", { dateStyle: "long", timeStyle: "short" })}</p>
               {entry.professor_note ? (
-                <p>{entry.professor_note}</p>
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
+                  <span className="font-semibold text-emerald-950 block mb-1">교수 메모</span>
+                  {entry.professor_note}
+                </div>
               ) : null}
             </div>
           ))}
