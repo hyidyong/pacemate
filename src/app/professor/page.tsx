@@ -1,10 +1,6 @@
-import Link from "next/link";
-import { ArrowLeft, MessageSquareText } from "lucide-react";
 import dynamicImport from "next/dynamic";
 import { AppShell } from "@/components/layout/app-shell";
-import { ProfessorNotificationSummary } from "@/components/professor/professor-notification-summary";
-import { Button } from "@/components/ui/button";
-import { getNotificationsForProfile } from "@/services/notifications.service";
+import { getUnreadNotificationCountByCategory } from "@/services/notifications.service";
 import { getProfessorPageData } from "@/services/professor.service";
 import { requireRoles } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
@@ -35,41 +31,27 @@ function normalizeProfessorTab(tab?: string) {
 export default async function ProfessorPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string }>;
+  searchParams?: Promise<{ tab?: string; sub?: string }>;
 }) {
   const profile = await getDemoProfile();
   requireRoles(profile, ["professor", "assistant"]);
   const params = await searchParams;
   const initialTab = normalizeProfessorTab(params?.tab);
 
-  const [data, notifications] = await Promise.all([
+  const [data, unreadCounselingCount, questionCount] = await Promise.all([
     getProfessorPageData(profile),
-    getNotificationsForProfile(profile, 4),
+    getUnreadNotificationCountByCategory(profile, "counseling"),
+    getUnreadNotificationCountByCategory(profile, "question"),
   ]);
+
+  const pendingCounselingCount = data.counselingRequests.filter((request) => request.status === "pending").length;
+  const effectiveCounselingCount = Math.max(pendingCounselingCount, unreadCounselingCount);
 
   return (
     <AppShell>
       <section className="screen-hero professor-hero">
-        <Link href="/dashboard" className="status-line">
-          <ArrowLeft size={15} aria-hidden="true" />
-          교수 모드
-        </Link>
         <h1>교수 대시보드</h1>
-        <p>
-          담당 과목, 상담 가능 시간, 학생 질문 FAQ를 관리합니다. 학생 익명
-          커뮤니티와는 분리하고, 공식 답변과 상담 흐름만 교수 모드에서 처리합니다.
-        </p>
-        <div className="actions">
-          <Button asChild variant="outline">
-            <Link href="/professor/lounge">
-              교수 라운지
-              <MessageSquareText size={16} aria-hidden="true" />
-            </Link>
-          </Button>
-        </div>
       </section>
-
-      <ProfessorNotificationSummary notifications={notifications} />
 
       {data.professor ? (
         <ProfessorWorkspace
@@ -79,6 +61,8 @@ export default async function ProfessorPage({
           courses={data.courses}
           faqs={data.faqs}
           initialTab={initialTab as any}
+          initialSub={params?.sub}
+          notificationCounts={{ counseling: effectiveCounselingCount, question: questionCount }}
           professor={data.professor}
           roadmapRequests={data.roadmapRequests}
           teachingSlots={data.teachingSlots}

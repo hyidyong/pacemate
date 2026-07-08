@@ -40,7 +40,9 @@ export function calculateRecommendedAvailability(
     // Collect all busy ranges for this day
     const busyRanges: { start: number; end: number }[] = [];
     const specificDateObj = weekDates[index]?.fullDate;
-    const specificDateStr = specificDateObj ? specificDateObj.toISOString().split('T')[0] : null;
+    const specificDateStr = specificDateObj 
+      ? `${specificDateObj.getFullYear()}-${String(specificDateObj.getMonth() + 1).padStart(2, '0')}-${String(specificDateObj.getDate()).padStart(2, '0')}` 
+      : null;
 
     // 1. Courses
     teachingSlots.forEach((slot) => {
@@ -75,7 +77,9 @@ export function calculateRecommendedAvailability(
       if (req.status === "approved") {
         const start = new Date(req.suggested_start || req.requested_start);
         const end = new Date(req.suggested_end || req.requested_end);
-        if (start.getDay() === day && start.toISOString().split('T')[0] === specificDateStr) {
+        const startLocalStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+        
+        if (start.getDay() === day && startLocalStr === specificDateStr) {
           busyRanges.push({
             start: start.getHours() * 60 + start.getMinutes(),
             end: end.getHours() * 60 + end.getMinutes(),

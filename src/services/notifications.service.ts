@@ -72,3 +72,28 @@ export async function getUnreadNotificationCount(profile: DemoProfile | null) {
 
   return count ?? 0;
 }
+
+export async function getUnreadNotificationCountByCategory(
+  profile: DemoProfile | null,
+  category: UserNotification["category"],
+) {
+  if (!profile) {
+    return 0;
+  }
+
+  let query = supabase
+    .from("user_notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("is_read", false)
+    .eq("category", category);
+
+  query = query.or(`recipient_role.eq.${profile.role},recipient_id.eq.${profile.id}`);
+
+  const { count, error } = await query;
+
+  if (error) {
+    throw new Error(`Failed to load unread notification count for ${category}: ${error.message}`);
+  }
+
+  return count ?? 0;
+}

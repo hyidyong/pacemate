@@ -2,6 +2,7 @@ import { AiTutorChat } from "@/components/chatbot/ai-tutor-chat";
 import { redirectNonStudent } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 
+export const dynamic = "force-dynamic";
 export default async function ChatbotPage() {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);

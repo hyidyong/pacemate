@@ -135,6 +135,12 @@ export function AppHeader({
         </nav>
 
         <div className="header-actions" aria-label="Quick navigation">
+          {isAuthenticated && isProfessor ? (
+            <Link href="/professor/lounge" className="header-action-link header-action-community-link hidden md:inline-flex hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
+              <MessageSquareText aria-hidden="true" />
+              <span>교수 커뮤니티</span>
+            </Link>
+          ) : null}
           {isAuthenticated ? (
             <Link
               href="/support"
@@ -167,12 +173,6 @@ export function AppHeader({
                 <span className="sr-only">마이페이지</span>
               </Link>
             </>
-          ) : null}
-          {isAuthenticated && isProfessor ? (
-            <Link href="/professor" className="header-action-link header-action-primary header-action-professor hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
-              <GraduationCap aria-hidden="true" />
-              <span>교수 홈</span>
-            </Link>
           ) : null}
           {isAuthenticated && isOperator ? (
             <Link href="/admin" className="header-action-link header-action-primary hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">

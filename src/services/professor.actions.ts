@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase/client";
+import {
+  isWeekday,
+  timeRangeEndsByStudentCutoff,
+} from "@/lib/scheduling-policy";
 import { textareaToList } from "@/services/roadmap-revisions.service";
 import { getDemoProfile } from "@/services/session.service";
 
@@ -76,32 +80,52 @@ async function resolveOwnedCourse(courseValue: string, profileId?: string | null
 }
 
 export async function addProfessorAvailability(formData: FormData) {
-  const professorId = text(formData.get("professorId"));
-  const day = integer(formData.get("dayOfWeek"), 1);
-  const startTime = text(formData.get("startTime"), "10:00");
-  const endTime = text(formData.get("endTime"), "12:00");
-  const slotMinutes = integer(formData.get("slotMinutes"), 30);
-  const isActive = formData.get("isActive") === "false" ? false : true;
+  try {
+    const professorId = text(formData.get("professorId"));
+    const day = integer(formData.get("dayOfWeek"), 1);
+    const specificDate = text(formData.get("specificDate"));
+    const startTime = text(formData.get("startTime"), "10:00");
+    const endTime = text(formData.get("endTime"), "12:00");
+    const slotMinutes = integer(formData.get("slotMinutes"), 30);
+    const isActive = formData.get("isActive") === "false" ? false : true;
 
-  if (!professorId) {
-    return { ok: false, message: "교수 정보를 찾을 수 없습니다." };
+    if (!professorId) {
+      return { ok: false, message: "교수 정보를 찾을 수 없습니다." };
+    }
+
+    if (specificDate) {
+      const date = new Date(`${specificDate}T00:00:00`);
+      if (!isWeekday(date)) {
+        return { ok: false, message: "상담 가능 시간은 평일에만 등록할 수 있습니다." };
+      }
+    } else if (day < 1 || day > 5) {
+      return { ok: false, message: "상담 가능 시간은 평일에만 등록할 수 있습니다." };
+    }
+
+    if (!timeRangeEndsByStudentCutoff(startTime, endTime)) {
+      return { ok: false, message: "상담 가능 시간은 18:00 이전으로만 등록할 수 있습니다." };
+    }
+
+    const { error } = await supabase.from("professor_availability").insert({
+      professor_id: professorId,
+      day_of_week: day,
+      specific_date: specificDate || null,
+      start_time: startTime,
+      end_time: endTime,
+      slot_minutes: slotMinutes,
+      is_active: isActive,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    revalidatePath("/professor");
+    return { ok: true, message: "상담 가능 시간이 추가됐습니다." };
+  } catch (err: any) {
+    console.error("Action error:", err);
+    return { ok: false, message: err.message || "알 수 없는 오류가 발생했습니다." };
   }
-
-  const { error } = await supabase.from("professor_availability").insert({
-    professor_id: professorId,
-    day_of_week: day,
-    start_time: startTime,
-    end_time: endTime,
-    slot_minutes: slotMinutes,
-    is_active: isActive,
-  });
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  revalidatePath("/professor");
-  return { ok: true, message: "상담 가능 시간이 추가됐습니다." };
 }
 
 export async function addProfessorFaq(formData: FormData) {
@@ -181,6 +205,32 @@ export async function updateCounselingStatus(formData: FormData) {
   revalidatePath("/professor");
   revalidatePath("/counseling");
   return { ok: true, message: "상담 상태를 변경했습니다." };
+}
+
+export async function updateCounselingDetails(formData: FormData) {
+  const requestId = text(formData.get("requestId"));
+  const professorNote = text(formData.get("professorNote"));
+  const location = text(formData.get("location"));
+
+  if (!requestId) {
+    return { ok: false, message: "상담 일정을 찾을 수 없습니다." };
+  }
+
+  const { error } = await supabase
+    .from("counseling_requests")
+    .update({
+      professor_note: professorNote || null,
+      location: location || null,
+    })
+    .eq("id", requestId);
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  revalidatePath("/professor");
+  revalidatePath("/counseling");
+  return { ok: true, message: "상담 일정이 저장되었습니다." };
 }
 
 export async function createRoadmapRevisionRequest(formData: FormData) {
@@ -330,58 +380,76 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
 }
 
 export async function addProfessorAdminTask(formData: FormData) {
-  const professorId = text(formData.get("professorId"));
-  const title = text(formData.get("title"));
-  const day = integer(formData.get("dayOfWeek"), 1);
-  const startTime = text(formData.get("startTime"), "09:00");
-  const endTime = text(formData.get("endTime"), "10:00");
+  try {
+    const professorId = text(formData.get("professorId"));
+    const title = text(formData.get("title"));
+    const day = integer(formData.get("dayOfWeek"), 1);
+    const startTime = text(formData.get("startTime"), "09:00");
+    const endTime = text(formData.get("endTime"), "10:00");
 
-  if (!professorId) {
-    return { ok: false, message: "교수 정보를 찾을 수 없습니다." };
+    if (!professorId) {
+      return { ok: false, message: "교수 정보를 찾을 수 없습니다." };
+    }
+
+    const { timeRangeEndsByStudentCutoff } = await import("@/lib/scheduling-policy");
+    if (title.startsWith("__BLACKOUT__") && !timeRangeEndsByStudentCutoff(startTime, endTime)) {
+      return { ok: false, message: "상담 차단은 18:00 이전 시간대에만 적용할 수 있습니다." };
+    }
+
+    const { error } = await supabase.from("professor_admin_tasks").insert({
+      professor_id: professorId,
+      title,
+      day_of_week: day,
+      start_time: startTime,
+      end_time: endTime,
+    });
+
+    if (error) {
+      return { ok: false, message: error.message };
+    }
+
+    revalidatePath("/professor");
+    return { ok: true, message: "행정 업무가 추가됐습니다." };
+  } catch (err: any) {
+    console.error("Action error:", err);
+    return { ok: false, message: err.message || "알 수 없는 오류가 발생했습니다." };
   }
-
-  const { error } = await supabase.from("professor_admin_tasks").insert({
-    professor_id: professorId,
-    title,
-    day_of_week: day,
-    start_time: startTime,
-    end_time: endTime,
-  });
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  revalidatePath("/professor");
-  return { ok: true, message: "행정 업무가 추가됐습니다." };
 }
 
 export async function deleteProfessorAdminTask(formData: FormData) {
-  const taskId = text(formData.get("taskId"));
+  try {
+    const id = text(formData.get("id"));
+    if (!id) return { ok: false, message: "ID 누락" };
 
-  if (!taskId) return { ok: false, message: "작업 ID가 없습니다." };
+    const { error } = await supabase.from("professor_admin_tasks").delete().eq("id", id);
+    if (error) return { ok: false, message: error.message };
 
-  const { error } = await supabase.from("professor_admin_tasks").delete().eq("id", taskId);
-
-  if (error) return { ok: false, message: error.message };
-
-  revalidatePath("/professor");
-  return { ok: true, message: "행정 업무가 삭제됐습니다." };
+    revalidatePath("/professor");
+    return { ok: true, message: "행정 업무가 삭제됐습니다." };
+  } catch (err: any) {
+    console.error("Action error:", err);
+    return { ok: false, message: err.message || "알 수 없는 오류가 발생했습니다." };
+  }
 }
 
 export async function toggleProfessorAvailability(formData: FormData) {
-  const availabilityId = text(formData.get("availabilityId"));
-  const isActive = formData.get("isActive") === "true";
+  try {
+    const id = text(formData.get("id"));
+    const isActive = text(formData.get("isActive")) === "true";
 
-  if (!availabilityId) return { ok: false, message: "일정 ID가 없습니다." };
+    if (!id) return { ok: false, message: "ID 누락" };
 
-  const { error } = await supabase
-    .from("professor_availability")
-    .update({ is_active: isActive })
-    .eq("id", availabilityId);
+    const { error } = await supabase
+      .from("professor_availability")
+      .update({ is_active: isActive })
+      .eq("id", id);
 
-  if (error) return { ok: false, message: error.message };
+    if (error) return { ok: false, message: error.message };
 
-  revalidatePath("/professor");
-  return { ok: true, message: "상담 가능 상태가 변경됐습니다." };
+    revalidatePath("/professor");
+    return { ok: true, message: isActive ? "상담 가능 상태로 변경됐습니다." : "상담 불가 상태로 변경됐습니다." };
+  } catch (err: any) {
+    console.error("Action error:", err);
+    return { ok: false, message: err.message || "알 수 없는 오류가 발생했습니다." };
+  }
 }
