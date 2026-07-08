@@ -132,6 +132,7 @@ create table public.syllabi (
 create table public.notices (
   id uuid primary key default gen_random_uuid(),
   title text not null,
+  day_of_week int check (day_of_week between 0 and 6),
   content text not null,
   category text,
   file_url text,
@@ -177,6 +178,7 @@ create table public.roadmap_revision_requests (
   course_id text,
   department_name text,
   title text not null,
+  day_of_week int check (day_of_week between 0 and 6),
   summary text not null,
   proposed_by uuid references public.profiles(id) on delete set null,
   proposed_by_name text not null default 'êµìˆ˜',
@@ -205,6 +207,7 @@ create table public.user_notifications (
   recipient_id uuid references public.profiles(id) on delete cascade,
   category text not null check (category in ('question', 'counseling', 'revision', 'system')),
   title text not null,
+  day_of_week int check (day_of_week between 0 and 6),
   body text not null,
   target_href text not null,
   is_read boolean not null default false,
@@ -218,6 +221,7 @@ create table public.posts (
   category text not null,
   board_key text not null default 'question',
   title text not null,
+  day_of_week int check (day_of_week between 0 and 6),
   content text not null,
   course_id uuid references public.courses(id) on delete set null,
   display_mode text not null default 'anonymous',
@@ -344,6 +348,7 @@ create table public.counseling_requests (
   topic text not null,
   status public.counseling_status not null default 'pending',
   professor_note text,
+  location text,
   suggested_start timestamptz,
   suggested_end timestamptz,
   created_at timestamptz not null default now(),
@@ -902,6 +907,7 @@ create table public.professor_admin_tasks (
   id uuid primary key default gen_random_uuid(),
   professor_id uuid not null references public.professors(id) on delete cascade,
   title text not null,
+  day_of_week int check (day_of_week between 0 and 6),
   day_of_week int not null check (day_of_week between 0 and 6),
   start_time time not null,
   end_time time not null,
@@ -968,7 +974,7 @@ create policy "demo manage student_mission_progress" on public.student_mission_p
 
 
 
--- ½Ã°£Ç¥ Å×ÀÌºí
+-- ï¿½Ã°ï¿½Ç¥ ï¿½ï¿½ï¿½Ìºï¿½
 create table public.timetables (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references public.profiles(id) on delete cascade,
@@ -981,11 +987,11 @@ create table public.timetables (
   created_at timestamptz not null default now()
 );
 
--- chat_sessions¿¡ title ÄÃ·³ Ãß°¡ (Á¸ÀçÇÏÁö ¾ÊÀ¸¸é Ãß°¡)
+-- chat_sessionsï¿½ï¿½ title ï¿½Ã·ï¿½ ï¿½ß°ï¿½ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ß°ï¿½)
 do $$$
 begin
   if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='chat_sessions' and column_name='title') then
-    alter table public.chat_sessions add column title text default '»õ ´ëÈ­';
+    alter table public.chat_sessions add column title text default 'ï¿½ï¿½ ï¿½ï¿½È­';
   end if;
   if not exists (select 1 from information_schema.columns where table_schema='public' and table_name='chat_sessions' and column_name='profile_id') then
     alter table public.chat_sessions add column profile_id uuid references public.profiles(id) on delete cascade;

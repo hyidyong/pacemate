@@ -37,6 +37,7 @@ export type StudentCounselingRequest = {
   professor_note: string | null;
   suggested_start: string | null;
   suggested_end: string | null;
+  location: string | null;
   professor: { id: string; name: string; office: string | null } | null;
 };
 
@@ -105,7 +106,7 @@ async function getStudentRequests(
   const { data, error } = await supabase
     .from("counseling_requests")
     .select(
-      "id, professor_id, requested_start, requested_end, topic, status, professor_note, suggested_start, suggested_end, professor:professors(id, name, office)",
+      "id, professor_id, requested_start, requested_end, topic, status, professor_note, location, suggested_start, suggested_end, professor:professors(id, name, office)",
     )
     .eq("student_id", profile.id)
     .order("created_at", { ascending: false })
@@ -312,7 +313,8 @@ function buildAvailableSlots(
             // Check if it's a specific date blackout
             if (admin.title.startsWith("__BLACKOUT__")) {
                const blackoutDate = admin.title.split("__")[2]; // "2026-07-15"
-               if (date.toISOString().split('T')[0] !== blackoutDate) {
+               const localDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+               if (localDateStr !== blackoutDate) {
                    return false; // not this specific date
                }
             } else {
