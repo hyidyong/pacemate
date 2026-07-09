@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, Sparkles } from "lucide-react";
+import { Bot, BookOpenText, CalendarClock, House, MessagesSquare, Sparkles, UserCircle2 } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import {
@@ -23,6 +23,13 @@ export async function AppShell({ children }: AppShellProps) {
   const isOperator = profile?.role === "assistant" || profile?.role === "admin";
   const isStudent = isAuthenticated && !isProfessor && !isOperator;
   const homeHref = profile ? getRoleHomePath(profile.role) : "/";
+  const professorMobileNavItems = [
+    { label: "홈", href: "/professor", icon: House },
+    { label: "과목 관리", href: "/professor?tab=roadmap&sub=roadmap-edit", icon: BookOpenText },
+    { label: "일정관리", href: "/professor?tab=schedule&sub=calendar", icon: CalendarClock },
+    { label: "마이페이지", href: "/mypage", icon: UserCircle2 },
+    { label: "커뮤니티", href: "/professor/lounge", icon: MessagesSquare },
+  ];
 
   return (
     <div className="app-shell">
@@ -35,25 +42,44 @@ export async function AppShell({ children }: AppShellProps) {
         unreadCount={unreadCount}
       />
 
-      {/* 학생: 하단 탭바 높이만큼 padding */}
-      <main className={isStudent ? "pb-[60px] md:pb-0" : ""}>{children}</main>
+      {/* 학생/교수: 모바일 하단바 높이만큼 padding */}
+      <main className={isStudent || isProfessor ? "pb-[60px] md:pb-0" : ""}>{children}</main>
 
       {/* 학생 전용 하단 탭바 (모바일만) */}
       {isStudent && <MobileBottomNav />}
 
-      {/* 교수/운영자 전용 단순 모바일 하단바 */}
-      {isAuthenticated && (isProfessor || isOperator) && (
+      {/* 교수 전용 모바일 하단바 */}
+      {isAuthenticated && isProfessor && (
+        <nav
+          className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/90 backdrop-blur-md"
+          aria-label="Professor mobile navigation"
+        >
+          <div className="mx-auto flex h-[60px] max-w-4xl items-center justify-around px-2">
+            {professorMobileNavItems.map(({ label, href, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-[11px] font-medium text-gray-400 transition-colors hover:text-emerald-600"
+              >
+                <Icon size={18} />
+                <span className="leading-none">{label}</span>
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
+
+      {/* 운영자 전용 단순 모바일 하단바 */}
+      {isAuthenticated && isOperator && !isProfessor && (
         <nav
           className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-gray-100 flex items-center justify-around h-[60px]"
-          aria-label="Mobile primary navigation"
+          aria-label="Operator mobile navigation"
         >
           <Link
-            href={isProfessor ? "/professor" : "/admin"}
+            href="/admin"
             className="flex flex-col items-center gap-1 text-gray-400 hover:text-emerald-600 transition-colors"
           >
-            <span className="text-[11px] font-medium">
-              {isProfessor ? "교수 홈" : "운영 홈"}
-            </span>
+            <span className="text-[11px] font-medium">운영 홈</span>
           </Link>
         </nav>
       )}

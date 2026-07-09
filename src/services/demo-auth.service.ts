@@ -34,6 +34,16 @@ export async function createDemoSession(formData: FormData) {
   if (!profileId) {
     const demoUser = demoUsers.find((u) => u.identifier === identifier);
     if (demoUser && demoUser.password === password) {
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("identifier", demoUser.identifier)
+        .maybeSingle();
+
+      if (existingProfile) {
+        redirect("/login?error=duplicate_identifier");
+      }
+
       const { data: newProfile, error: insertError } = await supabase
         .from("profiles")
         .insert({
@@ -43,8 +53,15 @@ export async function createDemoSession(formData: FormData) {
         })
         .select("id")
         .single();
-        
-      if (!insertError && newProfile) {
+
+      if (insertError) {
+        if (insertError.code === "23505" || /duplicate|already exists/i.test(insertError.message)) {
+          redirect("/login?error=duplicate_identifier");
+        }
+        redirect("/login?error=create");
+      }
+
+      if (newProfile) {
         profileId = newProfile.id;
       }
     } else {

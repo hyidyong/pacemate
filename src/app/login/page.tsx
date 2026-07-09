@@ -24,6 +24,7 @@ const errorMessages: Record<string, string> = {
   identifier: "식별자를 입력해 주세요.",
   password_required: "비밀번호를 입력해 주세요.",
   invalid_password: "이메일 또는 비밀번호가 올바르지 않습니다.",
+  duplicate_identifier: "이미 가입된 이메일입니다. 다른 이메일을 입력해주세요.",
   read: "권한을 확인하지 못했습니다.",
   create: "로그인 처리 중 문제가 발생했습니다.",
 };
@@ -45,10 +46,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <LogIn size={15} aria-hidden="true" />
           로그인
         </span>
-        <h1>로그인 후 전용 화면으로 이동해요.</h1>
-        <p>
-          이메일과 비밀번호로 로그인합니다. 학생은 로그인 후 최초 1회 맞춤형 로드맵 온보딩을 거칩니다.
-        </p>
       </section>
 
       <section className="section login-layout">
@@ -94,24 +91,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>RBAC 적용 로그인 시스템</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="screen-list">
-              {[
-                "입력한 이메일과 비밀번호를 통해 사용자 인증(Auth Provider)을 수행합니다.",
-                "로그인 성공 시, DB(profiles)에서 Role(학생, 교수, 관리자 등)을 조회합니다.",
-                "조회된 권한에 따라 접근 가능한 대시보드 및 서비스로 자동 연결됩니다.",
-              ].map((item) => (
-                <li key={item}>
-                  <p>{item}</p>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
       </section>
     </AppShell>
   );

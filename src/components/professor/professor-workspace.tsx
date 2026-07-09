@@ -182,9 +182,9 @@ export function ProfessorWorkspace({
   const [announcements, setAnnouncements] = useState<Array<{ question: string; answer: string; courseName: string }>>([]);
 
   // When tab changes: auto-select first sub-menu, close sidebar
-  function changeTab(tab: ProfessorTab) {
+  function changeTab(tab: ProfessorTab, sub?: string) {
     setActiveTab(tab);
-    setActiveSub(sidebarMenus[tab][0].id);
+    setActiveSub(sub ?? sidebarMenus[tab][0].id);
     setSidebarOpen(false);
   }
 
@@ -436,8 +436,8 @@ export function ProfessorWorkspace({
 
   return (
     <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50/50 font-sans" data-testid="professor-workspace">
-      {/* Sidebar for PC / Top Navigation for Mobile */}
-      <aside className="lg:w-64 flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 flex flex-col z-20 sticky top-0 lg:h-screen shadow-sm">
+      {/* Sidebar for PC / Mobile menu panel */}
+      <aside className="hidden lg:flex lg:w-64 flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 flex-col z-20 sticky top-0 lg:h-screen shadow-sm">
         <div className="p-5 lg:p-6">
           <div className="flex items-center gap-3">
             <div className="bg-emerald-100/80 text-emerald-700 p-2.5 rounded-xl shadow-sm">
@@ -474,6 +474,7 @@ export function ProfessorWorkspace({
                     <Link
                       key={item.id}
                       href={`/professor?tab=${tab.id}&sub=${item.id}`}
+                      onClick={() => changeTab(tab.id, item.id)}
                       className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
                         isActive
                           ? "bg-emerald-50 text-emerald-700 shadow-sm ring-1 ring-emerald-600/10"
@@ -508,7 +509,62 @@ export function ProfessorWorkspace({
               {professorTabs.find((t) => t.id === activeTab)?.label} 대시보드
             </p>
           </div>
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm lg:hidden"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            aria-expanded={sidebarOpen}
+            aria-label="교수 메뉴 열기"
+          >
+            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
         </header>
+
+        {sidebarOpen ? (
+          <div className="mb-4 rounded-2xl border border-slate-200/70 bg-white p-3 shadow-sm lg:hidden">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-700">교수 메뉴</p>
+              <button
+                type="button"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                onClick={() => setSidebarOpen(false)}
+                aria-label="교수 메뉴 닫기"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {professorTabs.map((tab) => (
+                <div key={tab.id}>
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                    {tab.label}
+                  </div>
+                  <div className="space-y-1">
+                    {sidebarMenus[tab.id].map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === tab.id && activeSub === item.id;
+                      return (
+                        <Link
+                          key={item.id}
+                          href={`/professor?tab=${tab.id}&sub=${item.id}`}
+                          onClick={() => changeTab(tab.id, item.id)}
+                          className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+                            isActive
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                          }`}
+                        >
+                          <Icon size={16} className={isActive ? "text-emerald-600" : "text-slate-400"} />
+                          <span>{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {/* SubContent */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-4 lg:p-6 min-h-[600px]">
