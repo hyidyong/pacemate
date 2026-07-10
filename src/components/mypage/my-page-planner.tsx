@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
   Bookmark,
   CalendarPlus,
@@ -11,6 +11,7 @@ import {
   Trash2,
   ThumbsUp,
   MessageCircle,
+  Circle,
   FileText
 } from "lucide-react";
 import {
@@ -23,6 +24,16 @@ import type {
   CourseRecord,
   StudentCourseRecord,
 } from "@/services/student-community.service";
+import {
+  getLocalDateKey,
+  getTodoTypeFromCategory,
+  normalizeStoredTodo,
+  normalizeStoredTodos,
+  STUDENT_TODO_DONE_STORAGE_KEY,
+  STUDENT_TODO_STORAGE_KEY,
+  type StudentTodoCategory,
+  type StudentTodoItem,
+} from "@/components/dashboard/student-todo-card";
 
 type MyPagePlannerProps = {
   courses: CourseRecord[];
@@ -62,6 +73,14 @@ export function MyPagePlanner({
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const [activeCommunityTab, setActiveCommunityTab] = useState<"my" | "scrap" | "comment" | "like">("my");
+  const [todoTitle, setTodoTitle] = useState("");
+  const [todoDueDate, setTodoDueDate] = useState(getLocalDateKey(new Date()));
+  const [todoCategory, setTodoCategory] = useState<StudentTodoCategory>("과제");
+  const [todoEditId, setTodoEditId] = useState<string | null>(null);
+  const [todos, setTodos] = useState<StudentTodoItem[]>([]);
+  const [doneIds, setDoneIds] = useState<string[]>([]);
+  const [isTodoLoaded, setIsTodoLoaded] = useState(false);
+  const [isDoneLoaded, setIsDoneLoaded] = useState(false);
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0];
 
@@ -118,6 +137,65 @@ export function MyPagePlanner({
     };
   };
 
+  const loadTodos = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const storedTodos = window.localStorage.getItem(STUDENT_TODO_STORAGE_KEY);
+      const storedDone = window.localStorage.getItem(STUDENT_TODO_DONE_STORAGE_KEY);
+      const parsedTodos = storedTodos ? (JSON.parse(storedTodos) as unknown) : [];
+      const parsedDone = storedDone ? (JSON.parse(storedDone) as string[]) : [];
+      const normalizedTodos = normalizeStoredTodos(parsedTodos);
+      const normalizedDoneIds = Array.isArray(parsedDone) ? parsedDone : [];
+      const reconciledTodos = normalizedTodos.map((todo) => {
+        const isCompleted = Boolean(todo.completed) || normalizedDoneIds.includes(todo.id);
+        return { ...todo, completed: isCompleted };
+      });
+      const reconciledDoneIds = Array.from(
+        new Set([
+          ...normalizedDoneIds,
+          ...reconciledTodos.filter((todo) => todo.completed).map((todo) => todo.id),
+        ]),
+      );
+
+      setTodos(reconciledTodos);
+      setDoneIds(reconciledDoneIds);
+    } catch {
+      setTodos([]);
+      setDoneIds([]);
+    } finally {
+      setIsTodoLoaded(true);
+      setIsDoneLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTodos();
+
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("pacemate:student-todos-updated", loadTodos);
+    window.addEventListener("storage", loadTodos);
+
+    return () => {
+      window.removeEventListener("pacemate:student-todos-updated", loadTodos);
+      window.removeEventListener("storage", loadTodos);
+    };
+  }, [loadTodos]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !isTodoLoaded) return;
+    window.localStorage.setItem(
+      STUDENT_TODO_STORAGE_KEY,
+      JSON.stringify(todos.map((todo) => normalizeStoredTodo(todo))),
+    );
+  }, [todos, isTodoLoaded]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !isDoneLoaded) return;
+    window.localStorage.setItem(STUDENT_TODO_DONE_STORAGE_KEY, JSON.stringify(doneIds));
+  }, [doneIds, isDoneLoaded]);
+
   const currentTabPosts = useMemo(() => {
     switch (activeCommunityTab) {
       case "my": return myPosts;
@@ -126,6 +204,105 @@ export function MyPagePlanner({
       case "like": return likedPosts;
     }
   }, [activeCommunityTab, myPosts, scrapedPosts, commentedPosts, likedPosts]);
+
+  const sortedTodos = useMemo(() => {
+    return [...todos].sort((a, b) => {
+      const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+      const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+      return aTime - bTime;
+    });
+  }, [todos]);
+
+  const activeTodos = useMemo(() => {
+    return sortedTodos.filter((todo) => !(todo.completed ?? false) && !doneIds.includes(todo.id));
+  }, [sortedTodos, doneIds]);
+
+  function resetTodoForm() {
+    setTodoTitle("");
+    setTodoDueDate(getLocalDateKey(new Date()));
+    setTodoCategory("과제");
+    setTodoEditId(null);
+  }
+
+  function persistTodoState(nextTodos: StudentTodoItem[], nextDoneIds: string[]) {
+    if (typeof window === "undefined") return;
+
+    window.localStorage.setItem(STUDENT_TODO_STORAGE_KEY, JSON.stringify(nextTodos.map((todo) => normalizeStoredTodo(todo))));
+    window.localStorage.setItem(STUDENT_TODO_DONE_STORAGE_KEY, JSON.stringify(nextDoneIds));
+    window.dispatchEvent(new Event("pacemate:student-todos-updated"));
+  }
+
+  function handleSaveTodo() {
+    const trimmedTitle = todoTitle.trim();
+    if (!trimmedTitle) return;
+
+    let nextTodos: StudentTodoItem[];
+
+    if (todoEditId) {
+      nextTodos = todos.map((todo) =>
+        todo.id === todoEditId
+          ? {
+              ...todo,
+              title: trimmedTitle,
+              dueDate: todoDueDate,
+              category: todoCategory,
+              type: getTodoTypeFromCategory(todoCategory),
+              source: "manual",
+              completed: todo.completed ?? false,
+            }
+          : todo,
+      );
+    } else {
+      nextTodos = [
+        {
+          id: `manual-${Date.now()}`,
+          title: trimmedTitle,
+          description: `${todoCategory} 일정입니다.`,
+          type: getTodoTypeFromCategory(todoCategory),
+          dueDate: todoDueDate,
+          category: todoCategory,
+          source: "manual",
+          completed: false,
+        },
+        ...todos,
+      ];
+    }
+
+    setTodos(nextTodos);
+    persistTodoState(nextTodos, doneIds);
+    resetTodoForm();
+  }
+
+  function handleEditTodo(todo: StudentTodoItem) {
+    setTodoEditId(todo.id);
+    setTodoTitle(todo.title);
+    setTodoDueDate(todo.dueDate ?? getLocalDateKey(new Date()));
+    setTodoCategory(todo.category ?? "개인");
+  }
+
+  function handleDeleteTodo(id: string) {
+    const nextTodos = todos.filter((todo) => todo.id !== id);
+    const nextDoneIds = doneIds.filter((todoId) => todoId !== id);
+
+    setTodos(nextTodos);
+    setDoneIds(nextDoneIds);
+    persistTodoState(nextTodos, nextDoneIds);
+  }
+
+  function toggleTodoCompletion(id: string) {
+    const targetTodo = todos.find((todo) => todo.id === id);
+    if (!targetTodo) return;
+
+    const nextCompleted = !(targetTodo.completed ?? false);
+    const nextTodos = todos.map((todo) => (todo.id === id ? { ...normalizeStoredTodo(todo), completed: nextCompleted } : todo));
+    const nextDoneIds = nextCompleted
+      ? Array.from(new Set([...doneIds, id]))
+      : doneIds.filter((todoId) => todoId !== id);
+
+    setTodos(nextTodos);
+    setDoneIds(nextDoneIds);
+    persistTodoState(nextTodos, nextDoneIds);
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-8 pb-20 md:pb-8">
@@ -324,7 +501,116 @@ export function MyPagePlanner({
         </div>
       </section>
 
-      {/* SECTION 3: Community Tabs */}
+      {/* SECTION 3: To-do Management */}
+      <section id="todo" className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold">To-do 관리</h2>
+            <p className="text-sm text-gray-500 mt-1">오늘의 할 일을 추가하고, 완료 상태를 관리해 보세요.</p>
+          </div>
+          <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">{todos.length}개</span>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="grid gap-3 md:grid-cols-[1.3fr_0.8fr_0.8fr_auto]">
+            <input
+              type="text"
+              value={todoTitle}
+              onChange={(e) => setTodoTitle(e.target.value)}
+              placeholder="할 일 제목"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            />
+            <input
+              type="date"
+              value={todoDueDate}
+              onChange={(e) => setTodoDueDate(e.target.value)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            />
+            <select
+              value={todoCategory}
+              onChange={(e) => setTodoCategory(e.target.value as StudentTodoCategory)}
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            >
+              <option value="과제">과제</option>
+              <option value="시험">시험</option>
+              <option value="상담">상담</option>
+              <option value="공지">공지</option>
+              <option value="개인">개인</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleSaveTodo}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-sm transition-colors"
+            >
+              {todoEditId ? "수정하기" : "추가하기"}
+            </button>
+          </div>
+
+          {todoEditId ? (
+            <button
+              type="button"
+              onClick={resetTodoForm}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              취소
+            </button>
+          ) : null}
+
+          <div className="space-y-3">
+            {activeTodos.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
+                아직 등록된 To-do가 없습니다.
+              </div>
+            ) : (
+              activeTodos.map((todo) => {
+                const done = Boolean(todo.completed) || doneIds.includes(todo.id);
+                return (
+                  <div key={todo.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleTodoCompletion(todo.id)}
+                          className="mt-0.5 shrink-0 text-gray-400 hover:text-emerald-600"
+                        >
+                          {done ? <CheckCircle2 size={18} className="text-emerald-600" /> : <Circle size={18} />}
+                        </button>
+                        <div className="min-w-0">
+                          <p className={`font-semibold text-sm ${done ? "text-gray-500 line-through" : "text-gray-900"}`}>
+                            {todo.title}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+                            <span className="rounded-full bg-gray-100 px-2 py-1">{todo.category ?? "개인"}</span>
+                            {todo.dueDate ? <span>마감일 {todo.dueDate}</span> : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditTodo(todo)}
+                          className="text-sm text-emerald-600 hover:text-emerald-700"
+                        >
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTodo(todo.id)}
+                          className="text-sm text-red-500 hover:text-red-600"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 4: Community Tabs */}
       <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="border-b border-gray-100 px-2 pt-2 flex overflow-x-auto hide-scrollbar">
           <button 
