@@ -24,6 +24,8 @@ import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/u
 import { HoverGlowCard } from "@/components/ui/hover-glow-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 
+import PortalShortcutCard from "../../components/PortalShortcutCard";
+
 function getTodoTypeFromText(text: string): StudentTodoItem["type"] | null {
   const normalized = text.toLowerCase();
   if (/(과제|레포트|보고서|제출|마감)/.test(normalized)) {
@@ -231,7 +233,9 @@ export default async function DashboardPage() {
           <section className="px-4 mb-8 max-w-4xl mx-auto w-full space-y-4">
             <TodayTimetableWidget myCourses={myCourses} />
             <StudentTodoCard items={todoItems} />
-          </section>
+          
+        <PortalShortcutCard />
+</section>
         </ScrollReveal>
       )}
 
