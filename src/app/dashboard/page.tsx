@@ -17,11 +17,30 @@ import { WeeklyMissions } from "@/components/roadmap/weekly-missions";
 import { supabase } from "@/lib/supabase/client";
 import { getMyCourses, type StudentCourseRecord } from "@/services/student-community.service";
 import { TodayTimetableWidget } from "@/components/dashboard/today-timetable-widget";
+import { StudentTodoCard, type StudentTodoItem } from "@/components/dashboard/student-todo-card";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
 import { HoverGlowCard } from "@/components/ui/hover-glow-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
+
+function getTodoTypeFromText(text: string): StudentTodoItem["type"] | null {
+  const normalized = text.toLowerCase();
+  if (/(과제|레포트|보고서|제출|마감)/.test(normalized)) {
+    return "assignment";
+  }
+  if (/(시험|퀴즈)/.test(normalized)) {
+    return "exam";
+  }
+  return null;
+}
+
+function formatDateLabel(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
 
 const roleCopy = {
   student: {
@@ -93,20 +112,35 @@ export default async function DashboardPage() {
   // Fetch student courses if student
   let coursesData: any[] = [];
   let myCourses: StudentCourseRecord[] = [];
+  let todoItems: StudentTodoItem[] = [];
   if (profile.role === "student") {
     myCourses = await getMyCourses(profile.id);
 
-    const { data } = await supabase
-      .from("student_courses")
-      .select(`
-        course_id, current_week,
-        courses ( name )
-      `)
-      .eq("student_id", profile.id);
-      
-    if (data && data.length > 0) {
-      // Fetch initial guide for each
-      for (const sc of data) {
+    const [{ data: studentCourseData }, { data: noticeRows }, { data: counselingRows }] = await Promise.all([
+      supabase
+        .from("student_courses")
+        .select(`
+          course_id, current_week,
+          courses ( name )
+        `)
+        .eq("student_id", profile.id),
+      supabase
+        .from("posts")
+        .select("id, title, content, created_at, course_id, course:courses(id, name)")
+        .eq("status", "active")
+        .eq("board_key", "course_notice")
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("counseling_requests")
+        .select("id, topic, status, requested_start, suggested_start, professor_id, professor:professors(id, name)")
+        .eq("student_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
+    ]);
+
+    if (studentCourseData && studentCourseData.length > 0) {
+      for (const sc of studentCourseData) {
         const { data: progress } = await supabase
           .from("student_mission_progress")
           .select("calibrated_mission_json")
@@ -114,15 +148,54 @@ export default async function DashboardPage() {
           .eq("course_id", sc.course_id)
           .eq("week_number", sc.current_week)
           .maybeSingle();
-          
+
         coursesData.push({
           courseId: sc.course_id,
           courseName: Array.isArray(sc.courses) ? sc.courses[0]?.name : (sc.courses as any)?.name,
           currentWeek: sc.current_week,
-          initialGuide: progress?.calibrated_mission_json || null
+          initialGuide: progress?.calibrated_mission_json || null,
         });
       }
     }
+
+    const noticeTodoItems = (noticeRows ?? [])
+      .map((row: any) => {
+        const text = `${row.title ?? ""} ${row.content ?? ""}`;
+        const type = getTodoTypeFromText(text);
+        if (!type) return null;
+
+        const courseName = row.course?.name ?? null;
+        const dateLabel = formatDateLabel(row.created_at);
+
+        return {
+          id: `notice-${row.id}`,
+          title: row.title ?? "공지사항",
+          description: row.content?.replace(/\s+/g, " ").slice(0, 80) ?? "공지사항이 등록되었습니다.",
+          type: type === "exam" ? "exam" : "assignment",
+          courseName,
+          metaLabel: dateLabel ? "공지일" : null,
+          metaValue: dateLabel,
+          linkHref: row.course_id ? `/courses/${row.course_id}` : "/courses",
+          linkLabel: "과목 공지 보기",
+        } as StudentTodoItem;
+      })
+      .filter(Boolean) as StudentTodoItem[];
+
+    const counselingTodoItems = (counselingRows ?? [])
+      .filter((row: any) => ["pending", "scheduled", "approved"].includes(row.status))
+      .map((row: any) => ({
+        id: `counseling-${row.id}`,
+        title: row.topic ?? "상담 요청",
+        description: row.status === "pending" ? "교수 승인 대기 중입니다." : "상담 일정이 확정되었습니다.",
+        type: "counseling" as const,
+        courseName: null,
+        metaLabel: row.requested_start || row.suggested_start ? "상담일" : null,
+        metaValue: formatDateLabel(row.requested_start || row.suggested_start),
+        linkHref: "/counseling",
+        linkLabel: "상담 확인",
+      })) as StudentTodoItem[];
+
+    todoItems = [...noticeTodoItems, ...counselingTodoItems].slice(0, 6);
   }
 
   return (
@@ -155,8 +228,9 @@ export default async function DashboardPage() {
       {/* 학생 전용: 오늘 시간표 위젯 */}
       {profile.role === "student" && (
         <ScrollReveal>
-          <section className="px-4 mb-8 max-w-4xl mx-auto w-full">
+          <section className="px-4 mb-8 max-w-4xl mx-auto w-full space-y-4">
             <TodayTimetableWidget myCourses={myCourses} />
+            <StudentTodoCard items={todoItems} />
           </section>
         </ScrollReveal>
       )}
