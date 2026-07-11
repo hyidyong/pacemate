@@ -1,5 +1,6 @@
 import dynamicImport from "next/dynamic";
 import { AppShell } from "@/components/layout/app-shell";
+import { getAcademicEvents } from "@/services/academic-calendar.service";
 import { getUnreadNotificationCountByCategory } from "@/services/notifications.service";
 import { getProfessorPageData } from "@/services/professor.service";
 import { requireRoles } from "@/services/role-guard.service";
@@ -22,7 +23,7 @@ const ProfessorWorkspace = dynamicImport(
 
 export const dynamic = "force-dynamic";
 
-const professorTabs = ["overview", "roadmap", "questions", "counseling"] as const;
+const professorTabs = ["schedule", "roadmap", "questions", "counseling"] as const;
 
 function normalizeProfessorTab(tab?: string) {
   return professorTabs.find((item) => item === tab);
@@ -46,6 +47,9 @@ export default async function ProfessorPage({
 
   const pendingCounselingCount = data.counselingRequests.filter((request) => request.status === "pending").length;
   const effectiveCounselingCount = Math.max(pendingCounselingCount, unreadCounselingCount);
+  const academicEvents = getAcademicEvents().filter(
+    (event) => event.audience === "all" || event.audience === "professor",
+  );
 
   return (
     <AppShell>
@@ -56,11 +60,12 @@ export default async function ProfessorPage({
       {data.professor ? (
         <ProfessorWorkspace
           adminTasks={data.adminTasks}
+          academicEvents={academicEvents}
           availability={data.availability}
           counselingRequests={data.counselingRequests}
           courses={data.courses}
           faqs={data.faqs}
-          initialTab={initialTab as any}
+          initialTab={initialTab}
           initialSub={params?.sub}
           notificationCounts={{ counseling: effectiveCounselingCount, question: questionCount }}
           professor={data.professor}

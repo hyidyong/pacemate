@@ -14,13 +14,14 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 export type AppRoute = {
   href: string;
   label: string;
   description: string;
   group: "core" | "student" | "community" | "ops";
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   nextStep: string;
 };
 

@@ -3,28 +3,21 @@ import { ArrowRight, ClipboardList, GraduationCap, ShieldCheck } from "lucide-re
 import { AppShell } from "@/components/layout/app-shell";
 import { NotificationStrip } from "@/components/notifications/notification-strip";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { clearDemoSession } from "@/services/demo-auth.service";
 import { getNotificationsForProfile } from "@/services/notifications.service";
 import { getDemoProfile } from "@/services/session.service";
 import { WeeklyMissions } from "@/components/roadmap/weekly-missions";
 import { supabase } from "@/lib/supabase/client";
 import { getMyCourses, type StudentCourseRecord } from "@/services/student-community.service";
-import { TodayTimetableWidget } from "@/components/dashboard/today-timetable-widget";
 import { StudentTodoCard, type StudentTodoItem } from "@/components/dashboard/student-todo-card";
+import { StudentDashboardContent } from "@/components/dashboard/student-dashboard-content";
+import { getAcademicEvents } from "@/services/academic-calendar.service";
+import type { AcademicEvent } from "@/types/academic-calendar";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
 import { HoverGlowCard } from "@/components/ui/hover-glow-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
-
-import PortalShortcutCard from "../../components/PortalShortcutCard";
 
 function getTodoTypeFromText(text: string): StudentTodoItem["type"] | null {
   const normalized = text.toLowerCase();
@@ -108,15 +101,18 @@ export default async function DashboardPage() {
   }
 
   const copy = roleCopy[profile.role];
-  const Icon = copy.icon;
   const notifications = await getNotificationsForProfile(profile, 4);
 
   // Fetch student courses if student
   let coursesData: any[] = [];
   let myCourses: StudentCourseRecord[] = [];
   let todoItems: StudentTodoItem[] = [];
+  let academicEvents: AcademicEvent[] = [];
   if (profile.role === "student") {
     myCourses = await getMyCourses(profile.id);
+    academicEvents = getAcademicEvents().filter(
+      (event) => event.audience === "all" || event.audience === "student",
+    );
 
     const [{ data: studentCourseData }, { data: noticeRows }, { data: counselingRows }] = await Promise.all([
       supabase
@@ -230,30 +226,27 @@ export default async function DashboardPage() {
       {/* 학생 전용: 오늘 시간표 위젯 */}
       {profile.role === "student" && (
         <ScrollReveal>
-          <section className="px-4 mb-8 max-w-4xl mx-auto w-full space-y-4">
-            <TodayTimetableWidget myCourses={myCourses} />
-            <StudentTodoCard items={todoItems} />
-          
-        <PortalShortcutCard />
-</section>
+          <StudentDashboardContent
+            academicEvents={academicEvents}
+            myCourses={myCourses}
+            todoItems={todoItems}
+          />
         </ScrollReveal>
       )}
 
       <ScrollRevealList>
-        <section className="section dashboard-grid">
+        <section className="section dashboard-grid md:hidden">
           {profile.role === "student" && (
             <ScrollRevealItem>
-              <div className="md:hidden">
-                <Link href="/courses" className="block p-5 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl text-white shadow-md hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
-                  <div className="flex items-center justify-between">
-                    <div>
+              <Link href="/courses" className="block p-5 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl text-white shadow-md hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
                       <h3 className="text-lg font-bold mb-1">과목 및 강의 계획 관리</h3>
                       <p className="text-emerald-50 text-sm">수강 과목 로드맵 및 상세 정보</p>
                     </div>
-                    <ArrowRight size={24} className="opacity-80" />
+                    <ArrowRight size={24} className="shrink-0 opacity-80" />
                   </div>
-                </Link>
-              </div>
+              </Link>
             </ScrollRevealItem>
           )}
         </section>
@@ -261,7 +254,7 @@ export default async function DashboardPage() {
 
       {profile.role === "student" && coursesData.length > 0 && (
         <ScrollRevealList>
-          <section className="section" style={{ marginTop: "32px" }}>
+          <section className="section">
             <ScrollRevealItem>
               <h2 style={{ fontSize: "1.25rem", fontWeight: "bold", marginBottom: "16px" }}>수강 중인 과목 학습 관리 (스마트 로드맵)</h2>
             </ScrollRevealItem>

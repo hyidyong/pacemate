@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -47,6 +47,30 @@ export function AppHeader({
 }: AppHeaderProps) {
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfessorMenuOpen, setIsProfessorMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleProfessorMenuState = (event: Event) => {
+      setIsProfessorMenuOpen(Boolean((event as CustomEvent<boolean>).detail));
+    };
+
+    window.addEventListener("professor-mobile-menu-state", handleProfessorMenuState);
+
+    return () => {
+      window.removeEventListener("professor-mobile-menu-state", handleProfessorMenuState);
+    };
+  }, []);
+
+  const handleMobileMenuToggle = () => {
+    if (isProfessor) {
+      window.dispatchEvent(new Event("professor-mobile-menu-toggle"));
+      return;
+    }
+
+    setIsMobileMenuOpen(previous => !previous);
+  };
+
+  const isMobileMenuVisible = isProfessor ? isProfessorMenuOpen : isMobileMenuOpen;
 
   const desktopRoutes = !isAuthenticated
     ? []
@@ -195,18 +219,21 @@ export function AppHeader({
             <NotificationMenu notifications={notifications} unreadCount={unreadCount} />
           ) : null}
           
-          <button 
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1 text-gray-700 hover:text-emerald-600 transition-colors z-50 relative"
+          <button
+            aria-expanded={isMobileMenuVisible}
+            aria-label={isMobileMenuVisible ? "메뉴 닫기" : "메뉴 열기"}
+            onClick={handleMobileMenuToggle}
+            type="button"
+            className="relative z-50 inline-flex h-10 w-10 items-center justify-center bg-transparent text-slate-700 transition-colors hover:text-emerald-600 active:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
           >
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {isMobileMenuVisible ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
           </button>
         </div>
       </header>
 
       {/* Mobile Hamburger Drawer Menu */}
       <AnimatePresence>
-        {isMobileMenuOpen && (
+        {isMobileMenuOpen && !isProfessor && (
           <MotionDiv
             initial={{ opacity: 0, x: "100%" }}
             animate={{ opacity: 1, x: 0 }}
@@ -225,10 +252,7 @@ export function AppHeader({
                     onClick={() => setIsMobileMenuOpen(false)}
                     className="flex items-center gap-3 text-lg font-medium text-gray-700 hover:text-emerald-600 p-2 rounded-lg hover:bg-emerald-50 transition-colors"
                   >
-                    {Icon && (
-                      // @ts-expect-error Icon types may not strictly include size in all unions
-                      <Icon size={20} />
-                    )}
+                    {Icon && <Icon size={20} />}
                     {route.label}
                   </Link>
                 );

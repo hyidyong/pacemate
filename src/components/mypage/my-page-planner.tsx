@@ -12,7 +12,8 @@ import {
   ThumbsUp,
   MessageCircle,
   Circle,
-  FileText
+  FileText,
+  CheckCircle2
 } from "lucide-react";
 import {
   addCourseToSchedule,

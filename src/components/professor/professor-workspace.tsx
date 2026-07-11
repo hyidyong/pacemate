@@ -7,19 +7,16 @@ import {
   BookOpenText,
   CalendarClock,
   Check,
-  ChevronRight,
   Clock,
   FileText,
   GraduationCap,
   HelpCircle,
   History,
   Inbox,
-  Menu,
   MessageSquareText,
   PencilLine,
   Send,
   Settings,
-  X,
 } from "lucide-react";
 import {
   addProfessorAvailability,
@@ -41,7 +38,14 @@ import {
   ProfessorAdminTaskRecord,
 } from "@/services/professor.service";
 import type { RoadmapRevisionRequest } from "@/services/roadmap-revisions.service";
+import { AcademicScheduleCard } from "@/components/dashboard/academic-schedule-card";
+import type { AcademicEvent } from "@/types/academic-calendar";
 import { ProfessorCalendar } from "./professor-calendar";
+import {
+  ProfessorHomeSectionTabs,
+  type ProfessorHomeSection,
+} from "./professor-home-section-tabs";
+import { ProfessorPortalShortcutCard } from "./professor-portal-shortcut-card";
 import { getCourseRoadmap, addCourseNotice, addCourseTextbook, removeCourseAssignment } from "@/services/course-settings.actions";
 
 // ============== TYPES ==============
@@ -54,6 +58,7 @@ type ProfessorWorkspaceProps = {
     email: string | null;
     bio: string | null;
   };
+  academicEvents: AcademicEvent[];
   courses: ProfessorCourse[];
   teachingSlots: ProfessorTeachingSlot[];
   availability: ProfessorAvailability[];
@@ -155,6 +160,7 @@ export function ProfessorWorkspace({
   initialTab,
   initialSub,
   notificationCounts,
+  academicEvents,
   professor,
   courses,
   teachingSlots,
@@ -205,6 +211,22 @@ export function ProfessorWorkspace({
   useEffect(() => {
     setCurrentNotificationCounts(notificationCounts);
   }, [notificationCounts]);
+
+  useEffect(() => {
+    const toggleProfessorMenu = () => {
+      setSidebarOpen(previous => !previous);
+    };
+
+    window.addEventListener("professor-mobile-menu-toggle", toggleProfessorMenu);
+
+    return () => {
+      window.removeEventListener("professor-mobile-menu-toggle", toggleProfessorMenu);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent<boolean>("professor-mobile-menu-state", { detail: sidebarOpen }));
+  }, [sidebarOpen]);
 
   // Toast: shows message at top, auto-dismiss after 3s
   function showToast(msg: string) {
@@ -300,12 +322,8 @@ export function ProfessorWorkspace({
 
   // Dashboard tasks
   const dashboardTasks = useMemo<ProfessorAdminTask[]>(() => {
-    const pendingCounselingCount = currentCounselingRequests.filter((r) => r.status === "pending").length;
     const pendingRoadmapCount = roadmapRequests.filter((r) => r.status === "pending" || r.status === "assistant_reviewed").length;
     const tasks: ProfessorAdminTask[] = [];
-    if (pendingCounselingCount > 0) {
-      tasks.push({ id: "pending-counseling", title: "\uc0c1\ub2f4 \uc2e0\uccad \uc2b9\uc778", description: "\ud559\uc0dd \uc0c1\ub2f4 \uc2e0\uccad\uc744 \ud655\uc778\ud558\uace0 \uc2b9\uc778, \uac70\uc808, \ucd94\ucc9c \uc2dc\uac04 \uc81c\uc548\uc744 \ucc98\ub9ac\ud569\ub2c8\ub2e4.", countLabel: `${pendingCounselingCount}\uac74 \ub300\uae30`, priority: "urgent", tab: "counseling" });
-    }
     if (pendingRoadmapCount > 0) {
       tasks.push({ id: "pending-roadmap", title: "\ub85c\ub4dc\ub9f5 \uc218\uc815 \uc694\uccad \uac80\ud1a0", description: "\ud559\uc0dd\uc5d0\uac8c \ubcf4\uc77c \ucd94\ucc9c \ub85c\ub4dc\ub9f5\uacfc \ud559\uc2b5 \uc548\ub0b4 \uc218\uc815 \uc694\uccad\uc744 \ud655\uc778\ud569\ub2c8\ub2e4.", countLabel: `${pendingRoadmapCount}\uac74 \ud655\uc778`, priority: "normal", tab: "roadmap" });
     }
@@ -313,7 +331,7 @@ export function ProfessorWorkspace({
       tasks.push({ id: "faq-setup", title: "\ube48\ucd9c \uc9c8\ubb38 \ub2f5\ubcc0 \ub4f1\ub85d", description: "\ubc18\ubcf5 \uc9c8\ubb38\uc740 FAQ\ub85c \ub4f1\ub85d\ud574 \ud559\uc0dd\uc5d0\uac8c \ube60\ub974\uac8c \uc548\ub0b4\ud569\ub2c8\ub2e4.", countLabel: "\ubbf8\ub4f1\ub85d", priority: "setup", tab: "questions" });
     }
     return tasks;
-}, [currentCounselingRequests, faqs.length, roadmapRequests]);
+}, [faqs.length, roadmapRequests]);
 
   const pendingCounselingRequestCount = currentCounselingRequests.filter((r) => r.status === "pending").length;
   const pendingQuestionCount = dummyQuestions.filter((q) => q.status === "PENDING").length;
@@ -333,6 +351,7 @@ export function ProfessorWorkspace({
           <ScheduleCalendarSub
             adminStats={adminStats}
             adminTasks={adminTasks}
+            academicEvents={academicEvents}
             dashboardTasks={dashboardTasks}
             availability={availability}
             counselingRequests={currentCounselingRequests}
@@ -435,7 +454,7 @@ export function ProfessorWorkspace({
   }
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50/50 font-sans" data-testid="professor-workspace">
+    <div className="flex min-w-0 flex-col lg:flex-row min-h-screen bg-slate-50/50 font-sans" data-testid="professor-workspace">
       {/* Sidebar for PC / Mobile menu panel */}
       <aside className="hidden lg:flex lg:w-64 flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 flex-col z-20 sticky top-0 lg:h-screen shadow-sm">
         <div className="p-5 lg:p-6">
@@ -498,9 +517,9 @@ export function ProfessorWorkspace({
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto w-full p-4 lg:p-8 max-w-7xl mx-auto">
+      <main className="min-w-0 flex-1 overflow-y-auto w-full p-4 lg:p-8 max-w-7xl mx-auto">
         {/* Content Header */}
-        <header className="mb-6 lg:mb-8 flex items-center justify-between">
+        <header className="mb-5 lg:mb-8">
           <div>
             <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 tracking-tight">
               {currentSidebarItems.find((item) => item.id === activeSub)?.label}
@@ -509,31 +528,12 @@ export function ProfessorWorkspace({
               {professorTabs.find((t) => t.id === activeTab)?.label} 대시보드
             </p>
           </div>
-          <button
-            type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm lg:hidden"
-            onClick={() => setSidebarOpen((prev) => !prev)}
-            aria-expanded={sidebarOpen}
-            aria-label="교수 메뉴 열기"
-          >
-            {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
         </header>
 
         {sidebarOpen ? (
-          <div className="mb-4 rounded-2xl border border-slate-200/70 bg-white p-3 shadow-sm lg:hidden">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-700">교수 메뉴</p>
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-                onClick={() => setSidebarOpen(false)}
-                aria-label="교수 메뉴 닫기"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="space-y-3">
+          <aside aria-label="교수 메뉴" className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-white px-5 pb-8 pt-24 lg:hidden">
+            <div className="mx-auto w-full max-w-lg space-y-5">
+              <p className="border-b border-slate-200 pb-3 text-sm font-semibold text-slate-700">교수 메뉴</p>
               {professorTabs.map((tab) => (
                 <div key={tab.id}>
                   <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
@@ -543,6 +543,12 @@ export function ProfessorWorkspace({
                     {sidebarMenus[tab.id].map((item) => {
                       const Icon = item.icon;
                       const isActive = activeTab === tab.id && activeSub === item.id;
+                      const badgeCount =
+                        item.id === "pending-counseling"
+                          ? sidebarBadgeCounts.pendingCounseling
+                          : item.id === "incoming-questions"
+                            ? sidebarBadgeCounts.incomingQuestions
+                            : 0;
                       return (
                         <Link
                           key={item.id}
@@ -555,7 +561,12 @@ export function ProfessorWorkspace({
                           }`}
                         >
                           <Icon size={16} className={isActive ? "text-emerald-600" : "text-slate-400"} />
-                          <span>{item.label}</span>
+                          <span className="min-w-0 flex-1">{item.label}</span>
+                          {badgeCount > 0 ? (
+                            <span className="flex-shrink-0 rounded-full bg-rose-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                              {badgeCount}
+                            </span>
+                          ) : null}
                         </Link>
                       );
                     })}
@@ -563,7 +574,7 @@ export function ProfessorWorkspace({
                 </div>
               ))}
             </div>
-          </div>
+          </aside>
         ) : null}
 
         {/* SubContent */}
@@ -589,6 +600,7 @@ export function ProfessorWorkspace({
 function ScheduleCalendarSub({
   adminStats,
   adminTasks,
+  academicEvents,
   dashboardTasks,
   availability,
   counselingRequests,
@@ -603,6 +615,7 @@ function ScheduleCalendarSub({
 }: {
   adminStats: ProfessorAdminStat[];
   adminTasks: ProfessorAdminTaskRecord[];
+  academicEvents: AcademicEvent[];
   dashboardTasks: ProfessorAdminTask[];
   availability: ProfessorAvailability[];
   counselingRequests: ProfessorCounselingRequest[];
@@ -618,10 +631,31 @@ function ScheduleCalendarSub({
   onUpdateCounseling: (requestId: string, note: string, location: string) => void;
   onCancelCounseling: (requestId: string) => void;
 }) {
+  const [activeHomeSection, setActiveHomeSection] = useState<ProfessorHomeSection>("all");
+  const panelId = "professor-home-section-panel";
+  const tabIdPrefix = "professor-home-section-tab";
+  const showAdmin = activeHomeSection === "all";
+  const showCalendar = activeHomeSection === "all" || activeHomeSection === "calendar";
+  const showAcademic = activeHomeSection === "all" || activeHomeSection === "academic";
+  const showPortal = activeHomeSection === "all" || activeHomeSection === "portal";
+
   return (
-    <>
-      {/* Admin stats + tasks */}
-      <section className="professor-panel professor-admin-panel">
+    <section className="professor-home-overview" aria-label="교수 홈">
+      <ProfessorHomeSectionTabs
+        activeSection={activeHomeSection}
+        onChange={setActiveHomeSection}
+        panelId={panelId}
+        tabIdPrefix={tabIdPrefix}
+      />
+      <div
+        aria-labelledby={`${tabIdPrefix}-${activeHomeSection}`}
+        className="professor-home-section-panel"
+        id={panelId}
+        role="tabpanel"
+        tabIndex={0}
+      >
+        {showAdmin ? (
+          <section className="professor-panel professor-admin-panel">
         <div className="community-section-heading">
           <h2>오늘 처리할 행정업무</h2>
           <span>{dashboardTasks.length ? `${dashboardTasks.length}개` : "정리됨"}</span>
@@ -670,7 +704,7 @@ function ScheduleCalendarSub({
                     {task.tab === "roadmap" ? <PencilLine aria-hidden="true" /> : null}
                     {task.tab === "questions" ? <MessageSquareText aria-hidden="true" /> : null}
                   </span>
-                  <span>
+                  <span className="professor-admin-task-copy">
                     <strong>{task.title}</strong>
                     <small>{task.description}</small>
                   </span>
@@ -686,22 +720,37 @@ function ScheduleCalendarSub({
             <p>지금 바로 처리할 행정업무가 없습니다.</p>
           </div>
         )}
-      </section>
+          </section>
+        ) : null}
 
-      {/* Calendar */}
-      <section className="professor-panel mt-6">
-        <ProfessorCalendar
-          teachingSlots={teachingSlots}
-          counselingRequests={counselingRequests}
-          adminTasks={adminTasks}
-          availability={availability}
-          onToggleBlackout={onToggleBlackout}
-          onAddAdminTask={onAddAdminTask}
-          onUpdateCounseling={onUpdateCounseling}
-          onCancelCounseling={onCancelCounseling}
+        {showCalendar ? (
+          <section className="professor-panel">
+            <ProfessorCalendar
+              teachingSlots={teachingSlots}
+              counselingRequests={counselingRequests}
+              adminTasks={adminTasks}
+              availability={availability}
+              onToggleBlackout={onToggleBlackout}
+              onAddAdminTask={onAddAdminTask}
+              onUpdateCounseling={onUpdateCounseling}
+              onCancelCounseling={onCancelCounseling}
+            />
+          </section>
+        ) : null}
+
+      {showAcademic ? (
+        <AcademicScheduleCard
+          academicEvents={academicEvents}
+          description="주요 학사 일정과 교내 행정 일정을 확인하세요."
+          headingId="professor-academic-schedule-title"
+          notice="학교 사정에 따라 일정이 변경될 수 있습니다."
+          title="학사일정"
         />
-      </section>
-    </>
+      ) : null}
+
+        {showPortal ? <ProfessorPortalShortcutCard /> : null}
+      </div>
+    </section>
   );
 }
 

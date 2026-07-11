@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
+const WEEKDAYS = ["월", "화", "수", "목", "금"];
+
 type ProfessorCalendarProps = {
   teachingSlots: ProfessorTeachingSlot[];
   counselingRequests: ProfessorCounselingRequest[];
@@ -39,7 +41,6 @@ export function ProfessorCalendar({
   const [counselingNote, setCounselingNote] = useState("");
   const [counselingLocation, setCounselingLocation] = useState("");
 
-  const days = ["월", "화", "수", "목", "금"];
   const startHour = 9;
   const endHour = 18;
 
@@ -51,7 +52,7 @@ export function ProfessorCalendar({
     const monday = new Date(currentDate);
     monday.setDate(currentDate.getDate() + diffToMonday);
 
-    return days.map((day, i) => {
+    return WEEKDAYS.map((day, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       return {
@@ -527,7 +528,7 @@ export function ProfessorCalendar({
             <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
               <p className="text-sm font-medium text-gray-500 flex items-center gap-1.5 mb-2">
                 <Clock size={14} className="text-gray-400" />
-                {selectedBlock?.day ? days[selectedBlock?.day - 1] + "요일" : ""} {selectedBlock?.startTime} ~ {selectedBlock?.endTime} (확정)
+                {selectedBlock?.day ? WEEKDAYS[selectedBlock?.day - 1] + "요일" : ""} {selectedBlock?.startTime} ~ {selectedBlock?.endTime} (확정)
               </p>
               <div className="text-sm text-gray-700">
                 <strong className="text-gray-900 font-semibold mr-1">학생 메모:</strong> 
@@ -592,7 +593,7 @@ export function ProfessorCalendar({
                 <h3 className="text-xl font-bold text-gray-800">{selectedBlock.title}</h3>
                 <p className="text-sm font-medium text-gray-500 flex items-center gap-1 mt-1">
                   <Clock size={14} />
-                  {selectedBlock.day ? days[selectedBlock.day - 1] + "요일" : ""} {selectedBlock.startTime} ~ {selectedBlock.endTime}
+                  {selectedBlock.day ? WEEKDAYS[selectedBlock.day - 1] + "요일" : ""} {selectedBlock.startTime} ~ {selectedBlock.endTime}
                 </p>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setSelectedBlock(null)} className="h-8 w-8 rounded-xl bg-gray-100 hover:bg-gray-200">

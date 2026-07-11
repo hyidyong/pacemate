@@ -43,7 +43,11 @@ export async function AppShell({ children }: AppShellProps) {
       />
 
       {/* 학생/교수: 모바일 하단바 높이만큼 padding */}
-      <main className={isStudent || isProfessor ? "pb-[60px] md:pb-0" : ""}>{children}</main>
+      <main
+        className={`app-shell-main${isStudent || isProfessor ? " app-shell-main--with-mobile-nav" : ""}`}
+      >
+        {children}
+      </main>
 
       {/* 학생 전용 하단 탭바 (모바일만) */}
       {isStudent && <MobileBottomNav />}

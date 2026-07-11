@@ -227,7 +227,7 @@ export function StudentTodoCard({ items }: { items: StudentTodoItem[] }) {
   return (
     <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
       <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
             <CheckCircle2 size={18} strokeWidth={2.5} />
           </div>
@@ -236,7 +236,7 @@ export function StudentTodoCard({ items }: { items: StudentTodoItem[] }) {
             <p className="text-[11px] text-gray-400">공지·상담 데이터와 직접 등록한 할 일이 함께 표시됩니다.</p>
           </div>
         </div>
-        <Link href="/mypage#todo" className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
+        <Link href="/mypage#todo" className="shrink-0 text-right text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
           마이페이지에서 관리
         </Link>
       </div>
@@ -284,10 +284,10 @@ export function StudentTodoCard({ items }: { items: StudentTodoItem[] }) {
                         ) : null}
                       </div>
 
-                      <p className={`mt-2 text-sm font-semibold ${done ? "text-gray-500 line-through" : "text-gray-900"}`}>
+                      <p className={`mt-2 break-words text-sm font-semibold ${done ? "text-gray-500 line-through" : "text-gray-900"}`}>
                         {item.title}
                       </p>
-                      <p className="mt-1 text-xs leading-5 text-gray-500">{item.description}</p>
+                      <p className="mt-1 break-words text-xs leading-5 text-gray-500">{item.description}</p>
 
                       {(item.metaLabel || item.metaValue) && (
                         <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-gray-500">
