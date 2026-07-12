@@ -2,19 +2,34 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { authProvider } from "@/lib/auth";
 import {
   createDemoSession as createSignedDemoSession,
   destroyDemoSession,
 } from "@/lib/auth/demo-session";
-import { getRoleByUserId } from "@/lib/db";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getRoleHomePath, type DemoProfile } from "@/services/session.service";
-import { supabase } from "@/lib/supabase/client";
-import demoUsers from "@/config/demo-users.json";
 
 function normalizeRequiredText(value: FormDataEntryValue | null, fallback = "") {
   const text = typeof value === "string" ? value.trim() : "";
   return text || fallback;
+}
+
+function isDemoProfileRole(value: unknown): value is DemoProfile["role"] {
+  return (
+    value === "student" ||
+    value === "professor" ||
+    value === "assistant" ||
+    value === "admin"
+  );
+}
+
+async function rejectLogin(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  errorCode: "invalid_password" | "read",
+): Promise<never> {
+  await supabase.auth.signOut().catch(() => undefined);
+  await destroyDemoSession();
+  redirect(`/login?error=${errorCode}`);
 }
 
 export async function createDemoSession(formData: FormData) {
@@ -30,76 +45,63 @@ export async function createDemoSession(formData: FormData) {
     redirect("/login?error=password_required");
   }
 
-  // 1. Auth Provider를 통한 인증
-  const authResult = await authProvider.login(identifier, password);
-  let profileId = authResult?.id;
-
-  // 데모 편의: DB에 유저가 없으면 demoUsers.json에서 찾아 생성해줌
-  if (!profileId) {
-    const demoUser = demoUsers.find((u) => u.identifier === identifier);
-    if (demoUser && demoUser.password === password) {
-      const { data: existingProfile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("identifier", demoUser.identifier)
-        .maybeSingle();
-
-      if (existingProfile) {
-        redirect("/login?error=duplicate_identifier");
-      }
-
-      const { data: newProfile, error: insertError } = await supabase
-        .from("profiles")
-        .insert({
-          identifier: demoUser.identifier,
-          name: demoUser.name,
-          role: demoUser.role,
-        })
-        .select("id")
-        .single();
-
-      if (insertError) {
-        if (insertError.code === "23505" || /duplicate|already exists/i.test(insertError.message)) {
-          redirect("/login?error=duplicate_identifier");
-        }
-        redirect("/login?error=create");
-      }
-
-      if (newProfile) {
-        profileId = newProfile.id;
-      }
-    } else {
-      // 데모 유저도 아니면 로그인 실패
-      redirect("/login?error=invalid_password");
-    }
-  }
-
-  if (!profileId) {
-    redirect("/login?error=invalid_password");
-    throw new Error("Login failed");
-  }
-
-  // 2. RBAC 적용 (로그인 성공 후 DB에서 Role 조회)
-  const role = await getRoleByUserId(profileId);
-  if (!role) {
+  let supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  try {
+    supabase = await createSupabaseServerClient();
+  } catch {
+    await destroyDemoSession();
     redirect("/login?error=read");
-    throw new Error("Role not found");
   }
 
-  // 세션 설정
-  await createSignedDemoSession({ profileId, role: role as DemoProfile["role"] });
+  let authResult: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
+  try {
+    authResult = await supabase.auth.signInWithPassword({
+      email: identifier,
+      password,
+    });
+  } catch {
+    return rejectLogin(supabase, "invalid_password");
+  }
 
-  // 온보딩 중 저장된 정보가 있다면 적용
-  await applyPendingOnboarding(profileId, role as any, cookieStore.get("pacemate_pending_student_types")?.value);
+  if (authResult.error) {
+    return rejectLogin(supabase, "invalid_password");
+  }
+
+  const authUser = authResult.data.user;
+  if (!authUser) {
+    return rejectLogin(supabase, "invalid_password");
+  }
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, auth_user_id, role")
+    .eq("auth_user_id", authUser.id)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    return rejectLogin(supabase, "read");
+  }
+
+  if (profile.auth_user_id !== authUser.id || !isDemoProfileRole(profile.role)) {
+    return rejectLogin(supabase, "read");
+  }
+
+  const role = profile.role;
+  await createSignedDemoSession({ profileId: profile.id, role });
+
+  await applyPendingOnboarding(
+    supabase,
+    profile.id,
+    role,
+    cookieStore.get("pacemate_pending_student_types")?.value,
+  );
   cookieStore.delete("pacemate_pending_role");
   cookieStore.delete("pacemate_pending_student_types");
 
-  // Redirection Logic (기존 로직 유지)
   if (role === "student") {
     const { data: studentData } = await supabase
       .from("student_profiles")
       .select("is_onboarded")
-      .eq("profile_id", profileId)
+      .eq("profile_id", profile.id)
       .maybeSingle();
 
     if (!studentData?.is_onboarded) {
@@ -111,19 +113,39 @@ export async function createDemoSession(formData: FormData) {
     }
   }
 
-  redirect(getRoleHomePath(role as any));
+  redirect(getRoleHomePath(role));
 }
 
 export async function clearDemoSession() {
   const cookieStore = await cookies();
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    await supabase.auth.signOut();
+  } catch {
+    // Always clear the compatibility cookie even if Auth sign-out is unavailable.
+  }
+
   await destroyDemoSession();
   cookieStore.delete("pacemate_pending_role");
   cookieStore.delete("pacemate_pending_student_types");
   redirect("/login");
 }
 
-type StudentType = "freshman" | "transfer" | "cross_major" | "double_major" | "current_student";
-const allowedStudentTypes = new Set<StudentType>(["freshman", "transfer", "cross_major", "double_major", "current_student"]);
+type StudentType =
+  | "freshman"
+  | "transfer"
+  | "cross_major"
+  | "double_major"
+  | "current_student";
+
+const allowedStudentTypes = new Set<StudentType>([
+  "freshman",
+  "transfer",
+  "cross_major",
+  "double_major",
+  "current_student",
+]);
 
 function normalizePendingStudentTypes(value?: string) {
   return (value ?? "")
@@ -132,7 +154,12 @@ function normalizePendingStudentTypes(value?: string) {
     .filter((item): item is StudentType => allowedStudentTypes.has(item as StudentType));
 }
 
-async function applyPendingOnboarding(profileId: string, role: string, rawStudentTypes?: string) {
+async function applyPendingOnboarding(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  profileId: string,
+  role: DemoProfile["role"],
+  rawStudentTypes?: string,
+) {
   if (role !== "student") return;
 
   const userTypes = normalizePendingStudentTypes(rawStudentTypes);
@@ -143,6 +170,6 @@ async function applyPendingOnboarding(profileId: string, role: string, rawStuden
       profile_id: profileId,
       user_types: userTypes,
     },
-    { onConflict: "profile_id" }
+    { onConflict: "profile_id" },
   );
 }
