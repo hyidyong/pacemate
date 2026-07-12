@@ -1,0 +1,212 @@
+-- PaceMate 1-D-5A electronic-engineering curriculum draft seed (REVIEW ONLY)
+-- DO NOT EXECUTE: no database write is authorized in 1-D-5A.
+-- This file is fail-closed because the source does not establish admission_year_from,
+-- while curriculum_versions.admission_year_from is NOT NULL in the applied schema.
+-- Resolve the admission-year scope and remove only the explicit blocker after review.
+-- No course catalog rows, student rows, active versions, reports, or career tracks are seeded.
+
+BEGIN;
+
+-- Fail closed before any write. Do not guess an admission-year range.
+DO $$
+BEGIN
+  RAISE EXCEPTION '전자공학과 draft seed blocked: admission_year_from is unresolved in the import JSON and is required by curriculum_versions';
+END
+$$;
+
+-- The statements below are the reviewed, idempotent template to use only after the blocker is resolved.
+-- They intentionally remain after the blocker so this file cannot write accidentally.
+
+DO $$
+DECLARE
+  v_school_id uuid;
+  v_school_count integer;
+  v_department_count integer;
+BEGIN
+  SELECT count(*), min(id) INTO v_school_count, v_school_id
+  FROM public.schools WHERE name = '계명대학교';
+  IF v_school_count <> 1 THEN
+    RAISE EXCEPTION 'Expected exactly one 계명대학교 school row, found %', v_school_count;
+  END IF;
+  SELECT count(*) INTO v_department_count
+  FROM public.departments WHERE school_id = v_school_id AND name = '전자공학과';
+  IF v_department_count > 1 THEN
+    RAISE EXCEPTION 'Duplicate 전자공학과 departments found for the target school';
+  ELSIF v_department_count = 0 THEN
+    INSERT INTO public.departments (school_id, name) VALUES (v_school_id, '전자공학과');
+  END IF;
+END
+$$;
+
+-- The two NULL admission-year literals must be replaced only with an approved range.
+INSERT INTO public.curriculum_versions (
+  school_id, department_id, version_key, academic_year, version_label,
+  admission_year_from, admission_year_to, status, source_title, source_file,
+  source_academic_year, source_edition, publication_date, source_verified, notes
+)
+SELECT s.id, d.id, 'electronic-engineering-2026', 2026,
+  '2026학년도 전자공학과 Bluebook', NULL, NULL, 'draft',
+  '2026학년도 전자공학과 학과 생활 가이드북(Blue Book)',
+  'docs/reference/bluebooks/electronic-engineering/source.pdf', 2026, NULL, NULL, false,
+  '이미지 도식에서 과목명과 학년만 확인됨. 학점·과목코드·정확한 학기·필수구분 미확인. 자동 졸업계산에 사용하지 않음.'
+FROM public.schools s
+JOIN public.departments d ON d.school_id = s.id AND d.name = '전자공학과'
+WHERE s.name = '계명대학교'
+  AND NOT EXISTS (
+    SELECT 1 FROM public.curriculum_versions v
+    WHERE v.school_id = s.id AND v.department_id = d.id
+      AND v.version_key = 'electronic-engineering-2026'
+      AND v.admission_year_from IS NOT DISTINCT FROM NULL
+      AND v.admission_year_to IS NULL
+  );
+
+DO $$
+DECLARE v_version_id uuid; v_count integer;
+BEGIN
+  SELECT count(*), min(v.id) INTO v_count, v_version_id
+  FROM public.curriculum_versions v
+  JOIN public.schools s ON s.id = v.school_id AND s.name = '계명대학교'
+  JOIN public.departments d ON d.id = v.department_id AND d.name = '전자공학과'
+  WHERE v.version_key = 'electronic-engineering-2026' AND v.status = 'draft';
+  IF v_count <> 1 THEN RAISE EXCEPTION 'Expected exactly one draft curriculum version, found %', v_count; END IF;
+  IF EXISTS (SELECT 1 FROM public.curriculum_versions WHERE id = v_version_id AND status <> 'draft') THEN
+    RAISE EXCEPTION 'Active or archived version cannot be used by this draft seed';
+  END IF;
+END
+$$;
+
+INSERT INTO public.curriculum_courses (
+  curriculum_version_id, source_course_name, source_course_code, course_id,
+  credits, requirement_type, recommended_grade, recommended_semester,
+  curriculum_level, is_required, source_page, sort_order, metadata
+)
+SELECT v.id, e.source_course_name, e.source_course_code, e.course_id,
+  e.credits, e.requirement_type, e.recommended_grade, e.recommended_semester,
+  e.curriculum_level, e.is_required, e.source_page, e.sort_order, e.metadata
+FROM public.curriculum_versions v
+CROSS JOIN (VALUES
+  ('전기전자공학수학', NULL::text, NULL::uuid, NULL::integer, 'other', 1, NULL::integer, 'major', false, 4, 1, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":1,"box":"1학년 공통","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('미분적분학', NULL::text, NULL::uuid, NULL::integer, 'other', 1, NULL::integer, 'major', false, 4, 2, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":1,"box":"1학년 공통","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('응용기초전기전자공학', NULL::text, NULL::uuid, NULL::integer, 'other', 1, NULL::integer, 'major', false, 4, 3, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":1,"box":"1학년 공통","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('C프로그래밍', NULL::text, NULL::uuid, NULL::integer, 'other', 1, NULL::integer, 'major', false, 4, 4, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":1,"box":"1학년 공통","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('대학생활과진로설계', NULL::text, NULL::uuid, NULL::integer, 'other', 1, NULL::integer, 'major', false, 4, 5, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":1,"box":"1학년 공통","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('회로이론', NULL::text, NULL::uuid, NULL::integer, 'other', 2, NULL::integer, 'major', false, 4, 6, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":2,"box":"2학년 상단","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('논리회로', NULL::text, NULL::uuid, NULL::integer, 'other', 2, NULL::integer, 'major', false, 4, 7, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":2,"box":"2학년 상단","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전자회로(1)', NULL::text, NULL::uuid, NULL::integer, 'other', 2, NULL::integer, 'major', false, 4, 8, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":2,"box":"2학년 상단","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전기전자공학실험(1)', NULL::text, NULL::uuid, NULL::integer, 'other', 2, NULL::integer, 'major', false, 4, 9, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":2,"box":"2학년 상단","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('PYTHON프로그래밍', NULL::text, NULL::uuid, NULL::integer, 'other', 2, NULL::integer, 'major', false, 4, 10, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":2,"box":"2학년 하단","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('신호및시스템', NULL::text, NULL::uuid, NULL::integer, 'other', 2, NULL::integer, 'major', false, 4, 11, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":2,"box":"2학년 하단","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('머신러닝입문', NULL::text, NULL::uuid, NULL::integer, 'other', 2, NULL::integer, 'major', false, 4, 12, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":2,"box":"2학년 하단","track":null}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전자기학(1)', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 13, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전자기학(2)', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 14, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전자회로설계응용', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 15, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('기초반도체공학', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 16, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전력전자회로응용', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 17, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('응용전자회로실습', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 18, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('공업논리및논술', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 19, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 상단","track":"하드웨어 설계 및 개발 전문가"},{"grade":3,"box":"3학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":2,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('공업교육론', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 20, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 상단","track":"하드웨어 설계 및 개발 전문가"},{"grade":3,"box":"3학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":2,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('마이크로프로세서', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 21, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('자동제어', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 22, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('임베디드시스템', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 23, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('디지털논리회로실습', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 24, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('통신이론및시스템', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 25, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전자파시스템', NULL::text, NULL::uuid, NULL::integer, 'other', 3, NULL::integer, 'major', false, 4, 26, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":3,"box":"3학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('반도체나노소자', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 27, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('정보디스플레이', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 28, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('에너지변환시스템', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 29, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전자공학세미나(1)', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 30, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 상단","track":"하드웨어 설계 및 개발 전문가"},{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":2,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('전자공학세미나(2)', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 31, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 상단","track":"하드웨어 설계 및 개발 전문가"},{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":2,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('캡스톤디자인', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 32, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 상단","track":"하드웨어 설계 및 개발 전문가"},{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":2,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('사물인터넷기초', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 33, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 상단","track":"하드웨어 설계 및 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('사전인턴십', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 34, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 상단","track":"하드웨어 설계 및 개발 전문가"},{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":2,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('디지털영상처리', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 35, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('DSP시스템응용', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 36, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('컴퓨터네트워킹', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 37, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('임베디드시스템실습', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 38, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('통신네트워크', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 39, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('차량신호처리', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 40, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb),
+  ('무선이동네트워크', NULL::text, NULL::uuid, NULL::integer, 'other', 4, NULL::integer, 'major', false, 4, 41, '{"sourceVisual":{"pdfPage":4,"printedPage":3,"diagramTitle":"전자공학과 교육과정 이수체계도"},"diagramLocations":[{"grade":4,"box":"4학년 하단","track":"임베디드시스템 및 소프트웨어 개발 전문가"}],"diagramOccurrenceCount":1,"unresolvedFields":["sourceCourseCode","credits","recommendedSemester","requirementType","isRequired","courseId"],"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"seed_as_draft","unresolvedReason":"과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함.","automaticGraduationCalculation":false}}'::jsonb)
+) AS e(source_course_name, source_course_code, course_id, credits, requirement_type, recommended_grade, recommended_semester, curriculum_level, is_required, source_page, sort_order, metadata)
+WHERE v.version_key = 'electronic-engineering-2026'
+  AND v.status = 'draft'
+  AND (SELECT count(*) FROM public.curriculum_courses c WHERE c.curriculum_version_id = v.id) = 0;
+
+INSERT INTO public.curriculum_requirements (
+  curriculum_version_id, requirement_code, requirement_type, title,
+  minimum_credits, minimum_course_count, must_complete_all, rule_definition,
+  source_page, is_required, sort_order
+)
+SELECT v.id, e.requirement_code, e.requirement_type, e.title,
+  e.minimum_credits, e.minimum_course_count, e.must_complete_all, e.rule_definition,
+  e.source_page, e.is_required, e.sort_order
+FROM public.curriculum_versions v
+CROSS JOIN (VALUES
+  ('school-total-credits-2024-plus', 'total_credits', '2024학년도 입학생부터 총 졸업학점', 120, NULL, true, '{"admissionYearFrom":2024,"admissionYearTo":null,"scope":"university_general","sourceText":"2024학년도 입학생부터 120학점 이상","_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"school-total-credits-2024-plus"}}'::jsonb, 7, true, 1),
+  ('school-total-credits-2023-minus', 'total_credits', '2023학년도 입학생까지 총 졸업학점', 130, NULL, true, '{"admissionYearFrom":null,"admissionYearTo":2023,"scope":"university_general","sourceText":"2023학년도 입학생까지 130학점 이상","_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"school-total-credits-2023-minus"}}'::jsonb, 7, true, 2),
+  ('common-general-2024-plus', 'common_general_credits', '2024학년도 입학생부터 공통교양', 12, NULL, true, '{"admissionYearFrom":2024,"admissionYearTo":null,"requiredCourseGroups":[["교양세미나와토론","기독교와계명인","글로벌시티즌십","채플(1)","채플(2)","COLLEGE ENGLISH","AI와컴퓨팅사고","스마트비즈니스와창업기초"]],"pFSubjects":["채플(1)","채플(2)","AI와컴퓨팅사고","스마트비즈니스와창업기초"],"_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"common-general-2024-plus"}}'::jsonb, 8, true, 3),
+  ('balanced-general-2024-plus', 'balanced_general_credits', '2024학년도 입학생부터 균형·일반교양', 18, NULL, false, '{"admissionYearFrom":2024,"admissionYearTo":null,"selectionRule":"균형교양과 일반교양 구분 없이 18학점 이상","_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"balanced-general-2024-plus"}}'::jsonb, 8, true, 4),
+  ('common-general-2014-2023', 'common_general_credits', '2014~2023학년도 입학생 공통교양', 12, NULL, true, '{"admissionYearFrom":2014,"admissionYearTo":2023,"selectionRule":"채플(1), 채플(2)를 포함한 공통교양 12학점","_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"common-general-2014-2023"}}'::jsonb, 9, true, 5),
+  ('balanced-general-2014-2023', 'balanced_general_credits', '2014~2023학년도 입학생 균형교양', 15, NULL, true, '{"admissionYearFrom":2014,"admissionYearTo":2023,"selectionRule":"6개 영역 중 5개 영역에서 각 3학점","_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"balanced-general-2014-2023"}}'::jsonb, 9, true, 6),
+  ('common-general-2013-minus', 'common_general_credits', '2013학년도 이전 입학생 교양', 30, NULL, true, '{"admissionYearFrom":null,"admissionYearTo":2013,"selectionRule":"채플(1), 채플(2)를 포함한 공통·균형·계열·일반교양 합계","_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"common-general-2013-minus"}}'::jsonb, 9, true, 7),
+  ('electronic-major-credits-2024-plus', 'major_credits', '전자공학과 제1전공 최소학점(2024학년도 이후)', 69, NULL, true, '{"departmentName":"전자공학과","admissionYearFrom":2024,"admissionYearTo":null,"includesMajorRequired":true,"_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"electronic-major-credits-2024-plus"}}'::jsonb, 28, true, 8),
+  ('electronic-microdegree-2024-plus', 'other', '전자공학과 타전공 Micro Degree', NULL, 1, true, '{"departmentName":"전자공학과","admissionYearFrom":2024,"admissionYearTo":null,"microDegreeCount":1,"_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"electronic-microdegree-2024-plus"}}'::jsonb, 28, true, 16),
+  ('credit-load-2024-plus', 'other', '2024학년도 입학생 이수허용학점', NULL, NULL, false, '{"admissionYearFrom":2024,"admissionYearTo":null,"semesterMaximumCredits":18,"academicYearMaximumCredits":34,"_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"credit-load-2024-plus"}}'::jsonb, 7, true, 18),
+  ('credit-load-2023-minus', 'other', '2023학년도 입학생까지 이수허용학점', NULL, NULL, false, '{"admissionYearFrom":null,"admissionYearTo":2023,"semesterMaximumCredits":20,"academicYearMaximumCredits":36,"_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"credit-load-2023-minus"}}'::jsonb, 7, true, 19),
+  ('chapel-pf-2024-plus', 'other', '2024학년도 공통교양 채플·P/F 과목', NULL, 2, true, '{"admissionYearFrom":2024,"admissionYearTo":null,"pfCourses":["채플(1)","채플(2)","AI와컴퓨팅사고","스마트비즈니스와창업기초"],"creditValue":0,"_importMetadata":{"verificationStatus":"verified","seedDisposition":"seed_as_draft","automaticGraduationCalculation":false,"sourceRequirementCode":"chapel-pf-2024-plus"}}'::jsonb, 8, true, 20)
+) AS e(requirement_code, requirement_type, title, minimum_credits, minimum_course_count, must_complete_all, rule_definition, source_page, is_required, sort_order)
+WHERE v.version_key = 'electronic-engineering-2026'
+  AND v.status = 'draft'
+  AND (SELECT count(*) FROM public.curriculum_requirements r WHERE r.curriculum_version_id = v.id) = 0;
+
+INSERT INTO public.curriculum_requirement_exceptions (
+  curriculum_version_id, exception_type, title, condition_definition,
+  override_definition, priority, requires_manual_review, source_page, notes
+)
+SELECT v.id, e.exception_type, e.title, e.condition_definition,
+  e.override_definition, e.priority, e.requires_manual_review, e.source_page, e.notes
+FROM public.curriculum_versions v
+CROSS JOIN (VALUES
+  ('international_student', '외국인 유학생 교양 기준', '{"sourceCondition":"외국인 유학생·교환학생·어학연수생","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, '{"ruleReference":"외국인 유학생, 교환학생 및 어학연수생 관리 내규","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, 10, true, 8, '학교 공통 내규 원문 확인 필요'),
+  ('department_transfer', '전과 학생 전공·Micro Degree 기준', '{"sourceCondition":"전과 연도 및 입학연도에 따른 전입학과 기준","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, '{"ruleReference":"전입 학과 졸업 기준 및 Micro Degree 기준","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, 20, true, 12, '전자공학과 전입 사례 적용 전 확인 필요'),
+  ('department_merger', '학과 통합 학생 기준', '{"sourceCondition":"입학 후 학과 통합","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, '{"ruleReference":"원소속·통합학과 기준 중 낮은 값 또는 통합 기준","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, 30, true, 10, '통합 시점별 적용 규칙 확인 필요'),
+  ('department_split', '학과 분리 학생 기준', '{"sourceCondition":"학과 통합·분리 전후 입학 및 전과","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, '{"ruleReference":"전과·재입학 당해연도 또는 입학연도 기준","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, 31, true, 12, '분리 사례의 authoritative 기록 필요'),
+  ('readmission', '재입학 학생 기준', '{"sourceCondition":"제적 전 소속 학과 유지 여부 및 재입학 연도","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, '{"ruleReference":"재입학 당해연도 또는 최초 입학연도 학과 기준","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, 40, true, 13, '전자공학과 존속 여부와 함께 확인 필요'),
+  ('transfer_student', '편입생 적용 기준', '{"sourceCondition":"편입생","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, '{"ruleReference":"편입생도 복수전공 전공학점 기준 동일 적용","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, 50, true, 17, '편입생의 전자공학과 졸업 기준 별도 확인 필요'),
+  ('double_major', '복수전공 이수 기준', '{"sourceCondition":"복수전공 신청자","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, '{"minimumFirstMajorCredits":42,"minimumDoubleMajorCredits":42,"admissionYearFrom":2010,"duplicateCourseCredit":false,"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, 60, true, 17, '2009학년도 이전 36/36 규칙도 별도 적용'),
+  ('minor', '부전공 이수 기준', '{"sourceCondition":"부전공 신청자","_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, '{"minimumFirstMajorCredits":54,"minimumMinorCredits":21,"_importMetadata":{"verificationStatus":"partially_verified","seedDisposition":"hold_for_confirmation","automaticAssignment":false}}'::jsonb, 70, true, 18, '복수 부전공은 별도 42/21 규칙 확인 필요')
+) AS e(exception_type, title, condition_definition, override_definition, priority, requires_manual_review, source_page, notes)
+WHERE v.version_key = 'electronic-engineering-2026'
+  AND v.status = 'draft'
+  AND (SELECT count(*) FROM public.curriculum_requirement_exceptions x WHERE x.curriculum_version_id = v.id) = 0;
+
+-- Fail closed on partial or unexpected data; these checks are also the post-apply verification queries.
+DO $$
+DECLARE
+  v_id uuid;
+  v_course_count integer;
+  v_requirement_count integer;
+  v_exception_count integer;
+BEGIN
+  SELECT v.id INTO v_id
+  FROM public.curriculum_versions v
+  JOIN public.schools s ON s.id = v.school_id AND s.name = '계명대학교'
+  JOIN public.departments d ON d.id = v.department_id AND d.name = '전자공학과'
+  WHERE v.version_key = 'electronic-engineering-2026' AND v.status = 'draft';
+  SELECT count(*) INTO v_course_count FROM public.curriculum_courses WHERE curriculum_version_id = v_id;
+  SELECT count(*) INTO v_requirement_count FROM public.curriculum_requirements WHERE curriculum_version_id = v_id;
+  SELECT count(*) INTO v_exception_count FROM public.curriculum_requirement_exceptions WHERE curriculum_version_id = v_id;
+  IF v_course_count <> 41 OR v_requirement_count <> 12 OR v_exception_count <> 8 THEN
+    RAISE EXCEPTION 'Unexpected seed counts: courses %, requirements %, exceptions %', v_course_count, v_requirement_count, v_exception_count;
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.curriculum_courses WHERE curriculum_version_id = v_id AND (course_id IS NOT NULL OR credits IS NOT NULL OR recommended_semester IS NOT NULL OR is_required IS NOT FALSE)) THEN
+    RAISE EXCEPTION 'Draft course safety invariant violated';
+  END IF;
+  IF (SELECT count(DISTINCT source_course_name) FROM public.curriculum_courses WHERE curriculum_version_id = v_id) <> 41 THEN
+    RAISE EXCEPTION 'Expected 41 distinct source course names';
+  END IF;
+END
+$$;
+
+COMMIT;
+
+
