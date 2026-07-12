@@ -1,21 +1,10 @@
 -- PaceMate 1-D-5A electronic-engineering curriculum draft seed (REVIEW ONLY)
 -- DO NOT EXECUTE: no database write is authorized in 1-D-5A.
--- This file is fail-closed because the source does not establish admission_year_from,
--- while curriculum_versions.admission_year_from is NOT NULL in the applied schema.
--- Resolve the admission-year scope and remove only the explicit blocker after review.
+-- Requires the 1-D-5B-0 admission-year constraint migration before execution.
+-- The source does not establish admission_year_from; draft NULL is intentional.
 -- No course catalog rows, student rows, active versions, reports, or career tracks are seeded.
 
 BEGIN;
-
--- Fail closed before any write. Do not guess an admission-year range.
-DO $$
-BEGIN
-  RAISE EXCEPTION '전자공학과 draft seed blocked: admission_year_from is unresolved in the import JSON and is required by curriculum_versions';
-END
-$$;
-
--- The statements below are the reviewed, idempotent template to use only after the blocker is resolved.
--- They intentionally remain after the blocker so this file cannot write accidentally.
 
 DO $$
 DECLARE
@@ -30,10 +19,8 @@ BEGIN
   END IF;
   SELECT count(*) INTO v_department_count
   FROM public.departments WHERE school_id = v_school_id AND name = '전자공학과';
-  IF v_department_count > 1 THEN
-    RAISE EXCEPTION 'Duplicate 전자공학과 departments found for the target school';
-  ELSIF v_department_count = 0 THEN
-    INSERT INTO public.departments (school_id, name) VALUES (v_school_id, '전자공학과');
+  IF v_department_count <> 1 THEN
+    RAISE EXCEPTION 'Expected exactly one 전자공학과 department row for the target school, found %', v_department_count;
   END IF;
 END
 $$;
@@ -208,5 +195,3 @@ END
 $$;
 
 COMMIT;
-
-

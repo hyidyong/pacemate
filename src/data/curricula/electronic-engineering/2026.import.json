@@ -1805,7 +1805,7 @@
         "admissionYearFrom": 2024,
         "admissionYearTo": null,
         "scope": "university_general",
-        "sourceText": "2024??? ????? 120?? ??"
+        "sourceText": "2024학년도 입학생부터 120학점 이상"
       },
       "sourcePage": 7,
       "isRequired": true,
@@ -1824,7 +1824,7 @@
         "admissionYearFrom": null,
         "admissionYearTo": 2023,
         "scope": "university_general",
-        "sourceText": "2023??? ????? 130?? ??"
+        "sourceText": "2023학년도 입학생까지 130학점 이상"
       },
       "sourcePage": 7,
       "isRequired": true,
@@ -2173,10 +2173,10 @@
         "admissionYearFrom": 2024,
         "admissionYearTo": null,
         "pfCourses": [
-          "??(1)",
-          "??(2)",
-          "AI??????",
-          "????????????"
+          "채플(1)",
+          "채플(2)",
+          "AI와컴퓨팅사고",
+          "스마트비즈니스와창업기초"
         ],
         "creditValue": 0
       },
