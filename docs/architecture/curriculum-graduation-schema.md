@@ -179,6 +179,8 @@ JSONB는 규칙의 매개변수를 담는 용도로만 사용한다. 상태·버
 
 후속 `1-D-2`에서 제안 테이블, enum/check, FK, unique index, updated_at trigger, RLS baseline을 migration으로 만들 수 있다. 단, 다음은 migration 전에 확정해야 한다.
 
+전자공학과 원본은 이번 단계의 source metadata에서 `source_academic_year=2026`으로 기록할 수 있다. 파일의 정확한 공식 발행일은 확인되지 않았으므로 `publication_date=null`로 유지하며, 이 값만으로 published version을 만들지 않는다.
+
 1. 학과별 입학연도 범위와 공식 curriculum version 식별자
 2. 전자공학과 PDF의 과목·졸업요건 원문 추출 및 검토
 3. `courses` catalog와 블루북 과목의 exact match 목록

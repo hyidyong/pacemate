@@ -11,9 +11,9 @@
 | 학과 | 원본 | 현재 정규화 자료 | 상태 |
 | --- | --- | --- | --- |
 | 법학과 | `docs/reference/bluebooks/law/source.pdf` | `src/data/bluebooks/law.json`, `docs/architecture/bluebook-law-source-map.md` | 구조화 초안 존재. `sourceEdition=null` 유지 |
-| 전자공학과 | `docs/reference/bluebooks/electronic-engineering/source.pdf` | 없음 | 38쪽 PDF 확인. 공통 JSON 정규화 전 검토 필요 |
+| 전자공학과 | `docs/reference/bluebooks/electronic-engineering/source.pdf` | 없음 | 38쪽 PDF 확인. `source_academic_year=2026`, `publication_date=null`; 공통 JSON 정규화 전 검토 필요 |
 
-법학 PDF는 18쪽이며 PDF metadata의 생성일이 있어도 공식 발행연도로 확정하지 않는다. 전자공학 PDF는 38쪽이며 파일 metadata 시각을 curriculum edition으로 사용하지 않는다. 두 자료 모두 학교·학과 담당자의 최신성 확인 전에는 `published` version으로 취급하지 않는다.
+법학 PDF는 18쪽이며 PDF metadata의 생성일이 있어도 공식 발행연도로 확정하지 않는다. 전자공학 PDF는 38쪽이며 source academic year만 2026으로 기록하고, 정확한 publication date는 null로 둔다. 파일 metadata 시각을 curriculum edition으로 사용하지 않는다. 두 자료 모두 학교·학과 담당자의 최신성 확인 전에는 `published` version으로 취급하지 않는다.
 
 ## 법학과에서 확인 가능한 범위
 
@@ -102,7 +102,7 @@ PDF에 없는 과목 코드, 선수과목, 학점, 예외를 보완하지 않는
 ## 현재 unresolved 목록
 
 1. 전자공학과 PDF의 page별 과목·졸업요건 구조화
-2. 두 학과의 공식 발행연도·edition 식별
+2. 법학과의 공식 edition 식별 및 전자공학과 publication date 확인(전자공학 source academic year는 2026으로 고정)
 3. 실제 `courses` catalog와 블루북 과목의 exact match
 4. 학생 입학연도와 편입·복수전공·부전공 authoritative source
 5. 공식 성적·편입 인정자료의 제공 주체와 검증 절차
