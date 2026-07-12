@@ -45,11 +45,32 @@ export interface WeeklyPlanDraft {
   warnings: string[];
 }
 
+export interface WeeklyPlanReview extends WeeklyPlanDraft {
+  approvalStatus: WeeklyPlanStatus;
+  persistedWeekCount: number;
+}
+
 export interface WeeklyPlanValidationResult {
   valid: boolean;
   errors: string[];
   warnings: string[];
 }
+
+export type PersistedWeeklyPlanApprovalState = {
+  review_required: boolean;
+  professor_confirmed: boolean;
+};
+
+export function deriveWeeklyPlanStatus(
+  rows: readonly PersistedWeeklyPlanApprovalState[],
+): WeeklyPlanStatus {
+  return rows.length === 15 && rows.every(
+    (row) => row.review_required === false && row.professor_confirmed === true,
+  )
+    ? "approved"
+    : "draft";
+}
+
 
 export interface AcademicTerm {
   id: string;

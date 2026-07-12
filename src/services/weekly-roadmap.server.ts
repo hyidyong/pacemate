@@ -5,12 +5,14 @@ import {
   getWeeklyPlanDraftByOfferingId,
   listWeeklyPlanDrafts,
 } from "@/services/weekly-plan-draft.server";
+import { deriveWeeklyPlanStatus } from "@/types/weekly-roadmap";
 import type {
   AcademicTerm,
   CourseOffering,
   CourseWeeklyPlan,
   StudentWeeklyProgress,
   WeeklyPlanDraft,
+  WeeklyPlanReview,
 } from "@/types/weekly-roadmap";
 
 export type WeeklyRoadmapServiceErrorCode =
@@ -259,7 +261,7 @@ export function getWeeklyRoadmapDraftPreviewForOffering(
  * The profile-to-professor-to-offering relationship is resolved server-side;
  * no professor or offering identifier is accepted from the client.
  */
-export async function getWeeklyPlanDraftsForProfessorSession(): Promise<WeeklyPlanDraft[]> {
+export async function getWeeklyPlanDraftsForProfessorSession(): Promise<WeeklyPlanReview[]> {
   const session = await getSessionOrThrow();
   if (session.role !== "professor") {
     throw new WeeklyRoadmapServiceError(
@@ -288,5 +290,28 @@ export async function getWeeklyPlanDraftsForProfessorSession(): Promise<WeeklyPl
   const offeringIds = new Set((offerings ?? []).map((offering) => offering.id));
   if (!offeringIds.size) return [];
 
-  return listWeeklyPlanDrafts().filter((draft) => offeringIds.has(draft.offeringId));
+  const { data: persistedPlans, error: persistedPlanError } = await supabase
+    .from("course_weekly_plans")
+    .select("offering_id, week_number, review_required, professor_confirmed")
+    .in("offering_id", [...offeringIds]);
+
+  if (persistedPlanError) throwDatabaseError(persistedPlanError);
+
+  const persistedByOffering = new Map<string, typeof persistedPlans>();
+  for (const plan of persistedPlans ?? []) {
+    const rows = persistedByOffering.get(plan.offering_id) ?? [];
+    rows.push(plan);
+    persistedByOffering.set(plan.offering_id, rows);
+  }
+
+  return listWeeklyPlanDrafts()
+    .filter((draft) => offeringIds.has(draft.offeringId))
+    .map((draft) => {
+      const persisted = persistedByOffering.get(draft.offeringId) ?? [];
+      return {
+        ...draft,
+        approvalStatus: deriveWeeklyPlanStatus(persisted),
+        persistedWeekCount: persisted.length,
+      };
+    });
 }

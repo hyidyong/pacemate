@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { getWeeklyPlanDraftsForProfessorSession } from "@/services/weekly-roadmap.server";
+import { approveWeeklyPlan } from "@/services/weekly-plan-approval.actions";
 import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
-import type { WeeklyPlanConfidence, WeeklyPlanDraft } from "@/types/weekly-roadmap";
+import type { WeeklyPlanConfidence, WeeklyPlanDraft, WeeklyPlanReview } from "@/types/weekly-roadmap";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ function confidenceCounts(draft: WeeklyPlanDraft): Record<WeeklyPlanConfidence, 
   );
 }
 
-function DraftCard({ draft }: { draft: WeeklyPlanDraft }) {
+function DraftCard({ draft }: { draft: WeeklyPlanReview }) {
   const counts = confidenceCounts(draft);
 
   return (
@@ -36,6 +37,23 @@ function DraftCard({ draft }: { draft: WeeklyPlanDraft }) {
           <div className="rounded-xl bg-amber-100 px-2 py-2 text-amber-900"><strong className="block text-lg">{counts.low}</strong>Low</div>
         </div>
       </header>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+        <div>
+          <strong className="block text-slate-900">{draft.approvalStatus === "approved" ? "15주 승인 완료" : "15주 draft 검토 필요"}</strong>
+          <span className="text-xs text-slate-500">저장된 주차: {draft.persistedWeekCount} / 15</span>
+        </div>
+        {draft.approvalStatus === "draft" ? (
+          <form action={approveWeeklyPlan}>
+            <input name="offeringId" type="hidden" value={draft.offeringId} />
+            <button className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-emerald-800" type="submit">
+              15주 승인
+            </button>
+          </form>
+        ) : (
+          <span className="rounded-xl bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-800">중복 승인 차단</span>
+        )}
+      </div>
 
       <div className="mt-5 space-y-3">
         {draft.warnings.map((warning) => (
@@ -76,7 +94,7 @@ export default async function WeeklyPlanPreviewPage() {
   if (!profile) redirect("/login");
   if (profile.role !== "professor") redirect(getRoleHomePath(profile.role));
 
-  let drafts: WeeklyPlanDraft[] = [];
+  let drafts: WeeklyPlanReview[] = [];
   let loadError = false;
 
   try {
@@ -95,6 +113,10 @@ export default async function WeeklyPlanPreviewPage() {
         </section>
 
         <div role="alert" className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <strong>교수 승인 전 초안입니다.</strong> 승인 전에는 학생에게 공개되지 않으며, 승인 시 기존 `course_weekly_plans` 구조에 1~15주 row를 저장합니다. 승인 상태는 `review_required`와 `professor_confirmed` 조합으로 표시합니다.
+        </div>
+
+        <div aria-hidden="true" className="mb-8 hidden rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
           <strong>교수 승인 전 초안입니다.</strong> 이 내용은 정식 학생 로드맵이 아니며, 승인·저장·course_weekly_plans 동기화 기능이 없습니다. 교수 확인 여부: <strong>미확인 (verifiedByProfessor=false)</strong>
         </div>
 
