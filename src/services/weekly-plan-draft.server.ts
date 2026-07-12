@@ -91,20 +91,22 @@ function readDraft(input: unknown): WeeklyPlanDraft {
   return input as WeeklyPlanDraft;
 }
 
-const drafts = draftInputs.map(readDraft);
+function loadDrafts(): WeeklyPlanDraft[] {
+  return draftInputs.map(readDraft);
+}
 
 export function getWeeklyPlanDraftByOfferingId(offeringId: string): WeeklyPlanDraft | null {
   if (!isNonEmptyString(offeringId)) return null;
-  return drafts.find((draft) => draft.offeringId === offeringId) ?? null;
+  return loadDrafts().find((draft) => draft.offeringId === offeringId) ?? null;
 }
 
 export function getWeeklyPlanDraftByCourseId(courseId: string): WeeklyPlanDraft | null {
   if (!isNonEmptyString(courseId)) return null;
-  return drafts.find((draft) => draft.courseId === courseId) ?? null;
+  return loadDrafts().find((draft) => draft.courseId === courseId) ?? null;
 }
 
 export function listWeeklyPlanDrafts(): WeeklyPlanDraft[] {
-  return drafts.map((draft) => ({
+  return loadDrafts().map((draft) => ({
     ...draft,
     source: { ...draft.source },
     weeks: draft.weeks.map((week) => ({ ...week, topics: [...week.topics] })),

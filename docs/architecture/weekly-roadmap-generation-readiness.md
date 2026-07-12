@@ -105,3 +105,11 @@ weekly plan을 생성하지 않는다. 빈 배열이나 임의 placeholder row�
 `src/services/weekly-roadmap.server.ts`에는 `getWeeklyRoadmapDraftPreviewForOffering`를 별도 demo preview 함수로 추가했다. 이 함수는 `course_weekly_plans` 승인 데이터나 기존 학생용 조회 결과에 draft를 합치지 않는다. 학생 production 경로, UI, API route에서 자동 사용되지 않는다.
 
 draft는 `status=draft`, `verifiedByProfessor=false`, `warnings` 포함 상태를 유지하며 서버 전용 모듈에서만 import한다. Supabase service-role client나 개인정보는 draft loader에서 사용하지 않는다.
+
+## 1-C-2C 교수 preview
+
+교수 전용 preview 경로는 `/professor/weekly-plan-preview`다. signed demo session이 없으면 `/login`으로 이동하고, `professor`가 아닌 역할은 각 role home으로 이동한다. 교수 페이지에는 이 preview로 들어가는 최소 링크만 추가했다.
+
+화면은 회사법과 행정절차와행정구제 draft 2건의 상태, 담당 교수, confidence 요약, warnings, 1~15주 목록, topics, activity type, source note, assessment 여부를 표시한다. low confidence 주차는 별도 강조한다. raw UUID, 학생 개인정보, service-role key는 화면에 표시하지 않는다.
+
+preview는 읽기 전용이며 승인·저장·mutation·course_weekly_plans 동기화가 없다. 기존 `getActiveAcademicTermForSession`, `getStudentCourseOfferingsForSession`, `getCourseWeeklyPlanForSession`, `getStudentWeeklyProgressForSession` 결과에 draft를 병합하지 않는다. 다음 단계에서 필요한 것은 교수 승인 workflow와 승인된 weekly plan의 별도 DB 입력·검증이다.
