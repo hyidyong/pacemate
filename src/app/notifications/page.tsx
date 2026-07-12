@@ -187,7 +187,6 @@ function NotificationRow({ notification }: { notification: UserNotification }) {
   return (
     <form action={markNotificationReadAndGo}>
       <input type="hidden" name="notificationId" value={notification.id} />
-      <input type="hidden" name="targetHref" value={notification.target_href} />
       <button className="notification-row" data-unread={!notification.is_read} type="submit">
         <span className="notification-row-icon">
           <Icon size={18} aria-hidden="true" />

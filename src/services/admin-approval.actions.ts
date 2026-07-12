@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase/client";
+import {
+  createUserNotification,
+  type UserNotificationCreateInput,
+} from "@/services/notifications.create.service";
 import { getDemoProfile } from "@/services/session.service";
 
 function text(value: FormDataEntryValue | null, fallback = "") {
@@ -55,27 +59,29 @@ export async function updateRoadmapRevisionStatus(formData: FormData) {
     return;
   }
 
-  const notification =
+  const notification: UserNotificationCreateInput =
     status === "assistant_reviewed"
       ? {
-          recipient_role: "admin",
+          recipientRole: "admin",
+          recipientId: null,
           category: "revision",
           title: "조교 검토 완료",
           body: `${data.title} 요청이 최종 승인을 기다립니다.`,
-          target_href: `/admin?request=${data.id}`,
+          targetHref: `/admin?request=${data.id}`,
         }
       : {
-          recipient_role: "student",
+          recipientRole: "student",
+          recipientId: null,
           category: "revision",
           title: status === "approved" ? "로드맵 수정 반영" : "로드맵 수정 반려",
           body:
             status === "approved"
               ? `${data.title} 승인본이 학생 로드맵에 반영됐습니다.`
               : `${data.title} 요청이 반려됐습니다.`,
-          target_href: data.course_id ? `/roadmap/${data.course_id}` : "/roadmap",
+          targetHref: data.course_id ? `/roadmap/${data.course_id}` : "/roadmap",
         };
 
-  await supabase.from("user_notifications").insert(notification);
+  await createUserNotification(notification);
 
   revalidatePath("/admin");
   revalidatePath("/professor");

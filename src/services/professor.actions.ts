@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase/client";
+import { createUserNotification } from "@/services/notifications.create.service";
 import {
   isWeekday,
   timeRangeEndsByStudentCutoff,
@@ -190,20 +191,25 @@ export async function updateCounselingStatus(formData: FormData) {
     return { ok: false, message: error.message };
   }
 
-  await supabase.from("user_notifications").insert({
-    recipient_role: "student",
-    recipient_id: data.student_id,
+  const notificationResult = await createUserNotification({
+    recipientRole: "student",
+    recipientId: data.student_id,
     category: "counseling",
     title: status === "approved" ? "상담 신청이 승인됐습니다" : "상담 시간이 조정 필요합니다",
     body:
       status === "approved"
         ? professorNote || `${data.topic} 상담 신청이 승인됐습니다.`
         : `${professorNote} 추천 시간으로 다시 예약할 수 있습니다.`,
-    target_href: "/counseling",
+    targetHref: "/counseling",
   });
 
   revalidatePath("/professor");
   revalidatePath("/counseling");
+
+  if (!notificationResult.ok) {
+    return { ok: true, message: "상담 상태는 변경됐지만 알림 전송에 실패했습니다." };
+  }
+
   return { ok: true, message: "상담 상태를 변경했습니다." };
 }
 
@@ -289,16 +295,22 @@ export async function createRoadmapRevisionRequest(formData: FormData) {
     return { ok: false, message: error.message };
   }
 
-  await supabase.from("user_notifications").insert({
-    recipient_role: "admin",
+  const notificationResult = await createUserNotification({
+    recipientRole: "admin",
+    recipientId: null,
     category: "revision",
     title: "로드맵 수정 승인 요청",
     body: `${title} 요청이 관리자 승인을 기다립니다.`,
-    target_href: `/admin?request=${data.id}`,
+    targetHref: `/admin?request=${data.id}`,
   });
 
   revalidatePath("/professor");
   revalidatePath("/admin");
+
+  if (!notificationResult.ok) {
+    return { ok: true, message: "로드맵 수정 요청은 접수됐지만 알림 전송에 실패했습니다." };
+  }
+
   return { ok: true, message: "로드맵 수정 요청을 보냈습니다." };
 }
 
@@ -365,17 +377,23 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
     return { ok: false, message: error.message };
   }
 
-  await supabase.from("user_notifications").insert({
-    recipient_role: "student",
+  const notificationResult = await createUserNotification({
+    recipientRole: "student",
+    recipientId: null,
     category: "revision",
     title: "담당 교수 로드맵 수정 반영",
     body: `${ownedCourse.courseCode} 과목 로드맵이 교수 수정본으로 업데이트됐습니다.`,
-    target_href: "/roadmap",
+    targetHref: "/roadmap",
   });
 
   revalidatePath("/professor");
   revalidatePath("/roadmap");
   revalidatePath("/admin");
+
+  if (!notificationResult.ok) {
+    return { ok: true, message: "로드맵 수정은 반영됐지만 알림 전송에 실패했습니다." };
+  }
+
   return { ok: true, message: `로드맵 수정이 바로 반영됐습니다. (${data.id.slice(0, 8)})` };
 }
 

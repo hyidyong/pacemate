@@ -8,6 +8,7 @@ import {
   timeToMinutes,
 } from "@/lib/scheduling-policy";
 import { getDemoProfile } from "@/services/session.service";
+import { createUserNotification } from "@/services/notifications.create.service";
 
 function text(value: FormDataEntryValue | null, fallback = "") {
   const current = typeof value === "string" ? value.trim() : "";
@@ -56,16 +57,21 @@ export async function createCounselingRequest(formData: FormData) {
     return { ok: false, message: error.message };
   }
 
-  await supabase.from("user_notifications").insert({
-    recipient_role: "professor",
+  const notificationResult = await createUserNotification({
+    recipientRole: "professor",
+    recipientId: null,
     category: "counseling",
     title: "새 상담 신청",
     body: `${profile.name} 학생이 ${topic} 상담을 신청했습니다.`,
-    target_href: "/professor?tab=counseling",
+    targetHref: "/professor?tab=counseling",
   });
 
   revalidatePath("/counseling");
   revalidatePath("/professor");
+
+  if (!notificationResult.ok) {
+    return { ok: true, message: "상담 신청은 완료됐지만 알림 전송에 실패했습니다." };
+  }
   return { ok: true, message: `상담 신청을 보냈습니다. (${data.id.slice(0, 8)})` };
 }
 
