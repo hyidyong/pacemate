@@ -1,7 +1,10 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireDemoSession, type DemoSession } from "@/lib/auth/demo-session";
-import { getWeeklyPlanDraftByOfferingId } from "@/services/weekly-plan-draft.server";
+import {
+  getWeeklyPlanDraftByOfferingId,
+  listWeeklyPlanDrafts,
+} from "@/services/weekly-plan-draft.server";
 import type {
   AcademicTerm,
   CourseOffering,
@@ -249,4 +252,41 @@ export function getWeeklyRoadmapDraftPreviewForOffering(
   offeringId: string,
 ): WeeklyPlanDraft | null {
   return getWeeklyPlanDraftByOfferingId(offeringId);
+}
+
+/**
+ * Returns only drafts whose offering is owned by the signed-in professor.
+ * The profile-to-professor-to-offering relationship is resolved server-side;
+ * no professor or offering identifier is accepted from the client.
+ */
+export async function getWeeklyPlanDraftsForProfessorSession(): Promise<WeeklyPlanDraft[]> {
+  const session = await getSessionOrThrow();
+  if (session.role !== "professor") {
+    throw new WeeklyRoadmapServiceError(
+      "wrong_role",
+      "Weekly plan drafts are available to professors only",
+    );
+  }
+
+  const supabase = getAdminClient();
+  const { data: professors, error: professorError } = await supabase
+    .from("professors")
+    .select("id")
+    .eq("profile_id", session.profileId)
+    .limit(2);
+
+  if (professorError) throwDatabaseError(professorError);
+  if (!professors || professors.length !== 1) return [];
+
+  const { data: offerings, error: offeringError } = await supabase
+    .from("course_offerings")
+    .select("id")
+    .eq("professor_id", professors[0].id);
+
+  if (offeringError) throwDatabaseError(offeringError);
+
+  const offeringIds = new Set((offerings ?? []).map((offering) => offering.id));
+  if (!offeringIds.size) return [];
+
+  return listWeeklyPlanDrafts().filter((draft) => offeringIds.has(draft.offeringId));
 }

@@ -1,15 +1,10 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { listWeeklyPlanDrafts } from "@/services/weekly-plan-draft.server";
+import { getWeeklyPlanDraftsForProfessorSession } from "@/services/weekly-roadmap.server";
 import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
 import type { WeeklyPlanConfidence, WeeklyPlanDraft } from "@/types/weekly-roadmap";
 
 export const dynamic = "force-dynamic";
-
-const offeringOrder = [
-  "d0761612-d2db-413a-a800-1d554a6876eb",
-  "228bb6cc-497c-4065-bf83-c9b0d906812c",
-] as const;
 
 function confidenceCounts(draft: WeeklyPlanDraft): Record<WeeklyPlanConfidence, number> {
   return draft.weeks.reduce(
@@ -85,10 +80,7 @@ export default async function WeeklyPlanPreviewPage() {
   let loadError = false;
 
   try {
-      const availableDrafts = listWeeklyPlanDrafts();
-      drafts = offeringOrder
-        .map((offeringId) => availableDrafts.find((draft) => draft.offeringId === offeringId) ?? null)
-        .filter((draft): draft is WeeklyPlanDraft => draft !== null);
+    drafts = await getWeeklyPlanDraftsForProfessorSession();
   } catch {
     loadError = true;
   }
@@ -109,7 +101,7 @@ export default async function WeeklyPlanPreviewPage() {
         {loadError ? (
           <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-900">초안 데이터를 불러오지 못했습니다. 내부 검토를 계속할 수 없습니다.</div>
         ) : drafts.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">검토 가능한 초안이 없습니다.</div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">검토할 담당 과목 초안이 없습니다</div>
         ) : (
           <div className="grid gap-6 xl:grid-cols-2">{drafts.map((draft) => <DraftCard key={draft.offeringId} draft={draft} />)}</div>
         )}
