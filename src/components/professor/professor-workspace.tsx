@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   BookOpenText,
+  BarChart3,
   CalendarClock,
   Check,
   Clock,
@@ -40,7 +41,12 @@ import {
 import type { RoadmapRevisionRequest } from "@/services/roadmap-revisions.service";
 import { AcademicScheduleCard } from "@/components/dashboard/academic-schedule-card";
 import type { AcademicEvent } from "@/types/academic-calendar";
+import type {
+  ProfessorCourseProgressReport,
+  ProfessorCourseProgressReportResult,
+} from "@/types/professor-course-progress-report";
 import { ProfessorCalendar } from "./professor-calendar";
+import { ProfessorCourseProgressReportView } from "./professor-course-progress-report";
 import {
   ProfessorHomeSectionTabs,
   type ProfessorHomeSection,
@@ -51,6 +57,8 @@ import { getCourseRoadmap, addCourseNotice, addCourseTextbook, removeCourseAssig
 // ============== TYPES ==============
 type ProfessorWorkspaceProps = {
   initialTab?: ProfessorTab;
+  professorCourseProgressReport: ProfessorCourseProgressReport;
+  professorCourseProgressReportError: Extract<ProfessorCourseProgressReportResult, { ok: false }>["error"] | null;
   professor: {
     id: string;
     name: string;
@@ -73,7 +81,7 @@ type ProfessorWorkspaceProps = {
   initialSub?: string;
 };
 
-type ProfessorTab = "schedule" | "roadmap" | "questions" | "counseling";
+type ProfessorTab = "schedule" | "roadmap" | "questions" | "counseling" | "report";
 type SubMenu = string;
 
 type DummyQuestion = {
@@ -111,6 +119,7 @@ const professorTabs: Array<{ id: ProfessorTab; label: string }> = [
   { id: "roadmap", label: "\uacfc\ubaa9 \uad00\ub9ac" },
   { id: "questions", label: "\uc9c8\ubb38 \uad00\ub9ac" },
   { id: "counseling", label: "\uc0c1\ub2f4 \uad00\ub9ac" },
+  { id: "report", label: "\ud559\uc2b5 \ub9ac\ud3ec\ud2b8" },
 ];
 
 const sidebarMenus: Record<ProfessorTab, Array<{ id: SubMenu; label: string; icon: any }>> = {
@@ -131,6 +140,9 @@ const sidebarMenus: Record<ProfessorTab, Array<{ id: SubMenu; label: string; ico
   counseling: [
     { id: "pending-counseling", label: "\ub300\uae30 \uc911\uc778 \uc0c1\ub2f4 \uc694\uccad", icon: Inbox },
     { id: "counseling-log", label: "\uc0c1\ub2f4 \uc694\uccad \ub85c\uadf8", icon: History },
+  ],
+  report: [
+    { id: "course-progress-report", label: "\uacfc\ubaa9 \uc9c4\ud589 \ud604\ud669", icon: BarChart3 },
   ],
 };
 
@@ -169,6 +181,8 @@ export function ProfessorWorkspace({
   counselingRequests,
   roadmapRequests,
   adminTasks,
+  professorCourseProgressReport,
+  professorCourseProgressReportError,
 }: ProfessorWorkspaceProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ProfessorTab>(initialTab ?? "schedule");
@@ -446,6 +460,13 @@ export function ProfessorWorkspace({
         return (
           <CounselingLogSub
             counselingRequests={counselingRequests}
+          />
+        );
+      case "course-progress-report":
+        return (
+          <ProfessorCourseProgressReportView
+            report={professorCourseProgressReport}
+            error={professorCourseProgressReportError}
           />
         );
       default:

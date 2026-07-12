@@ -7,6 +7,8 @@ import { getProfessorPageData } from "@/services/professor.service";
 import { requireRoles } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 import { clearDemoSession } from "@/services/demo-auth.service";
+import { getProfessorCourseProgressReport } from "@/services/professor-course-progress-report.server";
+import type { ProfessorCourseProgressReport } from "@/types/professor-course-progress-report";
 
 // ✅ [Opt 4] ProfessorWorkspace(50KB)를 Lazy Load — 교수 페이지 초기 JS 대폭 감소
 const ProfessorWorkspace = dynamicImport(
@@ -24,7 +26,7 @@ const ProfessorWorkspace = dynamicImport(
 
 export const dynamic = "force-dynamic";
 
-const professorTabs = ["schedule", "roadmap", "questions", "counseling"] as const;
+const professorTabs = ["schedule", "roadmap", "questions", "counseling", "report"] as const;
 
 function normalizeProfessorTab(tab?: string) {
   return professorTabs.find((item) => item === tab);
@@ -40,11 +42,19 @@ export default async function ProfessorPage({
   const params = await searchParams;
   const initialTab = normalizeProfessorTab(params?.tab);
 
-  const [data, unreadCounselingCount, questionCount] = await Promise.all([
+  const [data, unreadCounselingCount, questionCount, courseProgressReportResult] = await Promise.all([
     getProfessorPageData(profile),
     getUnreadNotificationCountByCategory(profile, "counseling"),
     getUnreadNotificationCountByCategory(profile, "question"),
+    getProfessorCourseProgressReport(),
   ]);
+
+  const professorCourseProgressReport: ProfessorCourseProgressReport = courseProgressReportResult.ok
+    ? courseProgressReportResult.report
+    : { offerings: [] };
+  const professorCourseProgressReportError = courseProgressReportResult.ok
+    ? null
+    : courseProgressReportResult.error;
 
   const pendingCounselingCount = data.counselingRequests.filter((request) => request.status === "pending").length;
   const effectiveCounselingCount = Math.max(pendingCounselingCount, unreadCounselingCount);
@@ -81,6 +91,8 @@ export default async function ProfessorPage({
           initialSub={params?.sub}
           notificationCounts={{ counseling: effectiveCounselingCount, question: questionCount }}
           professor={data.professor}
+          professorCourseProgressReport={professorCourseProgressReport}
+          professorCourseProgressReportError={professorCourseProgressReportError}
           roadmapRequests={data.roadmapRequests}
           teachingSlots={data.teachingSlots}
         />
