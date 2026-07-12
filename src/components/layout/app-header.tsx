@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
 import { appRoutes } from "@/lib/navigation";
-import type { UserNotification } from "@/services/notifications.service";
+import type { UserNotification } from "@/types/notifications";
 
 // ✅ Lazy load framer-motion — 헤더에서 초기 번들 ~160KB 절감
 const MotionDiv = dynamic(
