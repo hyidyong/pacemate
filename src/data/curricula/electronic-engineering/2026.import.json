@@ -1,0 +1,2474 @@
+{
+  "metadata": {
+    "departmentName": "?????",
+    "sourceTitle": "2026??? ????? ?? ?? ????(Blue Book)",
+    "sourceFile": "docs/reference/bluebooks/electronic-engineering/source.pdf",
+    "sourceAcademicYear": 2026,
+    "publicationDate": null,
+    "sourceVerified": false,
+    "generatedAt": "2026-07-12T13:10:00+09:00",
+    "importStatus": "draft_unresolved",
+    "verificationStatus": "partially_verified",
+    "seedDisposition": "seed_as_draft",
+    "blocksDraftSeed": false,
+    "blocksActivation": true,
+    "blocksGraduationCalculation": true,
+    "unresolvedReason": "이미지형 도식에서 42개 고유 과목명을 확인했지만 과목코드·학점·정확한 학기·필수/선택·전자공학과 DB 매칭 및 학과 department FK가 미확인이다.",
+    "notes": "Electronic-engineering only. PDF page 4 (printed page 3) visual curriculum diagram transcribed; no DB writes, seed SQL, migration, UI, or law file changes.",
+    "sourceVisual": {
+      "pdfPage": 4,
+      "printedPage": 3,
+      "uniqueCourseCount": 41,
+      "diagramPlacementCount": 47,
+      "duplicatePlacementCount": 6
+    }
+  },
+  "curriculumVersion": {
+    "schoolId": "862b661c-810a-4440-ba76-722b2fcf8d6a",
+    "departmentId": null,
+    "versionKey": "electronic-engineering-2026",
+    "academicYear": 2026,
+    "versionLabel": "2026??? ????? Bluebook",
+    "admissionYearFrom": null,
+    "admissionYearTo": null,
+    "status": "draft",
+    "sourceTitle": "2026??? ????? ?? ?? ????(Blue Book)",
+    "sourceFile": "docs/reference/bluebooks/electronic-engineering/source.pdf",
+    "sourceAcademicYear": 2026,
+    "publicationDate": null,
+    "sourceVerified": false,
+    "notes": "2026 ???? ??? ????? ????? ?? ??; admission range? departmentId? ?? ? null."
+  },
+  "curriculumCourses": [
+    {
+      "localKey": "ee-1-01",
+      "sourceCourseName": "전기전자공학수학",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 1,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 1,
+            "box": "1학년 공통",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-1-02",
+      "sourceCourseName": "미분적분학",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 2,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 1,
+            "box": "1학년 공통",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-1-03",
+      "sourceCourseName": "응용기초전기전자공학",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 3,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 1,
+            "box": "1학년 공통",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-1-04",
+      "sourceCourseName": "C프로그래밍",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 4,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 1,
+            "box": "1학년 공통",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-1-05",
+      "sourceCourseName": "대학생활과진로설계",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 5,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 1,
+            "box": "1학년 공통",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-2-06",
+      "sourceCourseName": "회로이론",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 6,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 2,
+            "box": "2학년 상단",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-2-07",
+      "sourceCourseName": "논리회로",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 7,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 2,
+            "box": "2학년 상단",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-2-08",
+      "sourceCourseName": "전자회로(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 8,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 2,
+            "box": "2학년 상단",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-2-09",
+      "sourceCourseName": "전기전자공학실험(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 9,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 2,
+            "box": "2학년 상단",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-2-10",
+      "sourceCourseName": "PYTHON프로그래밍",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 10,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 2,
+            "box": "2학년 하단",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-2-11",
+      "sourceCourseName": "신호및시스템",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 11,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 2,
+            "box": "2학년 하단",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-2-12",
+      "sourceCourseName": "머신러닝입문",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 12,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 2,
+            "box": "2학년 하단",
+            "track": null
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-13",
+      "sourceCourseName": "전자기학(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 13,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-14",
+      "sourceCourseName": "전자기학(2)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 14,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-15",
+      "sourceCourseName": "전자회로설계응용",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 15,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-16",
+      "sourceCourseName": "기초반도체공학",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 16,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-17",
+      "sourceCourseName": "전력전자회로응용",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 17,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-18",
+      "sourceCourseName": "응용전자회로실습",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 18,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-19",
+      "sourceCourseName": "공업논리및논술",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 19,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          },
+          {
+            "grade": 3,
+            "box": "3학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 2,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-20",
+      "sourceCourseName": "공업교육론",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 20,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          },
+          {
+            "grade": 3,
+            "box": "3학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 2,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-21",
+      "sourceCourseName": "마이크로프로세서",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 21,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-22",
+      "sourceCourseName": "자동제어",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 22,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-23",
+      "sourceCourseName": "임베디드시스템",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 23,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-24",
+      "sourceCourseName": "디지털논리회로실습",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 24,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-25",
+      "sourceCourseName": "통신이론및시스템",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 25,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-3-26",
+      "sourceCourseName": "전자파시스템",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 26,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 3,
+            "box": "3학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-27",
+      "sourceCourseName": "반도체나노소자",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 27,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-28",
+      "sourceCourseName": "정보디스플레이",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 28,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-29",
+      "sourceCourseName": "에너지변환시스템",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 29,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-30",
+      "sourceCourseName": "전자공학세미나(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 30,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          },
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 2,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-31",
+      "sourceCourseName": "전자공학세미나(2)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 31,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          },
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 2,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-32",
+      "sourceCourseName": "캡스톤디자인",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 32,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          },
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 2,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-33",
+      "sourceCourseName": "사물인터넷기초",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 33,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-34",
+      "sourceCourseName": "사전인턴십",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 34,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 상단",
+            "track": "하드웨어 설계 및 개발 전문가"
+          },
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 2,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-35",
+      "sourceCourseName": "디지털영상처리",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 35,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-36",
+      "sourceCourseName": "DSP시스템응용",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 36,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-37",
+      "sourceCourseName": "컴퓨터네트워킹",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 37,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-38",
+      "sourceCourseName": "임베디드시스템실습",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 38,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-39",
+      "sourceCourseName": "통신네트워크",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 39,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-40",
+      "sourceCourseName": "차량신호처리",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 40,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    },
+    {
+      "localKey": "ee-4-41",
+      "sourceCourseName": "무선이동네트워크",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "전자공학과 department/course row가 없어 exact match를 확인하지 못함; courseId는 null로 유지.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": null,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 4,
+      "sortOrder": 41,
+      "metadata": {
+        "sourceVisual": {
+          "pdfPage": 4,
+          "printedPage": 3,
+          "diagramTitle": "전자공학과 교육과정 이수체계도"
+        },
+        "diagramLocations": [
+          {
+            "grade": 4,
+            "box": "4학년 하단",
+            "track": "임베디드시스템 및 소프트웨어 개발 전문가"
+          }
+        ],
+        "diagramOccurrenceCount": 1,
+        "unresolvedFields": [
+          "sourceCourseCode",
+          "credits",
+          "recommendedSemester",
+          "requirementType",
+          "isRequired",
+          "courseId"
+        ]
+      },
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "seed_as_draft",
+      "unresolvedReason": "과목명과 학년은 이미지형 도식에서 확인했으나 과목코드·학점·정확한 학기·필수/선택·DB courseId는 확인하지 못함."
+    }
+  ],
+  "curriculumRequirements": [
+    {
+      "requirementCode": "school-total-credits-2024-plus",
+      "requirementType": "total_credits",
+      "title": "2024??? ????? ? ????",
+      "minimumCredits": 120,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2024,
+        "admissionYearTo": null,
+        "scope": "university_general",
+        "sourceText": "2024??? ????? 120?? ??"
+      },
+      "sourcePage": 7,
+      "isRequired": true,
+      "sortOrder": 1,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "school-total-credits-2023-minus",
+      "requirementType": "total_credits",
+      "title": "2023??? ????? ? ????",
+      "minimumCredits": 130,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": null,
+        "admissionYearTo": 2023,
+        "scope": "university_general",
+        "sourceText": "2023??? ????? 130?? ??"
+      },
+      "sourcePage": 7,
+      "isRequired": true,
+      "sortOrder": 2,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "common-general-2024-plus",
+      "requirementType": "common_general_credits",
+      "title": "2024??? ????? ????",
+      "minimumCredits": 12,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2024,
+        "admissionYearTo": null,
+        "requiredCourseGroups": [
+          [
+            "????????",
+            "???????",
+            "???????",
+            "??(1)",
+            "??(2)",
+            "COLLEGE ENGLISH",
+            "AI??????",
+            "????????????"
+          ]
+        ],
+        "pFSubjects": [
+          "??(1)",
+          "??(2)",
+          "AI??????",
+          "????????????"
+        ]
+      },
+      "sourcePage": 8,
+      "isRequired": true,
+      "sortOrder": 3,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "balanced-general-2024-plus",
+      "requirementType": "balanced_general_credits",
+      "title": "2024??? ????? ???????",
+      "minimumCredits": 18,
+      "minimumCourseCount": null,
+      "mustCompleteAll": false,
+      "ruleDefinition": {
+        "admissionYearFrom": 2024,
+        "admissionYearTo": null,
+        "selectionRule": "????? ???? ?? ?? 18?? ??"
+      },
+      "sourcePage": 8,
+      "isRequired": true,
+      "sortOrder": 4,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "common-general-2014-2023",
+      "requirementType": "common_general_credits",
+      "title": "2014~2023??? ??? ????",
+      "minimumCredits": 12,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2014,
+        "admissionYearTo": 2023,
+        "selectionRule": "??(1), ??(2)? ??? ???? 12??"
+      },
+      "sourcePage": 9,
+      "isRequired": true,
+      "sortOrder": 5,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "balanced-general-2014-2023",
+      "requirementType": "balanced_general_credits",
+      "title": "2014~2023??? ??? ????",
+      "minimumCredits": 15,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2014,
+        "admissionYearTo": 2023,
+        "selectionRule": "6? ?? ? 5? ???? ? 3??"
+      },
+      "sourcePage": 9,
+      "isRequired": true,
+      "sortOrder": 6,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "common-general-2013-minus",
+      "requirementType": "common_general_credits",
+      "title": "2013??? ?? ??? ??",
+      "minimumCredits": 30,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": null,
+        "admissionYearTo": 2013,
+        "selectionRule": "??(1), ??(2)? ??? ????????????? ??"
+      },
+      "sourcePage": 9,
+      "isRequired": true,
+      "sortOrder": 7,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "electronic-major-credits-2024-plus",
+      "requirementType": "major_credits",
+      "title": "????? ?1?? ????(2024??? ??)",
+      "minimumCredits": 69,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "departmentName": "?????",
+        "admissionYearFrom": 2024,
+        "admissionYearTo": null,
+        "includesMajorRequired": true
+      },
+      "sourcePage": 28,
+      "isRequired": true,
+      "sortOrder": 8,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "electronic-major-credits-2003-2006",
+      "requirementType": "major_credits",
+      "title": "????? ?1?? ????(2003~2006)",
+      "minimumCredits": 54,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "departmentName": "?????",
+        "admissionYearFrom": 2003,
+        "admissionYearTo": 2006,
+        "includesMajorRequired": true
+      },
+      "sourcePage": 31,
+      "isRequired": true,
+      "sortOrder": 9,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "electronic-major-credits-2007-2009",
+      "requirementType": "major_credits",
+      "title": "????? ?1?? ????(2007~2009)",
+      "minimumCredits": 45,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "departmentName": "?????",
+        "admissionYearFrom": 2007,
+        "admissionYearTo": 2009,
+        "includesMajorRequired": true
+      },
+      "sourcePage": 31,
+      "isRequired": true,
+      "sortOrder": 10,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "electronic-major-credits-2010-2023",
+      "requirementType": "major_credits",
+      "title": "????? ?1?? ????(2010~2023)",
+      "minimumCredits": 54,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "departmentName": "?????",
+        "admissionYearFrom": 2010,
+        "admissionYearTo": 2023,
+        "includesMajorRequired": true
+      },
+      "sourcePage": 31,
+      "isRequired": true,
+      "sortOrder": 11,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "major-total-credits-2003-2006",
+      "requirementType": "major_credits",
+      "title": "?1?????? ?? ????(2003~2006)",
+      "minimumCredits": 54,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2003,
+        "admissionYearTo": 2006,
+        "scope": "first_and_other_major"
+      },
+      "sourcePage": 31,
+      "isRequired": true,
+      "sortOrder": 12,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "major-total-credits-2007-2009",
+      "requirementType": "major_credits",
+      "title": "?1?????? ?? ????(2007~2009)",
+      "minimumCredits": 60,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2007,
+        "admissionYearTo": 2009,
+        "scope": "first_and_other_major"
+      },
+      "sourcePage": 31,
+      "isRequired": true,
+      "sortOrder": 13,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "major-total-credits-2010-2011",
+      "requirementType": "major_credits",
+      "title": "?1?????? ?? ????(2010~2011)",
+      "minimumCredits": 60,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2010,
+        "admissionYearTo": 2011,
+        "scope": "first_and_other_major"
+      },
+      "sourcePage": 31,
+      "isRequired": true,
+      "sortOrder": 14,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "major-total-credits-2012-2023",
+      "requirementType": "major_credits",
+      "title": "?1?????? ?? ????(2012~2023)",
+      "minimumCredits": 69,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2012,
+        "admissionYearTo": 2023,
+        "scope": "first_and_other_major"
+      },
+      "sourcePage": 31,
+      "isRequired": true,
+      "sortOrder": 15,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "electronic-microdegree-2024-plus",
+      "requirementType": "other",
+      "title": "????? ??? Micro Degree",
+      "minimumCredits": null,
+      "minimumCourseCount": 1,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "departmentName": "?????",
+        "admissionYearFrom": 2024,
+        "admissionYearTo": null,
+        "microDegreeCount": 1
+      },
+      "sourcePage": 28,
+      "isRequired": true,
+      "sortOrder": 16,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "electronic-major-required-all",
+      "requirementType": "required_courses",
+      "title": "????? ?? ???? ?? ??",
+      "minimumCredits": null,
+      "minimumCourseCount": null,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "departmentName": "?????",
+        "courseListSource": "department_curriculum_not_in_bluebook",
+        "sourceText": "????? ??? ?? ???? ??"
+      },
+      "sourcePage": 10,
+      "isRequired": true,
+      "sortOrder": 17,
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "requirementCode": "credit-load-2024-plus",
+      "requirementType": "other",
+      "title": "2024??? ??? ??????",
+      "minimumCredits": null,
+      "minimumCourseCount": null,
+      "mustCompleteAll": false,
+      "ruleDefinition": {
+        "admissionYearFrom": 2024,
+        "admissionYearTo": null,
+        "semesterMaximumCredits": 18,
+        "academicYearMaximumCredits": 34
+      },
+      "sourcePage": 7,
+      "isRequired": true,
+      "sortOrder": 18,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "credit-load-2023-minus",
+      "requirementType": "other",
+      "title": "2023??? ????? ??????",
+      "minimumCredits": null,
+      "minimumCourseCount": null,
+      "mustCompleteAll": false,
+      "ruleDefinition": {
+        "admissionYearFrom": null,
+        "admissionYearTo": 2023,
+        "semesterMaximumCredits": 20,
+        "academicYearMaximumCredits": 36
+      },
+      "sourcePage": 7,
+      "isRequired": true,
+      "sortOrder": 19,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "chapel-pf-2024-plus",
+      "requirementType": "other",
+      "title": "2024??? ???? ???P/F ??",
+      "minimumCredits": null,
+      "minimumCourseCount": 2,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "admissionYearFrom": 2024,
+        "admissionYearTo": null,
+        "pfCourses": [
+          "??(1)",
+          "??(2)",
+          "AI??????",
+          "????????????"
+        ],
+        "creditValue": 0
+      },
+      "sourcePage": 8,
+      "isRequired": true,
+      "sortOrder": 20,
+      "verificationStatus": "verified",
+      "seedDisposition": "seed_as_draft"
+    },
+    {
+      "requirementCode": "electronic-teaching-eligibility",
+      "requirementType": "teaching",
+      "title": "????? ?? ?? ??",
+      "minimumCredits": null,
+      "minimumCourseCount": null,
+      "mustCompleteAll": false,
+      "ruleDefinition": {
+        "departmentName": "?????",
+        "listedInTeachingInstallationDepartments": false,
+        "sourceText": "???? ???? ??? ????? ?? ??"
+      },
+      "sourcePage": 15,
+      "isRequired": false,
+      "sortOrder": 21,
+      "verificationStatus": "unresolved",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "requirementCode": "electronic-graduation-thesis-exam",
+      "requirementType": "graduation_exam",
+      "title": "????? ??????? ? ??? ??",
+      "minimumCredits": null,
+      "minimumCourseCount": null,
+      "mustCompleteAll": false,
+      "ruleDefinition": {
+        "departmentName": "?????",
+        "sourceText": "???? ?? ????? ???? ?? ?????? ????? ??? ???"
+      },
+      "sourcePage": 14,
+      "isRequired": false,
+      "sortOrder": 22,
+      "verificationStatus": "unresolved",
+      "seedDisposition": "hold_for_confirmation"
+    }
+  ],
+  "curriculumRequirementExceptions": [
+    {
+      "exceptionType": "international_student",
+      "title": "??? ??? ?? ??",
+      "conditionDefinition": "??? ??????????????",
+      "overrideDefinition": {
+        "ruleReference": "??? ???, ???? ? ????? ?? ??"
+      },
+      "priority": 10,
+      "requiresManualReview": true,
+      "sourcePage": 8,
+      "notes": "?? ?? ?? ?? ?? ??",
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "exceptionType": "department_transfer",
+      "title": "?? ?? ???Micro Degree ??",
+      "conditionDefinition": "?? ?? ? ????? ?? ???? ??",
+      "overrideDefinition": {
+        "ruleReference": "?? ?? ?? ?? ? Micro Degree ??"
+      },
+      "priority": 20,
+      "requiresManualReview": true,
+      "sourcePage": 12,
+      "notes": "????? ?? ?? ?? ? ?? ??",
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "exceptionType": "department_merger",
+      "title": "?? ?? ?? ??",
+      "conditionDefinition": "?? ? ?? ??",
+      "overrideDefinition": {
+        "ruleReference": "???????? ?? ? ?? ? ?? ?? ??"
+      },
+      "priority": 30,
+      "requiresManualReview": true,
+      "sourcePage": 10,
+      "notes": "?? ??? ?? ?? ?? ??",
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "exceptionType": "department_split",
+      "title": "?? ?? ?? ??",
+      "conditionDefinition": "?? ????? ?? ?? ? ??",
+      "overrideDefinition": {
+        "ruleReference": "?????? ???? ?? ???? ??"
+      },
+      "priority": 31,
+      "requiresManualReview": true,
+      "sourcePage": 12,
+      "notes": "?? ??? authoritative ?? ??",
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "exceptionType": "readmission",
+      "title": "??? ?? ??",
+      "conditionDefinition": "?? ? ?? ?? ?? ?? ? ??? ??",
+      "overrideDefinition": {
+        "ruleReference": "??? ???? ?? ?? ???? ?? ??"
+      },
+      "priority": 40,
+      "requiresManualReview": true,
+      "sourcePage": 13,
+      "notes": "????? ?? ??? ?? ?? ??",
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "exceptionType": "transfer_student",
+      "title": "??? ?? ??",
+      "conditionDefinition": "???",
+      "overrideDefinition": {
+        "ruleReference": "???? ???? ???? ?? ?? ??"
+      },
+      "priority": 50,
+      "requiresManualReview": true,
+      "sourcePage": 17,
+      "notes": "???? ????? ?? ?? ?? ?? ??",
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "exceptionType": "double_major",
+      "title": "???? ?? ??",
+      "conditionDefinition": "???? ???",
+      "overrideDefinition": {
+        "minimumFirstMajorCredits": 42,
+        "minimumDoubleMajorCredits": 42,
+        "admissionYearFrom": 2010,
+        "duplicateCourseCredit": false
+      },
+      "priority": 60,
+      "requiresManualReview": true,
+      "sourcePage": 17,
+      "notes": "2009??? ?? 36/36 ??? ?? ??",
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    },
+    {
+      "exceptionType": "minor",
+      "title": "??? ?? ??",
+      "conditionDefinition": "??? ???",
+      "overrideDefinition": {
+        "minimumFirstMajorCredits": 54,
+        "minimumMinorCredits": 21
+      },
+      "priority": 70,
+      "requiresManualReview": true,
+      "sourcePage": 18,
+      "notes": "?? ???? ?? 42/21 ?? ?? ??",
+      "verificationStatus": "partially_verified",
+      "seedDisposition": "hold_for_confirmation"
+    }
+  ],
+  "courseEquivalencies": [],
+  "careerTracks": [],
+  "careerTrackCourses": [],
+  "unresolvedItems": [
+    {
+      "type": "department_not_in_db",
+      "sourceValue": "????? department row",
+      "reason": "read-only departments ??? ?????? ?? ???? ????.",
+      "sourcePage": 4,
+      "recommendedResolution": "?? department row ????? ? departmentId ??",
+      "blocksDraftSeed": true,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": true
+    },
+    {
+      "type": "course_catalog_absent",
+      "sourceValue": "????? ?? ???? ???",
+      "reason": "텍스트형 과목표는 없지만 PDF page 4의 이미지형 커리큘럼 도식에서 과목명이 확인된다. 과목코드·학점·정확한 학기는 없다.",
+      "sourcePage": 10,
+      "recommendedResolution": "이미지 도식 과목명을 보존하고 EDWARD 연도별 교육과정에서 코드·학점·학기·이수구분을 보강",
+      "blocksDraftSeed": false,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": true
+    },
+    {
+      "type": "course_match",
+      "sourceValue": "????? curriculum courses",
+      "reason": "이미지 도식의 42개 고유 과목명은 확인했으나 전자공학과 course rows가 없어 exact match 0건이다.",
+      "sourcePage": 4,
+      "recommendedResolution": "department row ? ?? courses catalog ?? ? ????? exact match",
+      "blocksDraftSeed": false,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": true
+    },
+    {
+      "type": "course_credits_unknown",
+      "sourceValue": "????? ??? ??",
+      "reason": "이미지 도식에는 과목별 학점이 표시되지 않는다.",
+      "sourcePage": 4,
+      "recommendedResolution": "?? ?????? ??? ?? ??",
+      "blocksDraftSeed": false,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": true
+    },
+    {
+      "type": "admission_scope_version",
+      "sourceValue": "2026 curriculum year vs admission-year rules",
+      "reason": "2026 Bluebook? ???? ??? 2024/2023 ?? ???? ??? ???? ??? version ??? ??? ? ??.",
+      "sourcePage": 7,
+      "recommendedResolution": "????? curriculum version? ??? ??",
+      "blocksDraftSeed": true,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": true
+    },
+    {
+      "type": "required_course_status",
+      "sourceValue": "????? ???? ?? ??",
+      "reason": "도식은 전공 과목 흐름을 보여주지만 전공필수·전공선택 구분을 표시하지 않는다.",
+      "sourcePage": 4,
+      "recommendedResolution": "??? ?? ???? ?? ??",
+      "blocksDraftSeed": false,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": true
+    },
+    {
+      "type": "teaching_scope",
+      "sourceValue": "????? ?? ?? ??",
+      "reason": "?? ???? ??? ?????? ???? ???? ?? ??? ???? ???.",
+      "sourcePage": 15,
+      "recommendedResolution": "??????? ????? ?? ?? ?? ??",
+      "blocksDraftSeed": false,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": false
+    },
+    {
+      "type": "graduation_exam",
+      "sourceValue": "????? ???????",
+      "reason": "??? ???? ?? ??? ?? ????? ????? ??? ??.",
+      "sourcePage": 14,
+      "recommendedResolution": "?? ?? ???? ??",
+      "blocksDraftSeed": false,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": true
+    },
+    {
+      "type": "career_tracks",
+      "sourceValue": "???????????????????????? ??",
+      "reason": "?? ??? ???? ?? ?? ?? ??? ?? career track? ??? ???.",
+      "sourcePage": 3,
+      "recommendedResolution": "??? ??? ??? ?? ?? ?? ?? ? draft track ??",
+      "blocksDraftSeed": false,
+      "blocksActivation": false,
+      "blocksGraduationCalculation": false
+    },
+    {
+      "type": "school_common_rule_scope",
+      "sourceValue": "?? ?? ???Micro Degree????? ??",
+      "reason": "?? ??? ???? ??? ?? ????? ??? ??? ?? ?? ??? ????.",
+      "sourcePage": 8,
+      "recommendedResolution": "?? ?? ??? ?? onboarding attributes ?? ??",
+      "blocksDraftSeed": false,
+      "blocksActivation": true,
+      "blocksGraduationCalculation": true
+    }
+  ],
+  "courseRelations": [
+    {
+      "fromGrade": 1,
+      "toGrade": 2,
+      "relationType": "curriculum_flow",
+      "isOfficialPrerequisite": false,
+      "sourcePage": 4,
+      "sourceNote": "도식의 학년 열 사이 화살표; 개별 과목의 선수과목 관계로 해석하지 않음."
+    },
+    {
+      "fromGrade": 2,
+      "toGrade": 3,
+      "relationType": "curriculum_flow",
+      "isOfficialPrerequisite": false,
+      "sourcePage": 4,
+      "sourceNote": "도식의 학년 열 사이 화살표; 개별 과목의 선수과목 관계로 해석하지 않음."
+    },
+    {
+      "fromGrade": 3,
+      "toGrade": 4,
+      "relationType": "curriculum_flow",
+      "isOfficialPrerequisite": false,
+      "sourcePage": 4,
+      "sourceNote": "도식의 학년 열 사이 화살표; 개별 과목의 선수과목 관계로 해석하지 않음."
+    }
+  ]
+}
