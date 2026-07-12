@@ -1,0 +1,260 @@
+{
+  "departmentCode": "law",
+  "departmentName": "법학과",
+  "universityName": "계명대학교",
+  "sourceFile": "docs/reference/bluebooks/law/source.pdf",
+  "sourceEdition": null,
+  "graduationRequirements": {
+    "minimumCredits": 120,
+    "requiredCourses": [
+      {
+        "name": "법학개론",
+        "applicableTo": "2024학년도 신입생부터"
+      },
+      {
+        "name": "대학생활과진로설계",
+        "applicableTo": "2024학년도 신입생부터"
+      }
+    ],
+    "languageRequirements": [
+      {
+        "requirement": "법학과에 개설된 전공영어강좌 1과목 이상 이수하거나, 토익 600점 이상 취득",
+        "applicableTo": "2014학년도 신입학생부터 1전공(본인전공)만"
+      }
+    ],
+    "exceptions": [
+      "2023학년도 법학과 신입생까지는 전공필수 과목 없음",
+      "외국어과목 요건은 복수전공 하는 학과(전공)에는 해당 없음",
+      "외국어과목 요건 적용제외: 편입학생, 외국대학과의 복수학위 이수학생, 외국인학생"
+    ]
+  },
+  "curriculum": [
+    {
+      "grade": 1,
+      "semester": 1,
+      "courses": [
+        { "name": "법학개론", "majorRequirementStatus": "required_for_2024_new_students" },
+        { "name": "LEGAL ENGLISH 1(영어강의)", "majorRequirementStatus": "not_specified" },
+        { "name": "대학생활과진로설계", "majorRequirementStatus": "required_for_2024_new_students" }
+      ]
+    },
+    {
+      "grade": 1,
+      "semester": 2,
+      "courses": [
+        { "name": "민법총칙", "majorRequirementStatus": "not_specified" },
+        { "name": "형법총론(1)", "majorRequirementStatus": "not_specified" },
+        { "name": "LEGAL COMMUNICATION AND WRITING SKILLS(영어강의)", "majorRequirementStatus": "not_specified" }
+      ]
+    },
+    {
+      "grade": 2,
+      "semester": 1,
+      "courses": [
+        { "name": "물권법", "majorRequirementStatus": "not_specified" },
+        { "name": "헌법(1)", "majorRequirementStatus": "not_specified" },
+        { "name": "형법총론(2)", "majorRequirementStatus": "not_specified" },
+        { "name": "법협상론(1)", "majorRequirementStatus": "not_specified" }
+      ]
+    },
+    {
+      "grade": 2,
+      "semester": 2,
+      "courses": [
+        { "name": "담보물권법", "majorRequirementStatus": "not_specified" },
+        { "name": "상법총론", "majorRequirementStatus": "not_specified" },
+        { "name": "헌법(2)", "majorRequirementStatus": "not_specified" },
+        { "name": "형법각론(1)", "majorRequirementStatus": "not_specified" },
+        { "name": "소비자분쟁해결론", "majorRequirementStatus": "not_specified" },
+        { "name": "행정법기초", "majorRequirementStatus": "not_specified" }
+      ]
+    },
+    {
+      "grade": 3,
+      "semester": 1,
+      "courses": [
+        { "name": "형사소송법(1)", "majorRequirementStatus": "not_specified" },
+        { "name": "회사법", "majorRequirementStatus": "not_specified" },
+        { "name": "국제거래법", "majorRequirementStatus": "not_specified" },
+        { "name": "채권법총론", "majorRequirementStatus": "not_specified" },
+        { "name": "형법각론(2)", "majorRequirementStatus": "not_specified" },
+        { "name": "형사절차와인권", "majorRequirementStatus": "not_specified" },
+        { "name": "행정절차와행정구제", "majorRequirementStatus": "not_specified" },
+        { "name": "경찰헌법", "majorRequirementStatus": "not_specified" },
+        { "name": "노동법(1)", "majorRequirementStatus": "not_specified" },
+        { "name": "법학프로젝트", "majorRequirementStatus": "not_specified" }
+      ]
+    },
+    {
+      "grade": 3,
+      "semester": 2,
+      "courses": [
+        { "name": "어음수표법", "majorRequirementStatus": "not_specified" },
+        { "name": "채권법각론", "majorRequirementStatus": "not_specified" },
+        { "name": "형사소송법(2)", "majorRequirementStatus": "not_specified" },
+        { "name": "민사소송법(1)", "majorRequirementStatus": "not_specified" },
+        { "name": "Introduction to Intellectual Property Law(영어강의)", "majorRequirementStatus": "not_specified" },
+        { "name": "법학전공글쓰기", "majorRequirementStatus": "not_specified" },
+        { "name": "개별행정법이해", "majorRequirementStatus": "not_specified" },
+        { "name": "노동법(2)", "majorRequirementStatus": "not_specified" },
+        { "name": "통치기구론", "majorRequirementStatus": "not_specified" }
+      ]
+    },
+    {
+      "grade": 4,
+      "semester": 1,
+      "courses": [
+        { "name": "국제법", "majorRequirementStatus": "not_specified" },
+        { "name": "보험해상법", "majorRequirementStatus": "not_specified" },
+        { "name": "가족법", "majorRequirementStatus": "not_specified" },
+        { "name": "민사소송법(2)", "majorRequirementStatus": "not_specified" },
+        { "name": "환경법", "majorRequirementStatus": "not_specified" }
+      ]
+    },
+    {
+      "grade": 4,
+      "semester": 2,
+      "courses": [
+        { "name": "국제통상법", "majorRequirementStatus": "not_specified" },
+        { "name": "민사집행법", "majorRequirementStatus": "not_specified" },
+        { "name": "헌법소송법", "majorRequirementStatus": "not_specified" },
+        { "name": "전자상거래법", "majorRequirementStatus": "not_specified" },
+        { "name": "민사법세미나", "majorRequirementStatus": "not_specified" },
+        { "name": "국제인권법", "majorRequirementStatus": "not_specified" }
+      ]
+    }
+  ],
+  "careerTracks": [
+    {
+      "id": "law-school-bar-exam",
+      "name": "로스쿨/변호사시험 (판사, 검사, 변호사)",
+      "category": "legal-profession",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "형법총론(1)", "민법총칙"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["헌법(1)", "헌법(2)", "형법총론(2)", "형법각론(1)", "물권법", "담보물권법", "상법총론", "행정법기초"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": ["형법각론(2)", "형사소송법", "채권법총론", "채권법각론", "회사법", "민사소송법(1)", "어음수표법", "행정절차와행정구제", "개별행정법이해"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": ["헌법소송법", "가족법", "민사소송법(2)", "민사법세미나", "민사집행법", "보험해상법"], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [9]
+    },
+    {
+      "id": "judicial-scrivener",
+      "name": "법무사",
+      "category": "legal-qualification",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "형법총론(1)", "민법총칙"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["헌법(1)", "헌법(2)", "형법총론(2)", "형법각론(1)", "물권법", "담보물권법", "상법총론"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": ["형법각론(2)", "형사소송법", "채권법총론", "채권법각론", "회사법", "민사소송법(1)", "어음수표법"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": ["헌법소송법", "가족법", "민사소송법(2)", "민사법세미나", "민사집행법", "보험해상법"], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [10]
+    },
+    {
+      "id": "certified-labor-attorney",
+      "name": "공인노무사",
+      "category": "legal-qualification",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "민법총칙"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["노동법(1)", "채권법총론"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": ["채권법각론"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": ["노동법(2)"], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [10]
+    },
+    {
+      "id": "licensed-real-estate-agent",
+      "name": "공인중개사",
+      "category": "legal-qualification",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "민법총칙"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["물권법", "담보물권법"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": ["채권법총론", "채권법각론"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": ["민사법세미나"], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [11]
+    },
+    {
+      "id": "certified-appraiser",
+      "name": "감정평가사",
+      "category": "legal-qualification",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "민법총칙"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["물권법", "담보물권법"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": [], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": ["민사법세미나"], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [11]
+    },
+    {
+      "id": "patent-attorney",
+      "name": "변리사",
+      "category": "legal-qualification",
+      "courseSequenceByGrade": [],
+      "sourcePages": [11]
+    },
+    {
+      "id": "prosecution-drug-investigation-9th-grade",
+      "name": "검찰사무직/마약수사직 9급",
+      "category": "public-service",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "형법총론(1)"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["형법총론(2)", "형법각론(1)", "형사절차와인권", "헌법(1)", "헌법(2)", "행정법기초"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": ["형사소송법", "개별행정법이해", "경찰헌법"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": ["헌법소송법"], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [12]
+    },
+    {
+      "id": "court-clerical-9th-grade",
+      "name": "법원직 9급(법원사무직렬)",
+      "category": "public-service",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "형법총론(1)", "민법총칙"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["형법총론(2)", "형법각론(1)", "헌법(1)", "헌법(2)", "물권법"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": ["형사소송법", "형법각론(2)", "채권법총론", "채권법각론", "민사소송법(1)"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": ["헌법소송법", "가족법", "민사법세미나", "민사소송법(2)", "민사집행법"], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [13]
+    },
+    {
+      "id": "court-registration-clerical-9th-grade",
+      "name": "법원직 9급(등기사무직렬)",
+      "category": "public-service",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "민법총칙"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["헌법(1)", "헌법(2)", "물권법", "담보물권법", "상법총론"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": ["민사소송법(1)", "민사소송법(2)", "채권법총론", "채권법각론", "회사법"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": ["헌법소송법", "가족법", "민사법세미나", "민사집행법"], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [14]
+    },
+    {
+      "id": "police-officer-track",
+      "name": "경찰간부직/순경직",
+      "category": "public-service",
+      "courseSequenceByGrade": [
+        { "grade": 1, "courses": ["법학개론", "형법총론(1)"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 2, "courses": ["형법총론(2)", "형법각론(1)", "헌법(1)", "헌법(2)", "형사절차와인권"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 3, "courses": ["형사소송법", "형법각론(2)", "경찰헌법"], "relationType": "recommended_sequence", "explicitlyStated": true },
+        { "grade": 4, "courses": [], "relationType": "recommended_sequence", "explicitlyStated": true }
+      ],
+      "sourcePages": [15, 16]
+    },
+    {
+      "id": "other-public-service",
+      "name": "철도공안직(철도경찰)·출입국 관리직·보호직·교정직 9급",
+      "category": "public-service",
+      "courseSequenceByGrade": [],
+      "sourcePages": [12, 14, 15]
+    }
+  ],
+  "courseRelations": [],
+  "warnings": [
+    "이 자료는 전공 로드맵과 진로별 추천 과목의 근거로만 사용하며, 실제 2026-2학기 개설강좌 목록으로 취급하지 않는다.",
+    "진로별 시험과목·영어 및 한국사 대체 기준·가산점 등 자격시험 정보는 변경될 수 있으므로 최신 공고를 확인해야 한다.",
+    "sourceEdition은 문서 발행연도가 명확하지 않아 null로 기록했다.",
+    "진로 표의 화살표는 학년별 과목 묶음의 recommended_sequence로만 보존했다. 개별 과목 간 법적 선수과목(prerequisite)은 PDF에 명시되지 않아 기록하지 않았다.",
+    "변리사 및 일부 공무원 진로는 PDF에 시험과목 또는 진로명만 제시되거나 표의 학년별 과목 흐름이 완전하지 않아 빈 courseSequenceByGrade로 보존했다.",
+    "전학년 현장실습·창업현장실습 과목은 특정 학년·학기에 배정되지 않아 curriculum의 1~4학년 학기별 목록에는 포함하지 않았다."
+  ]
+}
