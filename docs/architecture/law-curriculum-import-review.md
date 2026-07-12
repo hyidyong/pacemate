@@ -16,7 +16,7 @@
 ## 생성 파일
 
 - `src/data/curricula/law/2026.import.json`
-- 실제 DB INSERT/UPDATE/DELETE, migration, seed, UI 변경 없음
+- draft seed SQL을 별도 적용한 뒤, 실제 DB는 read-only 조회로 검증했다. 추가 seed·migration·UI 변경은 수행하지 않았다.
 
 ## 변환 수치
 
@@ -117,3 +117,18 @@ Exact match는 read-only DB의 법학과 catalog에서 과목명과 학과가 �
 `career_track_courses`의 target check가 `curriculum_course_id` 또는 `course_id`를 요구하므로, 5개 보류 링크가 해결되기 전에는 123개 전체를 DB row로 저장할 수 없다. seed는 이 사실을 유지하고 추정 매핑을 차단한다.
 
 1-D-3B import는 여전히 draft/unresolved 참고용이며, 공식 졸업 계산·학생 자동 배정·active 전환은 금지한다. 법학과 draft seed의 실제 실행은 5개 보류 링크의 authoritative mapping 확인 후 별도 승인한다.
+
+## 실제 draft seed 적용 및 최종 read-only 검증
+
+- project ref: `szztsqdnvenfbgxtylkl` (`pacemate`, `ACTIVE_HEALTHY`)
+- version: `law-bluebook-reference-unknown`
+- status: `draft`; `admission_year_from/to=NULL`; `source_verified=false`
+- `curriculum_courses=46`, exact match `6`, unresolved `40`
+- `curriculum_requirements=3`, `curriculum_requirement_exceptions=5`
+- `career_tracks=11`, `career_track_courses=118`
+- source career links `123`, held unresolved links `5`
+- active curriculum count `0`; `student_curriculum_assignments` count `0`
+- 전자공학과 draft `electronic-engineering-2026`는 과목 `41`, requirement `12`, exception `8`, `source_verified=false`, 입학연도 NULL 상태로 유지됐다.
+- curriculum 관련 7개 테이블은 모두 RLS enabled이며, 직접 policy `0건`, `anon`/`authenticated` table grant `0건`으로 유지됐다.
+
+위 검증은 read-only SQL 조회로 수행했다. 추가 seed, migration, INSERT/UPDATE/DELETE, active 전환, 학생 자동 배정, 공식 졸업 계산, 코드/UI 수정은 수행하지 않았다. 5개 보류 career link와 source 미검증 상태로 인해 이 데이터는 계속 참고용 draft이며, published/active 전환은 금지한다.

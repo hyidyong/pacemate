@@ -64,10 +64,10 @@ Bluebook
 - [x] 1-D-5B-1 migration 안전성 검토 — preflight, constraint, partial unique index, 기존 데이터 불변성을 확인했다.
 - [x] 1-D-5B-2 migration 실제 DB 적용 — 원격에 단일 적용 후 nullable·constraint·index·RLS를 read-only 검증했다.
 - [x] 1-D-5C 전자공학과 draft seed 적용 — department reference seed 이후 draft version 1건, 과목 41개, requirement 12개, exception 8개를 반영하고 안전 invariant를 검증했다.
-- [ ] 1-D-5D 법학과 참고용 draft seed — exact match와 source 근거를 재확인한 후 별도 seed로 관리한다.
+- [x] 1-D-5D 법학과 참고용 draft seed — 원격 read-only 검증을 완료했다. `law-bluebook-reference-unknown` draft는 46개 과목(정확 매칭 6, 미해결 40), requirement 3개, exception 5개, career track 11개와 저장된 career link 118개를 유지한다. 원문 career link 123개 중 localKey 미확정 5개는 보류했다. active 전환·학생 배정·공식 졸업 계산은 금지 상태다. 관련: `docs/architecture/law-curriculum-import-review.md`, `supabase/seed/2026-law-curriculum-draft.sql`.
 - [!] 공식 졸업 계산 — 학점·입학연도·필수 여부·학교 공통 규정이 확정되기 전까지 학생에게 공식 판정을 제공하지 않는다.
 
-## 5. 현재 단계: 1-D-5C-9 완료
+## 5. 현재 단계: 1-D-5D 완료
 
 ### 목적
 
@@ -96,7 +96,7 @@ Bluebook
 - [x] 1-D-5B-1 migration 안전성 검토
 - [x] 1-D-5B-2 migration 실제 DB 적용
 - [x] 1-D-5C 전자공학과 draft seed 실제 적용
-- [ ] 1-D-5D 법학과 참고용 draft seed 작성·적용
+- [x] 1-D-5D 법학과 참고용 draft seed 작성·적용 및 read-only 검증
 
 ### Phase B — 학생 온보딩·장기 로드맵
 
@@ -216,7 +216,7 @@ Bluebook
 | 6 | 3-A 이후 weekly approval | 승인본만 production에 노출되는 transaction과 소유권 검증 구현 |
 | 7 | Phase E/F | 별도 demo seed와 `semester_reports` schema를 검토·적용한 뒤 익명 리포트 시연 |
 
-현재 즉시 진행 가능한 다음 단계는 1-D-5D 법학과 참고용 draft seed 검토이며, 전자공학과 active 전환·학생 배정·공식 졸업 계산은 보류한다.
+현재 즉시 진행 가능한 다음 단계는 1-D-6 curriculum 조회 service이며, 법학과·전자공학과의 active 전환·학생 배정·공식 졸업 계산은 보류한다.
 
 ## 11. 관련 산출물
 
@@ -251,7 +251,7 @@ Bluebook
 14. course_id·credits·recommended_semester는 모두 NULL이고 `is_required=false`다.
 15. active curriculum, student assignment, electronic course catalog row는 생성되지 않았다.
 16. curriculum 관련 RLS는 활성이고 policy와 anon/authenticated grant는 없다.
-17. 현재 다음 단계는 법학과 참고용 draft seed 검토(1-D-5D)다.
+17. 현재 다음 단계는 1-D-6 curriculum 조회 service다.
 18. 법학과 참고용 seed는 전자공학과 seed와 분리된 1-D-5D다.
 19. `course_id` NULL은 draft에서 허용하고 active에서 exact match를 재검증한다.
 20. 공식 졸업 판정은 두 학과 모두 보류 상태다.
