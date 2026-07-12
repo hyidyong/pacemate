@@ -12,11 +12,14 @@ DECLARE
   v_school_count integer;
   v_department_count integer;
 BEGIN
-  SELECT count(*), min(id) INTO v_school_count, v_school_id
+  SELECT count(*) INTO v_school_count
   FROM public.schools WHERE name = '계명대학교';
   IF v_school_count <> 1 THEN
     RAISE EXCEPTION 'Expected exactly one 계명대학교 school row, found %', v_school_count;
   END IF;
+  SELECT id INTO v_school_id
+  FROM public.schools
+  WHERE name = '계명대학교';
   SELECT count(*) INTO v_department_count
   FROM public.departments WHERE school_id = v_school_id AND name = '전자공학과';
   IF v_department_count <> 1 THEN
@@ -50,12 +53,17 @@ WHERE s.name = '계명대학교'
 DO $$
 DECLARE v_version_id uuid; v_count integer;
 BEGIN
-  SELECT count(*), min(v.id) INTO v_count, v_version_id
+  SELECT count(*) INTO v_count
   FROM public.curriculum_versions v
   JOIN public.schools s ON s.id = v.school_id AND s.name = '계명대학교'
   JOIN public.departments d ON d.id = v.department_id AND d.name = '전자공학과'
   WHERE v.version_key = 'electronic-engineering-2026' AND v.status = 'draft';
   IF v_count <> 1 THEN RAISE EXCEPTION 'Expected exactly one draft curriculum version, found %', v_count; END IF;
+  SELECT v.id INTO v_version_id
+  FROM public.curriculum_versions v
+  JOIN public.schools s ON s.id = v.school_id AND s.name = '계명대학교'
+  JOIN public.departments d ON d.id = v.department_id AND d.name = '전자공학과'
+  WHERE v.version_key = 'electronic-engineering-2026' AND v.status = 'draft';
   IF EXISTS (SELECT 1 FROM public.curriculum_versions WHERE id = v_version_id AND status <> 'draft') THEN
     RAISE EXCEPTION 'Active or archived version cannot be used by this draft seed';
   END IF;
