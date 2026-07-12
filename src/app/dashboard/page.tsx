@@ -13,6 +13,9 @@ import { StudentTodoCard, type StudentTodoItem } from "@/components/dashboard/st
 import { StudentDashboardContent } from "@/components/dashboard/student-dashboard-content";
 import { getAcademicEvents } from "@/services/academic-calendar.service";
 import type { AcademicEvent } from "@/types/academic-calendar";
+import { CourseTermEligibilityCard } from "@/components/dashboard/course-term-eligibility-card";
+import { resolveCompanyLaw2026OfferingForSession } from "@/services/company-law-offering.server";
+import { getCourseTermCompletionEligibility } from "@/services/course-term-completion-eligibility.server";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
@@ -108,6 +111,8 @@ export default async function DashboardPage() {
   let myCourses: StudentCourseRecord[] = [];
   let todoItems: StudentTodoItem[] = [];
   let academicEvents: AcademicEvent[] = [];
+  let eligibilityResult: Awaited<ReturnType<typeof getCourseTermCompletionEligibility>> | null = null;
+  let eligibilityCourseName: string | null = null;
   if (profile.role === "student") {
     myCourses = await getMyCourses(profile.id);
     academicEvents = getAcademicEvents().filter(
@@ -194,6 +199,12 @@ export default async function DashboardPage() {
       })) as StudentTodoItem[];
 
     todoItems = [...noticeTodoItems, ...counselingTodoItems].slice(0, 6);
+
+    const offeringResolution = await resolveCompanyLaw2026OfferingForSession();
+    eligibilityCourseName = offeringResolution.ok ? offeringResolution.courseName : null;
+    eligibilityResult = offeringResolution.ok
+      ? await getCourseTermCompletionEligibility(offeringResolution.offeringId)
+      : offeringResolution;
   }
 
   return (
@@ -231,6 +242,14 @@ export default async function DashboardPage() {
             myCourses={myCourses}
             todoItems={todoItems}
           />
+        </ScrollReveal>
+      )}
+
+      {profile.role === "student" && eligibilityResult && (
+        <ScrollReveal>
+          <section className="section" aria-label="과목 학기 완료 근거">
+            <CourseTermEligibilityCard result={eligibilityResult} courseName={eligibilityCourseName} />
+          </section>
         </ScrollReveal>
       )}
 
