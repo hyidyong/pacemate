@@ -2,27 +2,14 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
+import {
+  notificationCategoryLabels,
+  type NotificationCategoryFilter,
+  type UserNotification,
+} from "@/types/notifications";
 
-export type UserNotification = {
-  id: string;
-  recipient_role: DemoProfile["role"] | null;
-  category: "question" | "counseling" | "revision" | "system";
-  title: string;
-  body: string;
-  target_href: string;
-  is_read: boolean;
-  created_at: string;
-};
-
-export type NotificationCategoryFilter = UserNotification["category"] | "all";
-
-export const notificationCategoryLabels: Record<NotificationCategoryFilter, string> = {
-  all: "전체",
-  question: "질문",
-  counseling: "상담",
-  revision: "로드맵",
-  system: "문의",
-};
+export { notificationCategoryLabels } from "@/types/notifications";
+export type { NotificationCategoryFilter, UserNotification } from "@/types/notifications";
 
 const notificationCategories: readonly UserNotification["category"][] = [
   "question",

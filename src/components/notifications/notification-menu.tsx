@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import type { UserNotification } from "@/services/notifications.service";
+import type { UserNotification } from "@/types/notifications";
 
 type NotificationMenuProps = {
   notifications: UserNotification[];

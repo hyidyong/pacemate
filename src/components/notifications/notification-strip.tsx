@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   notificationCategoryLabels,
   type UserNotification,
-} from "@/services/notifications.service";
+} from "@/types/notifications";
 import { markNotificationAsRead } from "@/services/notifications.actions";
 import { useAppStore } from "@/store/app-store";
 
