@@ -12,6 +12,7 @@ import type {
   CounselingProfessor,
   StudentCounselingRequest,
 } from "@/services/counseling.service";
+import { getCounselingSlotId } from "@/services/counseling.service";
 
 type CounselingWorkspaceProps = {
   availableSlots: CounselingSlot[];
@@ -145,7 +146,7 @@ export function CounselingWorkspace({
   const [isPending, startTransition] = useTransition();
   const selectedDaySlots = sortedSlots.filter((slot) => toDateKey(slot.start) === selectedDate);
   const selectedSlot =
-    sortedSlots.find((slot) => `${slot.professorId}-${slot.start}` === selectedSlotId) ??
+    sortedSlots.find((slot) => getCounselingSlotId(slot) === selectedSlotId) ??
     selectedDaySlots[0] ??
     null;
   const calendarMonth = calendarDays[14]?.date ?? new Date();
@@ -166,7 +167,7 @@ export function CounselingWorkspace({
   function selectDate(dateKey: string) {
     setSelectedDate(dateKey);
     const firstSlot = sortedSlots.find((slot) => toDateKey(slot.start) === dateKey);
-    setSelectedSlotId(firstSlot ? `${firstSlot.professorId}-${firstSlot.start}` : "");
+    setSelectedSlotId(firstSlot ? getCounselingSlotId(firstSlot) : "");
   }
 
   function chooseCourse(courseId: string) {
@@ -178,7 +179,7 @@ export function CounselingWorkspace({
       setSelectedProfessorId(professor.id);
       const firstSlot = availableSlots.find((slot) => slot.professorId === professor.id);
       setSelectedDate(firstSlot ? toDateKey(firstSlot.start) : "");
-      setSelectedSlotId(firstSlot ? `${firstSlot.professorId}-${firstSlot.start}` : "");
+      setSelectedSlotId(firstSlot ? getCounselingSlotId(firstSlot) : "");
     } else {
       setSelectedDate("");
       setSelectedSlotId("");
@@ -189,7 +190,7 @@ export function CounselingWorkspace({
     setSelectedProfessorId(professorId);
     const firstSlot = availableSlots.find((slot) => slot.professorId === professorId);
     setSelectedDate(firstSlot ? toDateKey(firstSlot.start) : "");
-    setSelectedSlotId(firstSlot ? `${firstSlot.professorId}-${firstSlot.start}` : "");
+    setSelectedSlotId(firstSlot ? getCounselingSlotId(firstSlot) : "");
   }
 
   function requestSelectedSlot() {
@@ -360,8 +361,8 @@ export function CounselingWorkspace({
               </div>
               <div className="counseling-time-list" aria-label="상담 가능 시간">
                 {selectedDaySlots.map((slot) => {
-                  const slotId = `${slot.professorId}-${slot.start}`;
-                  const isSelected = selectedSlot?.start === slot.start;
+                  const slotId = getCounselingSlotId(slot);
+                  const isSelected = selectedSlot ? getCounselingSlotId(selectedSlot) === slotId : false;
 
                   return (
                     <button
@@ -369,7 +370,7 @@ export function CounselingWorkspace({
                       className="counseling-time-button"
                       data-selected={isSelected}
                       key={slotId}
-                      onClick={() => setSelectedSlotId(slotId)}
+                      onClick={() => setSelectedSlotId(getCounselingSlotId(slot))}
                       type="button"
                     >
                       <strong>

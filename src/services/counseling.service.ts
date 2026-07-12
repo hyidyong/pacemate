@@ -25,6 +25,12 @@ export type CounselingSlot = {
   end: string;
 };
 
+export function getCounselingSlotId(
+  slot: Pick<CounselingSlot, "professorId" | "start" | "end">,
+) {
+  return JSON.stringify([slot.professorId, slot.start, slot.end]);
+}
+
 export type CounselingCourseOption = {
   id: string;
   code: string;
@@ -355,7 +361,12 @@ function buildAvailableSlots(
     }
   }
 
-  return slots
+  const uniqueSlots = new Map<string, CounselingSlot>();
+  for (const slot of slots) {
+    uniqueSlots.set(getCounselingSlotId(slot), slot);
+  }
+
+  return Array.from(uniqueSlots.values())
     .sort((a, b) => a.start.localeCompare(b.start))
     .slice(0, 48); // Increase slots limit for better demo experience
 }
