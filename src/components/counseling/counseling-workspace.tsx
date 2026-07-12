@@ -6,13 +6,18 @@ import {
   createCounselingRequest,
   reserveSuggestedCounseling,
 } from "@/services/counseling.actions";
+import {
+  PACEMATE_TIME_ZONE,
+  getCounselingLocalDateKey,
+  getCounselingSlotId,
+  resolveSelectedCounselingSlot,
+} from "@/lib/counseling-slots";
 import type {
   CounselingSlot,
   CounselingCourseOption,
   CounselingProfessor,
   StudentCounselingRequest,
-} from "@/services/counseling.service";
-import { getCounselingSlotId } from "@/services/counseling.service";
+} from "@/types/counseling";
 
 type CounselingWorkspaceProps = {
   availableSlots: CounselingSlot[];
@@ -43,29 +48,41 @@ function pad(value: number) {
 }
 
 function toDateKey(value: string | Date) {
-  const date = typeof value === "string" ? new Date(value) : value;
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  if (typeof value === "string") {
+    return getCounselingLocalDateKey(value);
+  }
+
+  return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
 }
 
 function formatDateTime(value: string) {
-  const date = new Date(value);
-  return `${date.getFullYear()}. ${date.getMonth() + 1}. ${date.getDate()}. ${pad(date.getHours())}:${pad(
-    date.getMinutes(),
-  )}`;
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: PACEMATE_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(value));
 }
 
 function formatTime(value: string) {
-  const date = new Date(value);
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: PACEMATE_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(value));
 }
 
 function formatMonth(date: Date) {
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
+  return `${date.getUTCFullYear()}년 ${date.getUTCMonth() + 1}월`;
 }
 
 function formatSelectedDate(dateKey: string) {
-  const date = new Date(`${dateKey}T00:00:00`);
-  return `${date.getMonth() + 1}월 ${date.getDate()}일 ${weekLabels[date.getDay()]}요일`;
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  return `${date.getUTCMonth() + 1}월 ${date.getUTCDate()}일 ${weekLabels[date.getUTCDay()]}요일`;
 }
 
 function buildCalendarDays(slots: CounselingSlot[]) {
@@ -73,10 +90,10 @@ function buildCalendarDays(slots: CounselingSlot[]) {
     return [];
   }
 
-  const firstSlotDate = new Date(slots[0].start);
-  const firstOfMonth = new Date(firstSlotDate.getFullYear(), firstSlotDate.getMonth(), 1);
+  const [year, month] = getCounselingLocalDateKey(slots[0].start).split("-").map(Number);
+  const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
   const calendarStart = new Date(firstOfMonth);
-  calendarStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
+  calendarStart.setUTCDate(firstOfMonth.getUTCDate() - firstOfMonth.getUTCDay());
 
   const slotsByDate = new Map<string, CounselingSlot[]>();
   for (const slot of slots) {
@@ -88,14 +105,14 @@ function buildCalendarDays(slots: CounselingSlot[]) {
 
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(calendarStart);
-    date.setDate(calendarStart.getDate() + index);
+    date.setUTCDate(calendarStart.getUTCDate() + index);
     const dateKey = toDateKey(date);
 
     return {
       date,
       dateKey,
-      dayNumber: date.getDate(),
-      isCurrentMonth: date.getMonth() === firstSlotDate.getMonth(),
+      dayNumber: date.getUTCDate(),
+      isCurrentMonth: date.getUTCMonth() === firstOfMonth.getUTCMonth(),
       slots: slotsByDate.get(dateKey) ?? [],
     };
   });
@@ -145,10 +162,7 @@ export function CounselingWorkspace({
   const [topic, setTopic] = useState("");
   const [isPending, startTransition] = useTransition();
   const selectedDaySlots = sortedSlots.filter((slot) => toDateKey(slot.start) === selectedDate);
-  const selectedSlot =
-    sortedSlots.find((slot) => getCounselingSlotId(slot) === selectedSlotId) ??
-    selectedDaySlots[0] ??
-    null;
+  const selectedSlot = resolveSelectedCounselingSlot(sortedSlots, selectedDate, selectedSlotId);
   const calendarMonth = calendarDays[14]?.date ?? new Date();
   const reservedSuggestedStarts = new Set(
     requests
@@ -166,8 +180,7 @@ export function CounselingWorkspace({
 
   function selectDate(dateKey: string) {
     setSelectedDate(dateKey);
-    const firstSlot = sortedSlots.find((slot) => toDateKey(slot.start) === dateKey);
-    setSelectedSlotId(firstSlot ? getCounselingSlotId(firstSlot) : "");
+    setSelectedSlotId("");
   }
 
   function chooseCourse(courseId: string) {
@@ -179,7 +192,7 @@ export function CounselingWorkspace({
       setSelectedProfessorId(professor.id);
       const firstSlot = availableSlots.find((slot) => slot.professorId === professor.id);
       setSelectedDate(firstSlot ? toDateKey(firstSlot.start) : "");
-      setSelectedSlotId(firstSlot ? getCounselingSlotId(firstSlot) : "");
+      setSelectedSlotId("");
     } else {
       setSelectedDate("");
       setSelectedSlotId("");
@@ -190,7 +203,7 @@ export function CounselingWorkspace({
     setSelectedProfessorId(professorId);
     const firstSlot = availableSlots.find((slot) => slot.professorId === professorId);
     setSelectedDate(firstSlot ? toDateKey(firstSlot.start) : "");
-    setSelectedSlotId(firstSlot ? getCounselingSlotId(firstSlot) : "");
+    setSelectedSlotId("");
   }
 
   function requestSelectedSlot() {
@@ -200,9 +213,7 @@ export function CounselingWorkspace({
     }
 
     const formData = new FormData();
-    formData.set("professorId", selectedSlot.professorId);
-    formData.set("requestedStart", selectedSlot.start);
-    formData.set("requestedEnd", selectedSlot.end);
+    formData.set("slotId", getCounselingSlotId(selectedSlot));
     formData.set("topic", topic.trim() || "학업 상담");
     runAction(createCounselingRequest, formData);
   }

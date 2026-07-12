@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
 import { submitQuestionToProfessor } from "@/services/ask.actions";
-import type { CounselingCourseOption } from "@/services/counseling.service";
+import type { CounselingCourseOption } from "@/types/counseling";
 
 export function AskProfessorForm({ 
   courses, 
