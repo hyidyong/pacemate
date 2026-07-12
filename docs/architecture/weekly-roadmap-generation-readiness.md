@@ -97,3 +97,11 @@ weekly plan을 생성하지 않는다. 빈 배열이나 임의 placeholder row�
 - 법학과 블루북은 전공 과목·학년·진로 추천 근거로만 사용한다.
 - 블루북이나 syllabus만으로 실제 수강, 교수, 분반, 선수과목을 추정하지 않는다.
 - 1-C-2A에서는 DB INSERT/UPDATE/DELETE, migration, RLS, 인증, UI, commit/push를 수행하지 않았다.
+
+## 1-C-2B-Demo draft preview
+
+교수 승인 전 파일 기반 draft를 서버에서만 읽는 `src/services/weekly-plan-draft.server.ts`와 타입 계약을 추가했다. loader는 두 draft JSON을 검증한 뒤 offeringId/courseId별 조회와 전체 목록 조회를 제공한다. 잘못된 구조는 조용히 보정하지 않고 validation error를 발생시킨다.
+
+`src/services/weekly-roadmap.server.ts`에는 `getWeeklyRoadmapDraftPreviewForOffering`를 별도 demo preview 함수로 추가했다. 이 함수는 `course_weekly_plans` 승인 데이터나 기존 학생용 조회 결과에 draft를 합치지 않는다. 학생 production 경로, UI, API route에서 자동 사용되지 않는다.
+
+draft는 `status=draft`, `verifiedByProfessor=false`, `warnings` 포함 상태를 유지하며 서버 전용 모듈에서만 import한다. Supabase service-role client나 개인정보는 draft loader에서 사용하지 않는다.

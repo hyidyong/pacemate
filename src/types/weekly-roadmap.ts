@@ -11,6 +11,46 @@ export type CourseProgressStatus =
   | "completed"
   | "needs_review";
 
+export type WeeklyPlanStatus = "draft" | "approved";
+export type WeeklyPlanConfidence = "high" | "medium" | "low";
+export type WeeklyPlanActivityType = "lecture" | "review" | "discussion" | "assignment" | "assessment";
+
+export interface WeeklyPlanWeek {
+  weekNumber: number;
+  title: string;
+  topics: string[];
+  activityType: WeeklyPlanActivityType;
+  isAssessment: boolean;
+  confidence: WeeklyPlanConfidence;
+  sourceNote: string;
+}
+
+export interface WeeklyPlanSource {
+  type: "syllabus";
+  syllabusId: string;
+  verifiedByProfessor: boolean;
+}
+
+export interface WeeklyPlanDraft {
+  status: WeeklyPlanStatus;
+  termId: string;
+  offeringId: string;
+  courseId: string;
+  courseName: string;
+  professorId: string;
+  professorName: string;
+  semesterLabel: string;
+  source: WeeklyPlanSource;
+  weeks: WeeklyPlanWeek[];
+  warnings: string[];
+}
+
+export interface WeeklyPlanValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
 export interface AcademicTerm {
   id: string;
   schoolId: string | null;

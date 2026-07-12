@@ -1,11 +1,13 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireDemoSession, type DemoSession } from "@/lib/auth/demo-session";
+import { getWeeklyPlanDraftByOfferingId } from "@/services/weekly-plan-draft.server";
 import type {
   AcademicTerm,
   CourseOffering,
   CourseWeeklyPlan,
   StudentWeeklyProgress,
+  WeeklyPlanDraft,
 } from "@/types/weekly-roadmap";
 
 export type WeeklyRoadmapServiceErrorCode =
@@ -240,4 +242,11 @@ export async function getStudentWeeklyProgressForSession(
     createdAt: data.created_at,
     updatedAt: data.updated_at,
   };
+}
+
+/** Demo-only file-backed preview; never merges into approved student reads. */
+export function getWeeklyRoadmapDraftPreviewForOffering(
+  offeringId: string,
+): WeeklyPlanDraft | null {
+  return getWeeklyPlanDraftByOfferingId(offeringId);
 }
