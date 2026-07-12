@@ -8,6 +8,12 @@
     "sourceVerified": false,
     "generatedAt": "2026-07-12T12:32:46.348Z",
     "importStatus": "draft_unresolved",
+    "verificationStatus": "partially_verified",
+    "seedDisposition": "seedAsDraft",
+    "blocksDraftSeed": false,
+    "blocksActivation": true,
+    "blocksGraduationCalculation": true,
+    "unresolvedReason": "40개 과목의 catalog 매칭, 과목별 학점, 입학연도 범위, 외국어 적용 범위 및 학교·졸업요건의 authoritative 근거가 남아 있다.",
     "notes": "Law-only review import. No DB/seed writes. sourceEdition is unknown; only six exact DB course matches are connected."
   },
   "curriculumVersion": {

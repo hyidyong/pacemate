@@ -1,4 +1,4 @@
-# 법학과 curriculum import 검토 (1-D-3A)
+# 법학과 curriculum import 정확성 검토 (1-D-3B)
 
 ## source 범위
 
@@ -67,6 +67,19 @@ Exact match는 read-only DB의 법학과 catalog에서 과목명과 학과가 �
 
 `blocksImport=true`인 항목은 학점, admission scope, language scope, 졸업요건/학교 공통 규칙이다. course match와 진로 연결은 schema가 unresolved를 보존할 수 있으므로 이 파일 생성 자체는 막지 않지만, published seed 전에는 해결해야 한다.
 
+## 검증 상태와 seed disposition
+
+- `verified`: 0건. PDF 판본·발행연도와 과목별 학점이 확인되지 않았다.
+- `partially_verified`: 6개 exact DB course match, page 8의 명시 요건 3건, 예외 5건, page 9~17의 진로 트랙 11건은 원문 근거가 있으나 전체 import는 미확정이다.
+- `unresolved`: 40개 과목 매칭과 학점·입학연도·외국어 적용 범위·학교 공통 요건 및 일부 진로 과목 연결.
+- `excluded`: 0건. PDF의 학년·학기 과목을 임의로 제외하지 않았다.
+- `seedNow`: 0건. 확정 published seed는 만들 수 없다.
+- `seedAsDraft`: 구조 검토용 draft row로만 보존 가능하다. 이 단계에서는 seed SQL을 생성하거나 실행하지 않았다.
+- `holdForConfirmation`: published activation과 졸업학점 계산은 담당자·공식 catalog 확인 전 보류한다.
+- `blocksDraftSeed=false`, `blocksActivation=true`, `blocksGraduationCalculation=true`를 JSON metadata에 함께 기록했다.
+
+`verificationStatus=partially_verified`는 일부 근거가 교차 확인되었다는 뜻이며 교수·학과 승인 또는 최신성 확인을 의미하지 않는다.
+
 ## seed 전 반드시 확인할 항목
 
 1. 46개 과목의 공식 과목코드·학점·학과를 `courses`와 exact match
@@ -87,4 +100,4 @@ Exact match는 read-only DB의 법학과 catalog에서 과목명과 학과가 �
 - publicationDate 추측: 없음
 - DB/migration/seed 변경: 없음
 
-1-D-3B는 **검토 진행 가능**하다. 다만 이 import는 draft/unresolved 상태이며, `blocksImport` 항목이 해결되고 담당자 검토가 끝나기 전에는 법학과 curriculum seed나 published version을 만들 수 없다.
+1-D-3B는 **검토 진행 가능**하다. 다만 이 import는 draft/unresolved 상태이며, `blocksImport` 항목이 해결되고 담당자 검토가 끝나기 전에는 법학과 curriculum seed나 published version을 만들 수 없다. 1-D-3C seed SQL 작성·실행은 현재 범위에서 진행하지 않는다.
