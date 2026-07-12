@@ -45,6 +45,10 @@ import type {
   ProfessorCourseProgressReport,
   ProfessorCourseProgressReportResult,
 } from "@/types/professor-course-progress-report";
+import type {
+  ProfessorAnonymousWeeklyAggregateReport,
+  ProfessorAnonymousWeeklyAggregateResult,
+} from "@/types/professor-anonymous-weekly-aggregate";
 import { ProfessorCalendar } from "./professor-calendar";
 import { ProfessorCourseProgressReportView } from "./professor-course-progress-report";
 import {
@@ -59,6 +63,8 @@ type ProfessorWorkspaceProps = {
   initialTab?: ProfessorTab;
   professorCourseProgressReport: ProfessorCourseProgressReport;
   professorCourseProgressReportError: Extract<ProfessorCourseProgressReportResult, { ok: false }>["error"] | null;
+  professorAnonymousWeeklyAggregate: ProfessorAnonymousWeeklyAggregateReport;
+  professorAnonymousWeeklyAggregateError: Extract<ProfessorAnonymousWeeklyAggregateResult, { ok: false }>["error"] | null;
   professor: {
     id: string;
     name: string;
@@ -183,6 +189,8 @@ export function ProfessorWorkspace({
   adminTasks,
   professorCourseProgressReport,
   professorCourseProgressReportError,
+  professorAnonymousWeeklyAggregate,
+  professorAnonymousWeeklyAggregateError,
 }: ProfessorWorkspaceProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ProfessorTab>(initialTab ?? "schedule");
@@ -467,6 +475,8 @@ export function ProfessorWorkspace({
           <ProfessorCourseProgressReportView
             report={professorCourseProgressReport}
             error={professorCourseProgressReportError}
+            anonymousAggregateReport={professorAnonymousWeeklyAggregate}
+            anonymousAggregateError={professorAnonymousWeeklyAggregateError}
           />
         );
       default:

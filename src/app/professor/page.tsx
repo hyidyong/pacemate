@@ -9,6 +9,8 @@ import { getDemoProfile } from "@/services/session.service";
 import { clearDemoSession } from "@/services/demo-auth.service";
 import { getProfessorCourseProgressReport } from "@/services/professor-course-progress-report.server";
 import type { ProfessorCourseProgressReport } from "@/types/professor-course-progress-report";
+import { getProfessorAnonymousWeeklyAggregate } from "@/services/professor-anonymous-weekly-aggregate.server";
+import type { ProfessorAnonymousWeeklyAggregateReport } from "@/types/professor-anonymous-weekly-aggregate";
 
 // ✅ [Opt 4] ProfessorWorkspace(50KB)를 Lazy Load — 교수 페이지 초기 JS 대폭 감소
 const ProfessorWorkspace = dynamicImport(
@@ -42,11 +44,18 @@ export default async function ProfessorPage({
   const params = await searchParams;
   const initialTab = normalizeProfessorTab(params?.tab);
 
-  const [data, unreadCounselingCount, questionCount, courseProgressReportResult] = await Promise.all([
+  const [
+    data,
+    unreadCounselingCount,
+    questionCount,
+    courseProgressReportResult,
+    anonymousWeeklyAggregateResult,
+  ] = await Promise.all([
     getProfessorPageData(profile),
     getUnreadNotificationCountByCategory(profile, "counseling"),
     getUnreadNotificationCountByCategory(profile, "question"),
     getProfessorCourseProgressReport(),
+    getProfessorAnonymousWeeklyAggregate(),
   ]);
 
   const professorCourseProgressReport: ProfessorCourseProgressReport = courseProgressReportResult.ok
@@ -55,6 +64,13 @@ export default async function ProfessorPage({
   const professorCourseProgressReportError = courseProgressReportResult.ok
     ? null
     : courseProgressReportResult.error;
+  const professorAnonymousWeeklyAggregate: ProfessorAnonymousWeeklyAggregateReport =
+    anonymousWeeklyAggregateResult.ok
+      ? anonymousWeeklyAggregateResult.report
+      : { aggregates: [] };
+  const professorAnonymousWeeklyAggregateError = anonymousWeeklyAggregateResult.ok
+    ? null
+    : anonymousWeeklyAggregateResult.error;
 
   const pendingCounselingCount = data.counselingRequests.filter((request) => request.status === "pending").length;
   const effectiveCounselingCount = Math.max(pendingCounselingCount, unreadCounselingCount);
@@ -93,6 +109,8 @@ export default async function ProfessorPage({
           professor={data.professor}
           professorCourseProgressReport={professorCourseProgressReport}
           professorCourseProgressReportError={professorCourseProgressReportError}
+          professorAnonymousWeeklyAggregate={professorAnonymousWeeklyAggregate}
+          professorAnonymousWeeklyAggregateError={professorAnonymousWeeklyAggregateError}
           roadmapRequests={data.roadmapRequests}
           teachingSlots={data.teachingSlots}
         />
