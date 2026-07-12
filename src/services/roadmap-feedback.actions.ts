@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase/client";
+import { createUserNotification } from "@/services/notifications.create.service";
 import { getDemoProfile } from "@/services/session.service";
 
 function text(value: FormDataEntryValue | null, fallback = "") {
@@ -58,17 +59,22 @@ export async function submitRoadmapFeedback(formData: FormData) {
     return { ok: false, message: error.message };
   }
 
-  await supabase.from("user_notifications").insert({
-    recipient_role: "admin",
+  const notificationResult = await createUserNotification({
+    recipientRole: "admin",
+    recipientId: null,
     category: "revision",
     title: "학생 로드맵 오류 제보",
     body: `${courseName} 로드맵 수정 제보가 들어왔습니다.`,
-    target_href: `/admin?request=${data.id}`,
+    targetHref: `/admin?request=${data.id}`,
   });
 
   revalidatePath("/admin");
   revalidatePath("/notifications");
   revalidatePath(`/roadmap/${courseId}`);
+
+  if (!notificationResult.ok) {
+    return { ok: true, message: "수정 제보는 접수됐지만 알림 전송에 실패했습니다." };
+  }
 
   return { ok: true, message: "제보를 보냈습니다. 운영 검토 후 반영 여부가 결정됩니다." };
 }

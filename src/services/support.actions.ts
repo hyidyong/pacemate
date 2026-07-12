@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase/client";
+import { createUserNotification } from "@/services/notifications.create.service";
 import { getDemoProfile } from "@/services/session.service";
 
 function text(value: FormDataEntryValue | null, fallback = "") {
@@ -39,16 +40,17 @@ export async function submitSupportInquiry(formData: FormData) {
     return { ok: true, autoReplied: true, message: autoReply };
   }
 
-  const { error } = await supabase.from("user_notifications").insert({
-    recipient_role: "admin",
+  const notificationResult = await createUserNotification({
+    recipientRole: "admin",
+    recipientId: null,
     category: "system",
     title: `운영 문의: ${title}`,
     body: `[${category}] ${profile?.name ?? "사용자"}: ${message.slice(0, 500)}`,
-    target_href: "/admin",
+    targetHref: "/admin",
   });
 
-  if (error) {
-    return { ok: false, message: error.message };
+  if (!notificationResult.ok) {
+    return { ok: false, message: notificationResult.message };
   }
 
   revalidatePath("/admin");

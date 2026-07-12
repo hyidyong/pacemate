@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase/client";
+import { createUserNotifications } from "@/services/notifications.create.service";
 import { getDemoProfile } from "@/services/session.service";
 
 export async function getCourseRoadmap(courseId: string) {
@@ -86,24 +87,28 @@ export async function addCourseNotice(formData: FormData) {
     .eq("course_id", courseId)
     .eq("status", "interested"); // Or whatever status is active
 
+  revalidatePath("/professor");
+
   if (studentCourses && studentCourses.length > 0) {
     const courseName = Array.isArray(studentCourses[0].courses)
       ? studentCourses[0].courses[0].name
       : (studentCourses[0].courses as any)?.name ?? "과목";
 
     const notifications = studentCourses.map((sc) => ({
-      recipient_role: "student",
-      recipient_id: sc.student_id,
-      category: "system",
+      recipientRole: "student" as const,
+      recipientId: sc.student_id,
+      category: "system" as const,
       title: `[${courseName}] 새로운 공지사항이 등록되었습니다.`,
       body: title,
-      target_href: `/courses/${courseId}`, // Example link
+      targetHref: `/courses/${courseId}`,
     }));
 
-    await supabase.from("user_notifications").insert(notifications as any);
+    const notificationResult = await createUserNotifications(notifications);
+    if (!notificationResult.ok) {
+      return { message: "공지사항은 등록됐지만 알림 전송에 실패했습니다." };
+    }
   }
 
-  revalidatePath("/professor");
   return { message: "공지사항이 성공적으로 등록되었습니다." };
 }
 
@@ -144,23 +149,27 @@ export async function addCourseTextbook(formData: FormData) {
     .eq("course_id", courseId)
     .eq("status", "interested");
 
+  revalidatePath("/professor");
+
   if (studentCourses && studentCourses.length > 0) {
     const courseName = Array.isArray(studentCourses[0].courses)
       ? studentCourses[0].courses[0].name
       : (studentCourses[0].courses as any)?.name ?? "과목";
 
     const notifications = studentCourses.map((sc) => ({
-      recipient_role: "student",
-      recipient_id: sc.student_id,
-      category: "system",
+      recipientRole: "student" as const,
+      recipientId: sc.student_id,
+      category: "system" as const,
       title: `[${courseName}] 추천 교과서가 추가되었습니다.`,
       body: name,
-      target_href: `/courses/${courseId}`,
+      targetHref: `/courses/${courseId}`,
     }));
 
-    await supabase.from("user_notifications").insert(notifications as any);
+    const notificationResult = await createUserNotifications(notifications);
+    if (!notificationResult.ok) {
+      return { message: "교재는 등록됐지만 알림 전송에 실패했습니다." };
+    }
   }
 
-  revalidatePath("/professor");
   return { message: "교과서가 성공적으로 등록되었습니다." };
 }
