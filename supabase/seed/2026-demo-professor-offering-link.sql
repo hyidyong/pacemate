@@ -19,14 +19,19 @@ declare
   v_count integer;
   v_updated integer;
 begin
-  select count(*), min(id)
-    into v_count, v_profile_id
+  select count(*)
+    into v_count
     from public.profiles
    where identifier = 'prof1@pacemate.edu';
 
   if v_count <> 1 then
     raise exception 'Expected exactly one professor demo profile for prof1@pacemate.edu; found %', v_count;
   end if;
+
+  select id
+    into v_profile_id
+    from public.profiles
+   where identifier = 'prof1@pacemate.edu';
 
   if not exists (
     select 1
@@ -37,8 +42,8 @@ begin
     raise exception 'Demo profile prof1@pacemate.edu must have role professor';
   end if;
 
-  select count(*), min(id)
-    into v_count, v_company_course_id
+  select count(*)
+    into v_count
     from public.courses
    where name = '회사법';
 
@@ -46,16 +51,28 @@ begin
     raise exception 'Expected exactly one course named 회사법; found %', v_count;
   end if;
 
-  select count(*), min(co.id), min(co.professor_id)
-    into v_count, v_company_offering_id, v_company_professor_id
+  select id
+    into v_company_course_id
+    from public.courses
+   where name = '회사법';
+
+  select count(*)
+    into v_count
     from public.course_offerings co
-    join public.academic_terms t on t.id = co.term_id
+   join public.academic_terms t on t.id = co.term_id
    where co.course_id = v_company_course_id
      and t.semester_label = '2026-2';
 
   if v_count <> 1 then
     raise exception 'Expected exactly one 2026-2 company-law offering; found %', v_count;
   end if;
+
+  select co.id, co.professor_id
+    into v_company_offering_id, v_company_professor_id
+    from public.course_offerings co
+   join public.academic_terms t on t.id = co.term_id
+   where co.course_id = v_company_course_id
+     and t.semester_label = '2026-2';
 
   select count(*)
     into v_count
@@ -66,8 +83,8 @@ begin
     raise exception 'Expected exactly one professor row for the company-law offering; found %', v_count;
   end if;
 
-  select count(*), min(co.id), min(co.professor_id)
-    into v_count, v_admin_offering_id, v_admin_professor_id
+  select count(*)
+    into v_count
     from public.course_offerings co
     join public.courses c on c.id = co.course_id
     join public.academic_terms t on t.id = co.term_id
@@ -77,6 +94,14 @@ begin
   if v_count <> 1 then
     raise exception 'Expected exactly one 2026-2 administrative-procedure offering; found %', v_count;
   end if;
+
+  select co.id, co.professor_id
+    into v_admin_offering_id, v_admin_professor_id
+    from public.course_offerings co
+    join public.courses c on c.id = co.course_id
+    join public.academic_terms t on t.id = co.term_id
+   where c.name = '행정절차와행정구제'
+     and t.semester_label = '2026-2';
 
   if v_company_offering_id = v_admin_offering_id
      or v_company_professor_id = v_admin_professor_id then
