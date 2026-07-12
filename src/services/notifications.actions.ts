@@ -2,35 +2,84 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { normalizeUuid } from "@/lib/uuid";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDemoProfile } from "@/services/session.service";
 
-function text(value: FormDataEntryValue | null, fallback = "") {
-  const current = typeof value === "string" ? value.trim() : "";
-  return current || fallback;
+function text(value: FormDataEntryValue | null) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function safeNotificationTargetHref(value: unknown): string {
+  if (typeof value !== "string") {
+    return "/notifications";
+  }
+
+  const targetHref = value.trim();
+  const hasInternalPathShape = targetHref.startsWith("/") && !targetHref.startsWith("//");
+  const hasForbiddenScheme = /[a-z][a-z\d+.-]*:/i.test(targetHref);
+
+  if (!hasInternalPathShape || targetHref.includes("\\") || hasForbiddenScheme) {
+    return "/notifications";
+  }
+
+  return targetHref;
+}
+
+function notificationOwnershipFilter(profile: NonNullable<Awaited<ReturnType<typeof getDemoProfile>>>) {
+  return `recipient_id.eq.${profile.id},recipient_role.eq.${profile.role}`;
 }
 
 export async function markNotificationReadAndGo(formData: FormData) {
-  const notificationId = text(formData.get("notificationId"));
-  const targetHref = text(formData.get("targetHref"), "/notifications");
+  const profile = await getDemoProfile();
+  const notificationId = normalizeUuid(text(formData.get("notificationId")));
 
-  if (notificationId) {
-    await supabase
-      .from("user_notifications")
-      .update({ is_read: true })
-      .eq("id", notificationId);
+  if (!profile || !notificationId) {
+    redirect("/notifications");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const ownershipFilter = notificationOwnershipFilter(profile);
+  const { data: notification, error: selectError } = await supabase
+    .from("user_notifications")
+    .select("target_href")
+    .eq("id", notificationId)
+    .or(ownershipFilter)
+    .maybeSingle();
+
+  if (selectError || !notification) {
+    redirect("/notifications");
+  }
+
+  const { error: updateError } = await supabase
+    .from("user_notifications")
+    .update({ is_read: true })
+    .eq("id", notificationId)
+    .or(ownershipFilter);
+
+  if (updateError) {
+    redirect("/notifications");
   }
 
   revalidatePath("/notifications");
-  redirect(targetHref);
+  redirect(safeNotificationTargetHref(notification.target_href));
 }
 
 export async function markNotificationAsRead(notificationId: string) {
-  if (!notificationId) return;
+  const profile = await getDemoProfile();
+  const normalizedNotificationId = normalizeUuid(notificationId);
+
+  if (!profile || !normalizedNotificationId) {
+    return;
+  }
+
+  const supabase = await createSupabaseServerClient();
   await supabase
     .from("user_notifications")
     .update({ is_read: true })
-    .eq("id", notificationId);
+    .eq("id", normalizedNotificationId)
+    .or(notificationOwnershipFilter(profile));
+
   revalidatePath("/notifications");
   revalidatePath("/dashboard");
 }
@@ -41,14 +90,12 @@ export async function markAllNotificationsRead() {
     return;
   }
 
-  let query = supabase
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
     .from("user_notifications")
     .update({ is_read: true })
-    .eq("is_read", false);
-
-  query = query.or(`recipient_role.eq.${profile.role},recipient_id.eq.${profile.id}`);
-
-  const { error } = await query;
+    .eq("is_read", false)
+    .or(notificationOwnershipFilter(profile));
 
   if (error) {
     return;

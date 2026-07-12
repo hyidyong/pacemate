@@ -1,4 +1,6 @@
-import { supabase } from "@/lib/supabase/client";
+import "server-only";
+
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
 
 export type UserNotification = {
@@ -22,6 +24,33 @@ export const notificationCategoryLabels: Record<NotificationCategoryFilter, stri
   system: "문의",
 };
 
+const notificationCategories: readonly UserNotification["category"][] = [
+  "question",
+  "counseling",
+  "revision",
+  "system",
+];
+
+function isNotificationCategory(value: string): value is UserNotification["category"] {
+  return notificationCategories.includes(value as UserNotification["category"]);
+}
+
+function normalizeNotificationLimit(limit: number): number {
+  if (!Number.isFinite(limit)) {
+    return 5;
+  }
+
+  return Math.min(100, Math.max(1, Math.trunc(limit)));
+}
+
+const NOTIFICATION_READ_ERROR = "알림을 불러오지 못했습니다.";
+
+function applyNotificationOwnership<T>(query: T, profile: DemoProfile) {
+  return (query as { or: (filters: string) => T }).or(
+    `recipient_id.eq.${profile.id},recipient_role.eq.${profile.role}`,
+  );
+}
+
 export async function getNotificationsForProfile(
   profile: DemoProfile | null,
   limit = 5,
@@ -31,13 +60,18 @@ export async function getNotificationsForProfile(
     return [];
   }
 
+  if (category !== "all" && !isNotificationCategory(category)) {
+    return [];
+  }
+
+  const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("user_notifications")
     .select("id, recipient_role, category, title, body, target_href, is_read, created_at")
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .limit(normalizeNotificationLimit(limit));
 
-  query = query.or(`recipient_role.eq.${profile.role},recipient_id.eq.${profile.id}`);
+  query = applyNotificationOwnership(query, profile);
 
   if (category !== "all") {
     query = query.eq("category", category);
@@ -46,7 +80,7 @@ export async function getNotificationsForProfile(
   const { data, error } = await query;
 
   if (error) {
-    throw new Error(`Failed to load notifications: ${error.message}`);
+    throw new Error(NOTIFICATION_READ_ERROR);
   }
 
   return (data ?? []) as UserNotification[];
@@ -57,17 +91,18 @@ export async function getUnreadNotificationCount(profile: DemoProfile | null) {
     return 0;
   }
 
+  const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("user_notifications")
     .select("id", { count: "exact", head: true })
     .eq("is_read", false);
 
-  query = query.or(`recipient_role.eq.${profile.role},recipient_id.eq.${profile.id}`);
+  query = applyNotificationOwnership(query, profile);
 
   const { count, error } = await query;
 
   if (error) {
-    throw new Error(`Failed to load unread notification count: ${error.message}`);
+    throw new Error(NOTIFICATION_READ_ERROR);
   }
 
   return count ?? 0;
@@ -77,22 +112,23 @@ export async function getUnreadNotificationCountByCategory(
   profile: DemoProfile | null,
   category: UserNotification["category"],
 ) {
-  if (!profile) {
+  if (!profile || !isNotificationCategory(category)) {
     return 0;
   }
 
+  const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("user_notifications")
     .select("id", { count: "exact", head: true })
     .eq("is_read", false)
     .eq("category", category);
 
-  query = query.or(`recipient_role.eq.${profile.role},recipient_id.eq.${profile.id}`);
+  query = applyNotificationOwnership(query, profile);
 
   const { count, error } = await query;
 
   if (error) {
-    throw new Error(`Failed to load unread notification count for ${category}: ${error.message}`);
+    throw new Error(NOTIFICATION_READ_ERROR);
   }
 
   return count ?? 0;
