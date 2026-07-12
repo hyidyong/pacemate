@@ -4,6 +4,8 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { StudentOnboardingForm } from "@/components/onboarding/student-onboarding-form";
+import { getDraftCurriculumByDepartment } from "@/services/curriculum-query.server";
+import type { CurriculumPreview } from "@/types/curriculum";
 import { saveAssistantOnboarding } from "@/services/onboarding.actions";
 import { getStudentOnboardingProfile, type StudentType } from "@/services/onboarding.service";
 import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
@@ -58,6 +60,18 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   }
 
   const savedProfile = profile.role === "student" ? await getStudentOnboardingProfile(profile) : null;
+  const isAssistant = profile.role === "assistant";
+  let electronicCurriculumPreview: CurriculumPreview | null = null;
+  if (!isAssistant) {
+    try {
+      const curriculumResult = await getDraftCurriculumByDepartment("electronic-engineering");
+      if (curriculumResult.kind === "preview") {
+        electronicCurriculumPreview = curriculumResult;
+      }
+    } catch {
+      electronicCurriculumPreview = null;
+    }
+  }
   const selectedTypes = new Set(savedProfile?.user_types ?? []);
   const error = params?.error
     ? params.error === "required"
@@ -65,8 +79,6 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       : decodeURIComponent(params.error)
     : null;
   
-  const isAssistant = profile.role === "assistant";
-
   return (
     <AppShell>
       <section className="screen-hero onboarding-hero">
@@ -112,6 +124,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
           <StudentOnboardingForm 
             error={error} 
             savedProfile={savedProfile} 
+            electronicCurriculumPreview={electronicCurriculumPreview}
           />
         )}
       </section>

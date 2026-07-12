@@ -1153,6 +1153,223 @@ select {
   font-weight: 800;
 }
 
+.curriculum-preview-panel {
+  gap: 18px;
+  background: linear-gradient(145deg, rgba(247, 252, 248, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.curriculum-preview-heading,
+.curriculum-grade-heading,
+.curriculum-preview-summary,
+.curriculum-draft-warning,
+.curriculum-uncertainty-note,
+.curriculum-preview-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.curriculum-preview-heading {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.curriculum-preview-kicker {
+  margin: 0 0 5px;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.curriculum-preview-heading h2,
+.curriculum-grade-heading h3 {
+  margin: 0;
+}
+
+.curriculum-preview-description {
+  max-width: 620px;
+  margin: 7px 0 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.curriculum-department-select {
+  display: grid;
+  flex: 0 0 190px;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.curriculum-department-select select {
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--foreground);
+  background: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.curriculum-draft-warning {
+  align-items: flex-start;
+  padding: 13px;
+  border: 1px solid rgba(190, 135, 27, 0.28);
+  border-radius: var(--radius);
+  color: #714e00;
+  background: #fff9e8;
+}
+
+.curriculum-draft-warning strong,
+.curriculum-draft-warning p {
+  margin: 0;
+}
+
+.curriculum-draft-warning p {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.curriculum-preview-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.curriculum-preview-summary > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.curriculum-preview-summary span,
+.curriculum-grade-heading span,
+.curriculum-course-check small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.curriculum-preview-summary strong {
+  font-size: 15px;
+}
+
+.curriculum-uncertainty-note,
+.curriculum-preview-footer {
+  align-items: flex-start;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.curriculum-grade-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.curriculum-grade-group {
+  display: grid;
+  gap: 9px;
+}
+
+.curriculum-grade-heading {
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.curriculum-grade-heading h3 {
+  font-size: 18px;
+}
+
+.curriculum-course-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.curriculum-course-check {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.curriculum-course-check:hover,
+.curriculum-course-check:focus-within {
+  border-color: rgba(35, 138, 77, 0.42);
+}
+
+.curriculum-course-check[data-checked="true"] {
+  border-color: rgba(35, 138, 77, 0.44);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(35, 138, 77, 0.16);
+}
+
+.curriculum-course-check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.curriculum-course-checkmark {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #fff;
+  background: #fff;
+}
+
+.curriculum-course-check[data-checked="true"] .curriculum-course-checkmark {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.curriculum-course-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.curriculum-course-copy strong {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.curriculum-preview-footer {
+  padding-top: 4px;
+}
+
+.curriculum-preview-empty {
+  padding: 13px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .inline-actions {
   margin-top: 16px;
 }

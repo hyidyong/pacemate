@@ -2,6 +2,8 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { saveStudentOnboarding } from "@/services/onboarding.actions";
 import { StudentType } from "@/services/onboarding.service";
+import { ElectronicEngineeringCurriculumPreview } from "@/components/onboarding/electronic-engineering-curriculum-preview";
+import type { CurriculumPreview } from "@/types/curriculum";
 
 type StudentTypeOption = {
   value: StudentType;
@@ -40,12 +42,14 @@ export const studentTypes: StudentTypeOption[] = [
 type StudentOnboardingFormProps = {
   error: string | null;
   savedProfile: any;
+  electronicCurriculumPreview?: CurriculumPreview | null;
   returnTo?: string;
 };
 
 export function StudentOnboardingForm({
   error,
   savedProfile,
+  electronicCurriculumPreview = null,
   returnTo,
 }: StudentOnboardingFormProps) {
   const selectedTypes = new Set(savedProfile?.user_types ?? []);
@@ -151,6 +155,8 @@ export function StudentOnboardingForm({
           </label>
         </div>
       </section>
+
+      <ElectronicEngineeringCurriculumPreview preview={electronicCurriculumPreview} />
 
       <div className="onboarding-submit-bar">
         <Button type="submit">
