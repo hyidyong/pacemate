@@ -1,0 +1,2446 @@
+{
+  "metadata": {
+    "departmentName": "법학과",
+    "sourceTitle": "계명대학교 법학과 Bluebook",
+    "sourceFile": "docs/reference/bluebooks/law/source.pdf",
+    "sourceAcademicYear": null,
+    "publicationDate": null,
+    "sourceVerified": false,
+    "generatedAt": "2026-07-12T12:32:46.348Z",
+    "importStatus": "draft_unresolved",
+    "notes": "Law-only review import. No DB/seed writes. sourceEdition is unknown; only six exact DB course matches are connected."
+  },
+  "curriculumVersion": {
+    "schoolId": "862b661c-810a-4440-ba76-722b2fcf8d6a",
+    "departmentId": "4d2bc25f-7172-46cf-afd9-29f85172f4e1",
+    "academicYear": null,
+    "versionLabel": "Law curriculum bluebook (publication year unknown)",
+    "admissionYearFrom": null,
+    "admissionYearTo": null,
+    "status": "draft",
+    "sourceTitle": "계명대학교 법학과 Bluebook",
+    "sourceFile": "docs/reference/bluebooks/law/source.pdf",
+    "sourceAcademicYear": null,
+    "publicationDate": null,
+    "sourceVerified": false,
+    "notes": "Admission-year scope remains at requirement/exception level; one published range is not asserted."
+  },
+  "curriculumCourses": [
+    {
+      "localKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "major_required",
+      "recommendedGrade": 1,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": true,
+      "sourcePage": 7,
+      "sortOrder": 1,
+      "metadata": {
+        "sourceMajorRequirementStatus": "required_for_2024_new_students",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-1-1-02",
+      "sourceCourseName": "LEGAL ENGLISH 1(영어강의)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 2,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-1-1-03",
+      "sourceCourseName": "대학생활과진로설계",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "major_required",
+      "recommendedGrade": 1,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": true,
+      "sourcePage": 7,
+      "sortOrder": 3,
+      "metadata": {
+        "sourceMajorRequirementStatus": "required_for_2024_new_students",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-1-2-01",
+      "sourceCourseName": "민법총칙",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 4,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-1-2-02",
+      "sourceCourseName": "형법총론(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 5,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-1-2-03",
+      "sourceCourseName": "LEGAL COMMUNICATION AND WRITING SKILLS(영어강의)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 1,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 6,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-1-01",
+      "sourceCourseName": "물권법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 7,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-1-02",
+      "sourceCourseName": "헌법(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 8,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-1-03",
+      "sourceCourseName": "형법총론(2)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 9,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-1-04",
+      "sourceCourseName": "법협상론(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 10,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-2-01",
+      "sourceCourseName": "담보물권법",
+      "sourceCourseCode": null,
+      "courseId": "0b452ae6-8578-45b2-8a42-4373064ebed6",
+      "matchStatus": "exact",
+      "matchNote": "Exact name, department, and DB course row confirmed; source PDF has no course code.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 11,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-2-02",
+      "sourceCourseName": "상법총론",
+      "sourceCourseCode": null,
+      "courseId": "f87e10fb-1aad-4268-89fb-086ba985c4fd",
+      "matchStatus": "exact",
+      "matchNote": "Exact name, department, and DB course row confirmed; source PDF has no course code.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 12,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-2-03",
+      "sourceCourseName": "헌법(2)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 13,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-2-04",
+      "sourceCourseName": "형법각론(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 14,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-2-05",
+      "sourceCourseName": "소비자분쟁해결론",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 15,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-2-2-06",
+      "sourceCourseName": "행정법기초",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 2,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 16,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-01",
+      "sourceCourseName": "형사소송법(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 17,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-02",
+      "sourceCourseName": "회사법",
+      "sourceCourseCode": null,
+      "courseId": "6a9d0d8d-7010-4470-8af3-a72e09c59e88",
+      "matchStatus": "exact",
+      "matchNote": "Exact name, department, and DB course row confirmed; source PDF has no course code.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 18,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-03",
+      "sourceCourseName": "국제거래법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 19,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-04",
+      "sourceCourseName": "채권법총론",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 20,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-05",
+      "sourceCourseName": "형법각론(2)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 21,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-06",
+      "sourceCourseName": "형사절차와인권",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 22,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-07",
+      "sourceCourseName": "행정절차와행정구제",
+      "sourceCourseCode": null,
+      "courseId": "72170705-9609-456c-91fd-664b03c5a4ac",
+      "matchStatus": "exact",
+      "matchNote": "Exact name, department, and DB course row confirmed; source PDF has no course code.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 23,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-08",
+      "sourceCourseName": "경찰헌법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 24,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-09",
+      "sourceCourseName": "노동법(1)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 25,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-1-10",
+      "sourceCourseName": "법학프로젝트",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 26,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-01",
+      "sourceCourseName": "어음수표법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 27,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-02",
+      "sourceCourseName": "채권법각론",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 28,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-03",
+      "sourceCourseName": "형사소송법(2)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 29,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-04",
+      "sourceCourseName": "민사소송법(1)",
+      "sourceCourseCode": null,
+      "courseId": "66c552b1-6094-4bd9-b307-4a45d33119c4",
+      "matchStatus": "exact",
+      "matchNote": "Exact name, department, and DB course row confirmed; source PDF has no course code.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 30,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-05",
+      "sourceCourseName": "Introduction to Intellectual Property Law(영어강의)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 31,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-06",
+      "sourceCourseName": "법학전공글쓰기",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 32,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-07",
+      "sourceCourseName": "개별행정법이해",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 33,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-08",
+      "sourceCourseName": "노동법(2)",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 34,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-3-2-09",
+      "sourceCourseName": "통치기구론",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 3,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 35,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-1-01",
+      "sourceCourseName": "국제법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 36,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-1-02",
+      "sourceCourseName": "보험해상법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 37,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-1-03",
+      "sourceCourseName": "가족법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 38,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-1-04",
+      "sourceCourseName": "민사소송법(2)",
+      "sourceCourseCode": null,
+      "courseId": "7084e3fe-42a4-4320-b9d2-bfc2299c6a2b",
+      "matchStatus": "exact",
+      "matchNote": "Exact name, department, and DB course row confirmed; source PDF has no course code.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 39,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-1-05",
+      "sourceCourseName": "환경법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 1,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 40,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-2-01",
+      "sourceCourseName": "국제통상법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 41,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-2-02",
+      "sourceCourseName": "민사집행법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 42,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-2-03",
+      "sourceCourseName": "헌법소송법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 43,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-2-04",
+      "sourceCourseName": "전자상거래법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 44,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-2-05",
+      "sourceCourseName": "민사법세미나",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 45,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    },
+    {
+      "localKey": "law-4-2-06",
+      "sourceCourseName": "국제인권법",
+      "sourceCourseCode": null,
+      "courseId": null,
+      "matchStatus": "unresolved",
+      "matchNote": "No current DB course row with exact name; courseId remains null.",
+      "credits": null,
+      "requirementType": "other",
+      "recommendedGrade": 4,
+      "recommendedSemester": 2,
+      "curriculumLevel": "major",
+      "isRequired": false,
+      "sourcePage": 7,
+      "sortOrder": 46,
+      "metadata": {
+        "sourceMajorRequirementStatus": "not_specified",
+        "source": "law.json cross-checked with bluebook-law-source-map"
+      }
+    }
+  ],
+  "curriculumRequirements": [
+    {
+      "requirementCode": "total-graduation-credits",
+      "requirementType": "total_credits",
+      "title": "Total graduation credits",
+      "minimumCredits": 120,
+      "minimumCourseCount": null,
+      "mustCompleteAll": false,
+      "ruleDefinition": {
+        "sourceStatement": "At least 120 credits",
+        "applicability": "verify against university common rules"
+      },
+      "sourcePage": 8,
+      "isRequired": true,
+      "sortOrder": 1
+    },
+    {
+      "requirementCode": "law-major-required-2024",
+      "requirementType": "required_courses",
+      "title": "Law major required courses for 2024 entrants",
+      "minimumCredits": null,
+      "minimumCourseCount": 2,
+      "mustCompleteAll": true,
+      "ruleDefinition": {
+        "applicableAdmissionYearFrom": 2024,
+        "courseLocalKeys": [
+          "law-1-1-01",
+          "law-1-1-03"
+        ],
+        "sourceCourseNames": [
+          "법학개론",
+          "대학생활과진로설계"
+        ]
+      },
+      "sourcePage": 8,
+      "isRequired": true,
+      "sortOrder": 2
+    },
+    {
+      "requirementCode": "law-language-2014",
+      "requirementType": "language",
+      "title": "Major English course or TOEIC requirement",
+      "minimumCredits": null,
+      "minimumCourseCount": 1,
+      "mustCompleteAll": false,
+      "ruleDefinition": {
+        "applicableAdmissionYearFrom": 2014,
+        "applicability": "primary_major_only",
+        "alternatives": [
+          {
+            "type": "major_english_course",
+            "minimumCourseCount": 1
+          },
+          {
+            "type": "toeic",
+            "minimumScore": 600
+          }
+        ],
+        "sourceStatement": "One major English course or TOEIC 600+"
+      },
+      "sourcePage": 8,
+      "isRequired": true,
+      "sortOrder": 3
+    }
+  ],
+  "curriculumRequirementExceptions": [
+    {
+      "exceptionType": "other",
+      "title": "No major-required courses through 2023",
+      "conditionDefinition": {
+        "admissionYearTo": 2023,
+        "scope": "law_primary_major"
+      },
+      "overrideDefinition": {
+        "requiredCourseLocalKeys": []
+      },
+      "priority": 10,
+      "requiresManualReview": false,
+      "sourcePage": 8,
+      "notes": "Source states major-required courses apply from 2024 entrants."
+    },
+    {
+      "exceptionType": "transfer_student",
+      "title": "Transfer student language exemption",
+      "conditionDefinition": {
+        "studentType": "transfer_student",
+        "requirementCode": "law-language-2014"
+      },
+      "overrideDefinition": {
+        "requirementStatus": "not_applicable"
+      },
+      "priority": 20,
+      "requiresManualReview": true,
+      "sourcePage": 8,
+      "notes": "Confirm against authoritative student assignment."
+    },
+    {
+      "exceptionType": "double_major",
+      "title": "Double-major language exemption",
+      "conditionDefinition": {
+        "studentType": "double_major",
+        "requirementCode": "law-language-2014"
+      },
+      "overrideDefinition": {
+        "requirementStatus": "not_applicable"
+      },
+      "priority": 20,
+      "requiresManualReview": true,
+      "sourcePage": 8,
+      "notes": "Confirm primary-major assignment."
+    },
+    {
+      "exceptionType": "international_student",
+      "title": "International student language exemption",
+      "conditionDefinition": {
+        "studentType": "international_student",
+        "requirementCode": "law-language-2014"
+      },
+      "overrideDefinition": {
+        "requirementStatus": "not_applicable"
+      },
+      "priority": 20,
+      "requiresManualReview": true,
+      "sourcePage": 8,
+      "notes": "Confirm authoritative student type."
+    },
+    {
+      "exceptionType": "other",
+      "title": "Foreign university dual-degree language exemption",
+      "conditionDefinition": {
+        "studentType": "foreign_dual_degree",
+        "requirementCode": "law-language-2014"
+      },
+      "overrideDefinition": {
+        "requirementStatus": "not_applicable"
+      },
+      "priority": 20,
+      "requiresManualReview": true,
+      "sourcePage": 8,
+      "notes": "No matching common student_type enum; manual review."
+    }
+  ],
+  "courseEquivalencies": [],
+  "careerTracks": [
+    {
+      "trackCode": "law-school-bar-exam",
+      "trackName": "로스쿨/변호사시험 (판사, 검사, 변호사)",
+      "category": "legal-profession",
+      "description": null,
+      "sortOrder": 1,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "trackName": "법무사",
+      "category": "legal-qualification",
+      "description": null,
+      "sortOrder": 2,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "certified-labor-attorney",
+      "trackName": "공인노무사",
+      "category": "legal-qualification",
+      "description": null,
+      "sortOrder": 3,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "licensed-real-estate-agent",
+      "trackName": "공인중개사",
+      "category": "legal-qualification",
+      "description": null,
+      "sortOrder": 4,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "certified-appraiser",
+      "trackName": "감정평가사",
+      "category": "legal-qualification",
+      "description": null,
+      "sortOrder": 5,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "patent-attorney",
+      "trackName": "변리사",
+      "category": "legal-qualification",
+      "description": null,
+      "sortOrder": 6,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "trackName": "검찰사무직/마약수사직 9급",
+      "category": "public-service",
+      "description": null,
+      "sortOrder": 7,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "trackName": "법원직 9급(법원사무직렬)",
+      "category": "public-service",
+      "description": null,
+      "sortOrder": 8,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "trackName": "법원직 9급(등기사무직렬)",
+      "category": "public-service",
+      "description": null,
+      "sortOrder": 9,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "police-officer-track",
+      "trackName": "경찰간부직/순경직",
+      "category": "public-service",
+      "description": null,
+      "sortOrder": 10,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "other-public-service",
+      "trackName": "철도공안직(철도경찰)·출입국 관리직·보호직·교정직 9급",
+      "category": "public-service",
+      "description": null,
+      "sortOrder": 11,
+      "sourcePage": 12
+    }
+  ],
+  "careerTrackCourses": [
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-1-2-02",
+      "sourceCourseName": "형법총론(1)",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-1-2-01",
+      "sourceCourseName": "민법총칙",
+      "recommendedStage": "grade-1",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-2-1-02",
+      "sourceCourseName": "헌법(1)",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-2-2-03",
+      "sourceCourseName": "헌법(2)",
+      "recommendedStage": "grade-2",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-2-1-03",
+      "sourceCourseName": "형법총론(2)",
+      "recommendedStage": "grade-2",
+      "priority": 6,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-2-2-04",
+      "sourceCourseName": "형법각론(1)",
+      "recommendedStage": "grade-2",
+      "priority": 7,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-2-1-01",
+      "sourceCourseName": "물권법",
+      "recommendedStage": "grade-2",
+      "priority": 8,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-2-2-01",
+      "sourceCourseName": "담보물권법",
+      "recommendedStage": "grade-2",
+      "priority": 9,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-2-2-02",
+      "sourceCourseName": "상법총론",
+      "recommendedStage": "grade-2",
+      "priority": 10,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-2-2-06",
+      "sourceCourseName": "행정법기초",
+      "recommendedStage": "grade-2",
+      "priority": 11,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-3-1-05",
+      "sourceCourseName": "형법각론(2)",
+      "recommendedStage": "grade-3",
+      "priority": 12,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": null,
+      "sourceCourseName": "형사소송법",
+      "recommendedStage": "grade-3",
+      "priority": 13,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-3-1-04",
+      "sourceCourseName": "채권법총론",
+      "recommendedStage": "grade-3",
+      "priority": 14,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-3-2-02",
+      "sourceCourseName": "채권법각론",
+      "recommendedStage": "grade-3",
+      "priority": 15,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-3-1-02",
+      "sourceCourseName": "회사법",
+      "recommendedStage": "grade-3",
+      "priority": 16,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-3-2-04",
+      "sourceCourseName": "민사소송법(1)",
+      "recommendedStage": "grade-3",
+      "priority": 17,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-3-2-01",
+      "sourceCourseName": "어음수표법",
+      "recommendedStage": "grade-3",
+      "priority": 18,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-3-1-07",
+      "sourceCourseName": "행정절차와행정구제",
+      "recommendedStage": "grade-3",
+      "priority": 19,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-3-2-07",
+      "sourceCourseName": "개별행정법이해",
+      "recommendedStage": "grade-3",
+      "priority": 20,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-4-2-03",
+      "sourceCourseName": "헌법소송법",
+      "recommendedStage": "grade-4",
+      "priority": 21,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-4-1-03",
+      "sourceCourseName": "가족법",
+      "recommendedStage": "grade-4",
+      "priority": 22,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-4-1-04",
+      "sourceCourseName": "민사소송법(2)",
+      "recommendedStage": "grade-4",
+      "priority": 23,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-4-2-05",
+      "sourceCourseName": "민사법세미나",
+      "recommendedStage": "grade-4",
+      "priority": 24,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-4-2-02",
+      "sourceCourseName": "민사집행법",
+      "recommendedStage": "grade-4",
+      "priority": 25,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "law-school-bar-exam",
+      "curriculumCourseLocalKey": "law-4-1-02",
+      "sourceCourseName": "보험해상법",
+      "recommendedStage": "grade-4",
+      "priority": 26,
+      "isRequired": false,
+      "sourcePage": 9
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-1-2-02",
+      "sourceCourseName": "형법총론(1)",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-1-2-01",
+      "sourceCourseName": "민법총칙",
+      "recommendedStage": "grade-1",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-2-1-02",
+      "sourceCourseName": "헌법(1)",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-2-2-03",
+      "sourceCourseName": "헌법(2)",
+      "recommendedStage": "grade-2",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-2-1-03",
+      "sourceCourseName": "형법총론(2)",
+      "recommendedStage": "grade-2",
+      "priority": 6,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-2-2-04",
+      "sourceCourseName": "형법각론(1)",
+      "recommendedStage": "grade-2",
+      "priority": 7,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-2-1-01",
+      "sourceCourseName": "물권법",
+      "recommendedStage": "grade-2",
+      "priority": 8,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-2-2-01",
+      "sourceCourseName": "담보물권법",
+      "recommendedStage": "grade-2",
+      "priority": 9,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-2-2-02",
+      "sourceCourseName": "상법총론",
+      "recommendedStage": "grade-2",
+      "priority": 10,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-3-1-05",
+      "sourceCourseName": "형법각론(2)",
+      "recommendedStage": "grade-3",
+      "priority": 11,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": null,
+      "sourceCourseName": "형사소송법",
+      "recommendedStage": "grade-3",
+      "priority": 12,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-3-1-04",
+      "sourceCourseName": "채권법총론",
+      "recommendedStage": "grade-3",
+      "priority": 13,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-3-2-02",
+      "sourceCourseName": "채권법각론",
+      "recommendedStage": "grade-3",
+      "priority": 14,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-3-1-02",
+      "sourceCourseName": "회사법",
+      "recommendedStage": "grade-3",
+      "priority": 15,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-3-2-04",
+      "sourceCourseName": "민사소송법(1)",
+      "recommendedStage": "grade-3",
+      "priority": 16,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-3-2-01",
+      "sourceCourseName": "어음수표법",
+      "recommendedStage": "grade-3",
+      "priority": 17,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-4-2-03",
+      "sourceCourseName": "헌법소송법",
+      "recommendedStage": "grade-4",
+      "priority": 18,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-4-1-03",
+      "sourceCourseName": "가족법",
+      "recommendedStage": "grade-4",
+      "priority": 19,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-4-1-04",
+      "sourceCourseName": "민사소송법(2)",
+      "recommendedStage": "grade-4",
+      "priority": 20,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-4-2-05",
+      "sourceCourseName": "민사법세미나",
+      "recommendedStage": "grade-4",
+      "priority": 21,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-4-2-02",
+      "sourceCourseName": "민사집행법",
+      "recommendedStage": "grade-4",
+      "priority": 22,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "judicial-scrivener",
+      "curriculumCourseLocalKey": "law-4-1-02",
+      "sourceCourseName": "보험해상법",
+      "recommendedStage": "grade-4",
+      "priority": 23,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "certified-labor-attorney",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "certified-labor-attorney",
+      "curriculumCourseLocalKey": "law-1-2-01",
+      "sourceCourseName": "민법총칙",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "certified-labor-attorney",
+      "curriculumCourseLocalKey": "law-3-1-09",
+      "sourceCourseName": "노동법(1)",
+      "recommendedStage": "grade-2",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "certified-labor-attorney",
+      "curriculumCourseLocalKey": "law-3-1-04",
+      "sourceCourseName": "채권법총론",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "certified-labor-attorney",
+      "curriculumCourseLocalKey": "law-3-2-02",
+      "sourceCourseName": "채권법각론",
+      "recommendedStage": "grade-3",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "certified-labor-attorney",
+      "curriculumCourseLocalKey": "law-3-2-08",
+      "sourceCourseName": "노동법(2)",
+      "recommendedStage": "grade-4",
+      "priority": 6,
+      "isRequired": false,
+      "sourcePage": 10
+    },
+    {
+      "trackCode": "licensed-real-estate-agent",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "licensed-real-estate-agent",
+      "curriculumCourseLocalKey": "law-1-2-01",
+      "sourceCourseName": "민법총칙",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "licensed-real-estate-agent",
+      "curriculumCourseLocalKey": "law-2-1-01",
+      "sourceCourseName": "물권법",
+      "recommendedStage": "grade-2",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "licensed-real-estate-agent",
+      "curriculumCourseLocalKey": "law-2-2-01",
+      "sourceCourseName": "담보물권법",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "licensed-real-estate-agent",
+      "curriculumCourseLocalKey": "law-3-1-04",
+      "sourceCourseName": "채권법총론",
+      "recommendedStage": "grade-3",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "licensed-real-estate-agent",
+      "curriculumCourseLocalKey": "law-3-2-02",
+      "sourceCourseName": "채권법각론",
+      "recommendedStage": "grade-3",
+      "priority": 6,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "licensed-real-estate-agent",
+      "curriculumCourseLocalKey": "law-4-2-05",
+      "sourceCourseName": "민사법세미나",
+      "recommendedStage": "grade-4",
+      "priority": 7,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "certified-appraiser",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "certified-appraiser",
+      "curriculumCourseLocalKey": "law-1-2-01",
+      "sourceCourseName": "민법총칙",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "certified-appraiser",
+      "curriculumCourseLocalKey": "law-2-1-01",
+      "sourceCourseName": "물권법",
+      "recommendedStage": "grade-2",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "certified-appraiser",
+      "curriculumCourseLocalKey": "law-2-2-01",
+      "sourceCourseName": "담보물권법",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "certified-appraiser",
+      "curriculumCourseLocalKey": "law-4-2-05",
+      "sourceCourseName": "민사법세미나",
+      "recommendedStage": "grade-4",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 11
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-1-2-02",
+      "sourceCourseName": "형법총론(1)",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-2-1-03",
+      "sourceCourseName": "형법총론(2)",
+      "recommendedStage": "grade-2",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-2-2-04",
+      "sourceCourseName": "형법각론(1)",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-3-1-06",
+      "sourceCourseName": "형사절차와인권",
+      "recommendedStage": "grade-2",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-2-1-02",
+      "sourceCourseName": "헌법(1)",
+      "recommendedStage": "grade-2",
+      "priority": 6,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-2-2-03",
+      "sourceCourseName": "헌법(2)",
+      "recommendedStage": "grade-2",
+      "priority": 7,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-2-2-06",
+      "sourceCourseName": "행정법기초",
+      "recommendedStage": "grade-2",
+      "priority": 8,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": null,
+      "sourceCourseName": "형사소송법",
+      "recommendedStage": "grade-3",
+      "priority": 9,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-3-2-07",
+      "sourceCourseName": "개별행정법이해",
+      "recommendedStage": "grade-3",
+      "priority": 10,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-3-1-08",
+      "sourceCourseName": "경찰헌법",
+      "recommendedStage": "grade-3",
+      "priority": 11,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "prosecution-drug-investigation-9th-grade",
+      "curriculumCourseLocalKey": "law-4-2-03",
+      "sourceCourseName": "헌법소송법",
+      "recommendedStage": "grade-4",
+      "priority": 12,
+      "isRequired": false,
+      "sourcePage": 12
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-1-2-02",
+      "sourceCourseName": "형법총론(1)",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-1-2-01",
+      "sourceCourseName": "민법총칙",
+      "recommendedStage": "grade-1",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-1-03",
+      "sourceCourseName": "형법총론(2)",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-2-04",
+      "sourceCourseName": "형법각론(1)",
+      "recommendedStage": "grade-2",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-1-02",
+      "sourceCourseName": "헌법(1)",
+      "recommendedStage": "grade-2",
+      "priority": 6,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-2-03",
+      "sourceCourseName": "헌법(2)",
+      "recommendedStage": "grade-2",
+      "priority": 7,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-1-01",
+      "sourceCourseName": "물권법",
+      "recommendedStage": "grade-2",
+      "priority": 8,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": null,
+      "sourceCourseName": "형사소송법",
+      "recommendedStage": "grade-3",
+      "priority": 9,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-3-1-05",
+      "sourceCourseName": "형법각론(2)",
+      "recommendedStage": "grade-3",
+      "priority": 10,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-3-1-04",
+      "sourceCourseName": "채권법총론",
+      "recommendedStage": "grade-3",
+      "priority": 11,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-3-2-02",
+      "sourceCourseName": "채권법각론",
+      "recommendedStage": "grade-3",
+      "priority": 12,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-3-2-04",
+      "sourceCourseName": "민사소송법(1)",
+      "recommendedStage": "grade-3",
+      "priority": 13,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-2-03",
+      "sourceCourseName": "헌법소송법",
+      "recommendedStage": "grade-4",
+      "priority": 14,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-1-03",
+      "sourceCourseName": "가족법",
+      "recommendedStage": "grade-4",
+      "priority": 15,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-2-05",
+      "sourceCourseName": "민사법세미나",
+      "recommendedStage": "grade-4",
+      "priority": 16,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-1-04",
+      "sourceCourseName": "민사소송법(2)",
+      "recommendedStage": "grade-4",
+      "priority": 17,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-2-02",
+      "sourceCourseName": "민사집행법",
+      "recommendedStage": "grade-4",
+      "priority": 18,
+      "isRequired": false,
+      "sourcePage": 13
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-1-2-01",
+      "sourceCourseName": "민법총칙",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-1-02",
+      "sourceCourseName": "헌법(1)",
+      "recommendedStage": "grade-2",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-2-03",
+      "sourceCourseName": "헌법(2)",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-1-01",
+      "sourceCourseName": "물권법",
+      "recommendedStage": "grade-2",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-2-01",
+      "sourceCourseName": "담보물권법",
+      "recommendedStage": "grade-2",
+      "priority": 6,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-2-2-02",
+      "sourceCourseName": "상법총론",
+      "recommendedStage": "grade-2",
+      "priority": 7,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-3-2-04",
+      "sourceCourseName": "민사소송법(1)",
+      "recommendedStage": "grade-3",
+      "priority": 8,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-1-04",
+      "sourceCourseName": "민사소송법(2)",
+      "recommendedStage": "grade-3",
+      "priority": 9,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-3-1-04",
+      "sourceCourseName": "채권법총론",
+      "recommendedStage": "grade-3",
+      "priority": 10,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-3-2-02",
+      "sourceCourseName": "채권법각론",
+      "recommendedStage": "grade-3",
+      "priority": 11,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-3-1-02",
+      "sourceCourseName": "회사법",
+      "recommendedStage": "grade-3",
+      "priority": 12,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-2-03",
+      "sourceCourseName": "헌법소송법",
+      "recommendedStage": "grade-4",
+      "priority": 13,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-1-03",
+      "sourceCourseName": "가족법",
+      "recommendedStage": "grade-4",
+      "priority": 14,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-2-05",
+      "sourceCourseName": "민사법세미나",
+      "recommendedStage": "grade-4",
+      "priority": 15,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "court-registration-clerical-9th-grade",
+      "curriculumCourseLocalKey": "law-4-2-02",
+      "sourceCourseName": "민사집행법",
+      "recommendedStage": "grade-4",
+      "priority": 16,
+      "isRequired": false,
+      "sourcePage": 14
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-1-1-01",
+      "sourceCourseName": "법학개론",
+      "recommendedStage": "grade-1",
+      "priority": 1,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-1-2-02",
+      "sourceCourseName": "형법총론(1)",
+      "recommendedStage": "grade-1",
+      "priority": 2,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-2-1-03",
+      "sourceCourseName": "형법총론(2)",
+      "recommendedStage": "grade-2",
+      "priority": 3,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-2-2-04",
+      "sourceCourseName": "형법각론(1)",
+      "recommendedStage": "grade-2",
+      "priority": 4,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-2-1-02",
+      "sourceCourseName": "헌법(1)",
+      "recommendedStage": "grade-2",
+      "priority": 5,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-2-2-03",
+      "sourceCourseName": "헌법(2)",
+      "recommendedStage": "grade-2",
+      "priority": 6,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-3-1-06",
+      "sourceCourseName": "형사절차와인권",
+      "recommendedStage": "grade-2",
+      "priority": 7,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": null,
+      "sourceCourseName": "형사소송법",
+      "recommendedStage": "grade-3",
+      "priority": 8,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-3-1-05",
+      "sourceCourseName": "형법각론(2)",
+      "recommendedStage": "grade-3",
+      "priority": 9,
+      "isRequired": false,
+      "sourcePage": 15
+    },
+    {
+      "trackCode": "police-officer-track",
+      "curriculumCourseLocalKey": "law-3-1-08",
+      "sourceCourseName": "경찰헌법",
+      "recommendedStage": "grade-3",
+      "priority": 10,
+      "isRequired": false,
+      "sourcePage": 15
+    }
+  ],
+  "unresolvedItems": [
+    {
+      "type": "course_match",
+      "sourceValue": [
+        "법학개론",
+        "LEGAL ENGLISH 1(영어강의)",
+        "대학생활과진로설계",
+        "민법총칙",
+        "형법총론(1)",
+        "LEGAL COMMUNICATION AND WRITING SKILLS(영어강의)",
+        "물권법",
+        "헌법(1)",
+        "형법총론(2)",
+        "법협상론(1)",
+        "헌법(2)",
+        "형법각론(1)",
+        "소비자분쟁해결론",
+        "행정법기초",
+        "형사소송법(1)",
+        "국제거래법",
+        "채권법총론",
+        "형법각론(2)",
+        "형사절차와인권",
+        "경찰헌법",
+        "노동법(1)",
+        "법학프로젝트",
+        "어음수표법",
+        "채권법각론",
+        "형사소송법(2)",
+        "Introduction to Intellectual Property Law(영어강의)",
+        "법학전공글쓰기",
+        "개별행정법이해",
+        "노동법(2)",
+        "통치기구론",
+        "국제법",
+        "보험해상법",
+        "가족법",
+        "환경법",
+        "국제통상법",
+        "민사집행법",
+        "헌법소송법",
+        "전자상거래법",
+        "민사법세미나",
+        "국제인권법"
+      ],
+      "reason": "No exact DB courses name/code match; nullable courseId preserves unresolved mapping.",
+      "sourcePage": 7,
+      "recommendedResolution": "Compare with official catalog including department, code, and credits before seed.",
+      "blocksImport": false
+    },
+    {
+      "type": "credits_unknown",
+      "sourceValue": "curriculum course credits",
+      "reason": "Course-level credits are not structured in law.json/source map.",
+      "sourcePage": 7,
+      "recommendedResolution": "Confirm official curriculum or courses catalog credits.",
+      "blocksImport": true
+    },
+    {
+      "type": "admission_scope_unknown",
+      "sourceValue": "2024/2014 and other admission-year scopes",
+      "reason": "Rules have different scopes and cannot be collapsed to one version range.",
+      "sourcePage": 8,
+      "recommendedResolution": "Create admission-year versions or approved exception precedence.",
+      "blocksImport": true
+    },
+    {
+      "type": "required_status_unknown",
+      "sourceValue": [
+        "LEGAL ENGLISH 1(영어강의)",
+        "민법총칙",
+        "형법총론(1)",
+        "LEGAL COMMUNICATION AND WRITING SKILLS(영어강의)",
+        "물권법",
+        "헌법(1)",
+        "형법총론(2)",
+        "법협상론(1)",
+        "담보물권법",
+        "상법총론",
+        "헌법(2)",
+        "형법각론(1)",
+        "소비자분쟁해결론",
+        "행정법기초",
+        "형사소송법(1)",
+        "회사법",
+        "국제거래법",
+        "채권법총론",
+        "형법각론(2)",
+        "형사절차와인권",
+        "행정절차와행정구제",
+        "경찰헌법",
+        "노동법(1)",
+        "법학프로젝트",
+        "어음수표법",
+        "채권법각론",
+        "형사소송법(2)",
+        "민사소송법(1)",
+        "Introduction to Intellectual Property Law(영어강의)",
+        "법학전공글쓰기",
+        "개별행정법이해",
+        "노동법(2)",
+        "통치기구론",
+        "국제법",
+        "보험해상법",
+        "가족법",
+        "민사소송법(2)",
+        "환경법",
+        "국제통상법",
+        "민사집행법",
+        "헌법소송법",
+        "전자상거래법",
+        "민사법세미나",
+        "국제인권법"
+      ],
+      "reason": "Most courses do not have explicit required/elective status in the source.",
+      "sourcePage": 7,
+      "recommendedResolution": "Confirm status from official curriculum; keep unspecified rows as other.",
+      "blocksImport": false
+    },
+    {
+      "type": "language_scope_unknown",
+      "sourceValue": "law-language-2014",
+      "reason": "Source exceptions exist but authoritative student assignment data is not connected.",
+      "sourcePage": 8,
+      "recommendedResolution": "Confirm student type and primary-major applicability.",
+      "blocksImport": true
+    },
+    {
+      "type": "graduation_exam_unknown",
+      "sourceValue": "graduation thesis/exam, chapel/PF, department minimum credits",
+      "reason": "Not structured in law.json/source map.",
+      "sourcePage": 8,
+      "recommendedResolution": "Cross-check university common and department graduation sources.",
+      "blocksImport": true
+    },
+    {
+      "type": "career_track_course_match",
+      "sourceValue": [
+        "형사소송법"
+      ],
+      "reason": "Career table names such as criminal procedure do not exactly match curriculum names with course numbers.",
+      "sourcePage": 9,
+      "recommendedResolution": "Do not infer (1)/(2) mapping; confirm official catalog.",
+      "blocksImport": false
+    },
+    {
+      "type": "school_common_rule_conflict",
+      "sourceValue": "university common graduation rules",
+      "reason": "Department bluebook does not establish all school-wide general education rules.",
+      "sourcePage": null,
+      "recommendedResolution": "Merge only after official university rule review.",
+      "blocksImport": true
+    }
+  ]
+}
