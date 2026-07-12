@@ -74,7 +74,7 @@ Exact match는 read-only DB의 법학과 catalog에서 과목명과 학과가 �
 - `unresolved`: 40개 과목 매칭과 학점·입학연도·외국어 적용 범위·학교 공통 요건 및 일부 진로 과목 연결.
 - `excluded`: 0건. PDF의 학년·학기 과목을 임의로 제외하지 않았다.
 - `seedNow`: 0건. 확정 published seed는 만들 수 없다.
-- `seedAsDraft`: 구조 검토용 draft row로만 보존 가능하다. 이 단계에서는 seed SQL을 생성하거나 실행하지 않았다.
+- `seedAsDraft`: `supabase/seed/2026-law-curriculum-draft.sql`에 참고용 draft seed를 작성했다. 실제 실행은 보류된 career link 확인 후 별도 승인한다.
 - `holdForConfirmation`: published activation과 졸업학점 계산은 담당자·공식 catalog 확인 전 보류한다.
 - `blocksDraftSeed=false`, `blocksActivation=true`, `blocksGraduationCalculation=true`를 JSON metadata에 함께 기록했다.
 
@@ -100,4 +100,20 @@ Exact match는 read-only DB의 법학과 catalog에서 과목명과 학과가 �
 - publicationDate 추측: 없음
 - DB/migration/seed 변경: 없음
 
-1-D-3B는 **검토 진행 가능**하다. 다만 이 import는 draft/unresolved 상태이며, `blocksImport` 항목이 해결되고 담당자 검토가 끝나기 전에는 법학과 curriculum seed나 published version을 만들 수 없다. 1-D-3C seed SQL 작성·실행은 현재 범위에서 진행하지 않는다.
+## 법학과 draft seed의 career link 보류
+
+원문 career track course link는 총 123개다. 이 중 다음 5개는 원문 과목명이 `형사소송법`이지만 정확한 curriculum localKey가 없어 `형사소송법(1)` 또는 `형사소송법(2)`로 추정 매핑할 수 없다.
+
+| track | 원문 과목명 | 보류 사유 |
+| --- | --- | --- |
+| `law-school-bar-exam` | 형사소송법 | exact localKey 없음 |
+| `judicial-scrivener` | 형사소송법 | exact localKey 없음 |
+| `prosecution-drug-investigation-9th-grade` | 형사소송법 | exact localKey 없음 |
+| `court-clerical-9th-grade` | 형사소송법 | exact localKey 없음 |
+| `police-officer-track` | 형사소송법 | exact localKey 없음 |
+
+따라서 seed SQL은 `career_track_courses`에 저장 가능한 118개만 입력하고, 보류 5개는 version notes에 source link로 보존한다. NULL target row는 생성하지 않으며, 검증값은 source links 123개, seeded links 118개, held unresolved links 5개로 분리한다.
+
+`career_track_courses`의 target check가 `curriculum_course_id` 또는 `course_id`를 요구하므로, 5개 보류 링크가 해결되기 전에는 123개 전체를 DB row로 저장할 수 없다. seed는 이 사실을 유지하고 추정 매핑을 차단한다.
+
+1-D-3B import는 여전히 draft/unresolved 참고용이며, 공식 졸업 계산·학생 자동 배정·active 전환은 금지한다. 법학과 draft seed의 실제 실행은 5개 보류 링크의 authoritative mapping 확인 후 별도 승인한다.
