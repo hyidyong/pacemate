@@ -209,3 +209,14 @@
 
 4\. 기존 코드를 새 테이블 구조로 전환
 
+
+## 1-B-3 migration history 동기화 완료
+
+- 버전: `20260712000000`
+- `npx --yes supabase@2.109.1 migration list --linked` 확인 결과 local/remote history 일치
+- `20260712000000`: local applied, remote applied
+- migration repair로 remote history에 applied 처리 완료
+- foundation migration SQL 재실행 없음
+- 이번 확인 단계에서 schema, 기존 데이터, 앱 코드는 추가 변경 없음
+- 다음 단계: 1-C-0 demo session 및 server-only DB access 기반 구현
+
