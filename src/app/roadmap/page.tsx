@@ -8,6 +8,8 @@ import { getStudentOnboardingProfile, type StudentOnboardingProfile } from "@/se
 import { redirectNonStudent } from "@/services/role-guard.service";
 import { getApprovedRoadmapCourses } from "@/services/roadmap-revisions.service";
 import { getDemoProfile } from "@/services/session.service";
+import { getStudentWeeklyProgressForSession } from "@/services/student-weekly-progress.server";
+import { StudentWeeklyProgressPreview } from "@/components/roadmap/student-weekly-progress-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -93,9 +95,10 @@ function getPersonalizedSummary(onboarding: StudentOnboardingProfile | null) {
 export default async function RoadmapPage() {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
-  const [baseCourses, onboarding] = await Promise.all([
+  const [baseCourses, onboarding, weeklyProgress] = await Promise.all([
     getApprovedRoadmapCourses(),
     getStudentOnboardingProfile(profile),
+    profile?.role === "student" ? getStudentWeeklyProgressForSession() : Promise.resolve(null),
   ]);
   const courses = personalizeCourses(baseCourses, onboarding);
   const personalized = getPersonalizedSummary(onboarding);
@@ -130,6 +133,8 @@ export default async function RoadmapPage() {
         personalizationNotes={personalized.notes}
         totalCredit={roadmapSemester.totalCredit}
       />
+
+      {weeklyProgress ? <StudentWeeklyProgressPreview preview={weeklyProgress} /> : null}
     </AppShell>
   );
 }
