@@ -190,5 +190,22 @@
 
 3\. 실제 DB 구조 재검증
 
+
+## 1-B-2 실제 DB 적용 완료
+
+- 적용 migration: `supabase/migrations/20260712000000_weekly_roadmap_foundation.sql`
+- 적용 날짜: 2026-07-12 (Asia/Seoul)
+- 대상 프로젝트: Supabase `pacemate` (앱 환경의 project ref/URL과 일치)
+- 신규 테이블: `academic_terms`, `course_offerings`, `course_weekly_plans`, `student_course_progress`, `student_weekly_progress`
+- 추가 컬럼: `student_profiles.is_onboarded`, `professor_availability.specific_date`, `student_courses.offering_id`, `chat_sessions.offering_id`, `escalations.offering_id`, `counseling_requests.offering_id`
+- 기존 row count 보존: 적용 전후 동일 (`student_profiles 11`, `professor_availability 9`, `student_courses 6`, `chat_sessions 0`, `escalations 0`, `counseling_requests 3`)
+- RLS: 신규 테이블 5개 모두 활성화
+- 권한: `public`, `anon`, `authenticated` 직접 권한 없음
+- 정책: 신규 테이블 정책 없음; `auth.uid()` 정책 없음
+- 새 `SECURITY DEFINER` 함수 없음
+- Security Advisor: 기존 `professor_admin_tasks` permissive policy 경고 유지; 신규 security warning 없음. 신규 테이블의 RLS-no-policy INFO는 의도한 server-only 상태
+- Performance Advisor: progress offering FK 미인덱스 INFO가 확인되어 후속 최적화 대상으로 기록
+- 다음 단계: 1-C 서버 서비스 및 앱 코드 전환 (이번 단계에서는 진행하지 않음)
+
 4\. 기존 코드를 새 테이블 구조로 전환
 

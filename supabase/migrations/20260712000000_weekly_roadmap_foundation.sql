@@ -1,5 +1,5 @@
 -- PaceMate weekly roadmap foundation
--- 1-A draft only: do not apply directly to a remote database.
+-- 1-B-2 reviewed migration: apply only to the verified PaceMate project.
 -- This migration is intentionally additive and preserves existing rows.
 
 begin;
@@ -246,30 +246,60 @@ create index if not exists escalations_offering_idx
 create index if not exists counseling_requests_offering_idx
   on public.counseling_requests(offering_id);
 
-drop trigger if exists academic_terms_set_updated_at on public.academic_terms;
-create trigger academic_terms_set_updated_at
-before update on public.academic_terms
-for each row execute function public.set_updated_at();
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'academic_terms_set_updated_at' and not tgisinternal) then
+    raise exception 'Trigger academic_terms_set_updated_at already exists; review before applying';
+  end if;
+  create trigger academic_terms_set_updated_at
+  before update on public.academic_terms
+  for each row execute function public.set_updated_at();
+end
+$$;
 
-drop trigger if exists course_offerings_set_updated_at on public.course_offerings;
-create trigger course_offerings_set_updated_at
-before update on public.course_offerings
-for each row execute function public.set_updated_at();
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'course_offerings_set_updated_at' and not tgisinternal) then
+    raise exception 'Trigger course_offerings_set_updated_at already exists; review before applying';
+  end if;
+  create trigger course_offerings_set_updated_at
+  before update on public.course_offerings
+  for each row execute function public.set_updated_at();
+end
+$$;
 
-drop trigger if exists course_weekly_plans_set_updated_at on public.course_weekly_plans;
-create trigger course_weekly_plans_set_updated_at
-before update on public.course_weekly_plans
-for each row execute function public.set_updated_at();
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'course_weekly_plans_set_updated_at' and not tgisinternal) then
+    raise exception 'Trigger course_weekly_plans_set_updated_at already exists; review before applying';
+  end if;
+  create trigger course_weekly_plans_set_updated_at
+  before update on public.course_weekly_plans
+  for each row execute function public.set_updated_at();
+end
+$$;
 
-drop trigger if exists student_course_progress_set_updated_at on public.student_course_progress;
-create trigger student_course_progress_set_updated_at
-before update on public.student_course_progress
-for each row execute function public.set_updated_at();
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'student_course_progress_set_updated_at' and not tgisinternal) then
+    raise exception 'Trigger student_course_progress_set_updated_at already exists; review before applying';
+  end if;
+  create trigger student_course_progress_set_updated_at
+  before update on public.student_course_progress
+  for each row execute function public.set_updated_at();
+end
+$$;
 
-drop trigger if exists student_weekly_progress_set_updated_at on public.student_weekly_progress;
-create trigger student_weekly_progress_set_updated_at
-before update on public.student_weekly_progress
-for each row execute function public.set_updated_at();
+do $$
+begin
+  if exists (select 1 from pg_trigger where tgname = 'student_weekly_progress_set_updated_at' and not tgisinternal) then
+    raise exception 'Trigger student_weekly_progress_set_updated_at already exists; review before applying';
+  end if;
+  create trigger student_weekly_progress_set_updated_at
+  before update on public.student_weekly_progress
+  for each row execute function public.set_updated_at();
+end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- G. RLS baseline for the Supabase Auth transition.
