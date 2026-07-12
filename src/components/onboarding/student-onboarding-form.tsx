@@ -2,7 +2,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { saveStudentOnboarding } from "@/services/onboarding.actions";
 import { StudentType } from "@/services/onboarding.service";
-import { ElectronicEngineeringCurriculumPreview } from "@/components/onboarding/electronic-engineering-curriculum-preview";
+import { ElectronicEngineeringOnboardingWorkspace } from "@/components/onboarding/electronic-engineering-onboarding-workspace";
 import type { CurriculumPreview } from "@/types/curriculum";
 
 type StudentTypeOption = {
@@ -156,7 +156,11 @@ export function StudentOnboardingForm({
         </div>
       </section>
 
-      <ElectronicEngineeringCurriculumPreview preview={electronicCurriculumPreview} />
+      <ElectronicEngineeringOnboardingWorkspace
+        preview={electronicCurriculumPreview}
+        currentGrade={typeof savedProfile?.grade === "number" ? savedProfile.grade : null}
+        currentSemester={savedProfile?.semester === 1 || savedProfile?.semester === 2 ? savedProfile.semester : null}
+      />
 
       <div className="onboarding-submit-bar">
         <Button type="submit">

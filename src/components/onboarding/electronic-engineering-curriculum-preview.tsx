@@ -6,13 +6,16 @@ import type { CurriculumPreview } from "@/types/curriculum";
 
 type ElectronicEngineeringCurriculumPreviewProps = {
   preview: CurriculumPreview | null;
+  checkedCourseIds: ReadonlySet<string>;
+  onToggleCourse: (courseId: string) => void;
 };
 
 export function ElectronicEngineeringCurriculumPreview({
   preview,
+  checkedCourseIds,
+  onToggleCourse,
 }: ElectronicEngineeringCurriculumPreviewProps) {
   const [selectedDepartment, setSelectedDepartment] = useState("electronic-engineering");
-  const [checkedCourseIds, setCheckedCourseIds] = useState<Set<string>>(() => new Set());
 
   const coursesByGrade = useMemo(() => {
     if (!preview) {
@@ -29,18 +32,6 @@ export function ElectronicEngineeringCurriculumPreview({
 
     return [...groups.entries()].sort(([left], [right]) => left - right);
   }, [preview]);
-
-  function toggleCourse(courseId: string) {
-    setCheckedCourseIds((current) => {
-      const next = new Set(current);
-      if (next.has(courseId)) {
-        next.delete(courseId);
-      } else {
-        next.add(courseId);
-      }
-      return next;
-    });
-  }
 
   return (
     <section className="onboarding-panel curriculum-preview-panel" aria-labelledby="curriculum-preview-title">
@@ -114,7 +105,7 @@ export function ElectronicEngineeringCurriculumPreview({
                         <input
                           type="checkbox"
                           checked={checked}
-                          onChange={() => toggleCourse(course.id)}
+                          onChange={() => onToggleCourse(course.id)}
                         />
                         <span className="curriculum-course-checkmark" aria-hidden="true">
                           {checked ? <Check size={15} /> : null}
