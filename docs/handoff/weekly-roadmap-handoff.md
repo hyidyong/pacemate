@@ -1,0 +1,194 @@
+\# PaceMate 주간 로드맵·교수 리포트 인수인계
+
+
+
+\## 현재 완료된 작업
+
+
+
+\- 학생 대시보드 반응형 탭 및 학사일정
+
+\- 학생 알림 가로 슬라이더
+
+\- 교수 모바일 햄버거 메뉴 통합
+
+\- 교수 홈 상담 요청 중복 제거
+
+\- 교수 홈 시간표·학사일정·포털 바로가기
+
+\- 교수 포털 모바일 아이콘 + 한글 이름
+
+\- 0단계 코드 및 Supabase 실제 DB 감사
+
+
+
+\## DB 변경 여부
+
+
+
+0단계에서는 Supabase 실제 DB를 읽기 전용으로만 조사했다.
+
+
+
+\- DB 변경 없음
+
+\- migration 적용 없음
+
+\- commit/push 없음
+
+\- 실제 데이터 수정 없음
+
+
+
+\## 0단계 핵심 감사 결과
+
+
+
+\### 코드와 실제 DB 불일치
+
+
+
+1\. 코드가 `student\_courses.current\_week`를 사용하지만 실제 DB에는 컬럼이 없음
+
+2\. 코드가 `student\_mission\_progress`를 사용하지만 실제 DB에는 테이블이 없음
+
+3\. `student\_profiles.is\_onboarded`가 실제 DB에 없음
+
+4\. `professor\_availability.specific\_date`가 실제 DB에 없음
+
+5\. `chat\_sessions`, `escalations`, `counseling\_requests`에 과목 또는 개설 강좌 연결이 없음
+
+6\. `schema.sql`과 실제 Supabase DB 사이에 큰 drift가 있음
+
+7\. 실제 migration 파일이 없고 `schema.sql` 단일 파일 중심
+
+8\. 현재 인증은 Supabase Auth가 아니라 demo profile cookie 기반
+
+
+
+\### 보안 문제
+
+
+
+\- anon 정책이 넓게 설정되어 있음
+
+\- student\_profiles와 student\_courses의 개인 데이터가 과도하게 열릴 가능성
+
+\- counseling\_requests anon select가 넓음
+
+\- 단순 profile id 쿠키를 사용자 인증 근거로 사용
+
+\- 교수 리포트에 더미 데이터가 섞일 위험
+
+\- 학생 개인 메모와 학습 상태 저장 전 RLS 및 서버 접근 구조 정리가 필요
+
+
+
+\## 확정한 아키텍처 방향
+
+
+
+1\. `student\_courses.current\_week`는 추가하지 않는다.
+
+2\. 공식 수업 주차는 개강일과 현재 날짜로 계산한다.
+
+3\. 존재하지 않는 `student\_mission\_progress`를 만들지 않는다.
+
+4\. 학생 주차 기록은 `student\_weekly\_progress`로 통합한다.
+
+5\. 다음 테이블 구조를 사용한다.
+
+
+
+\- academic\_terms
+
+\- course\_offerings
+
+\- course\_weekly\_plans
+
+\- student\_course\_progress
+
+\- student\_weekly\_progress
+
+
+
+6\. chat\_sessions, escalations, counseling\_requests에는 nullable `offering\_id`를 추가한다.
+
+7\. 기존 데이터의 offering\_id는 강제로 추정하지 않고 null로 보존한다.
+
+8\. private\_note는 학생만 열람한다.
+
+9\. 교수에게는 담당 강좌의 익명 집계만 제공한다.
+
+10\. 현재 demo 로그인 UI는 유지하되 서명된 서버 세션으로 보강한다.
+
+11\. 실제 공개 전에는 Supabase Auth 전환이 필요하다.
+
+
+
+\## 다음 작업
+
+
+
+다음 작업은 `1-A 단계`이다.
+
+
+
+1-A에서는:
+
+
+
+\- migration SQL 파일 작성
+
+\- TypeScript 타입 작성
+
+\- 서버 서비스 인터페이스 설계
+
+\- architecture 문서 작성
+
+
+
+까지만 한다.
+
+
+
+아직 실제 Supabase DB에는 적용하지 않는다.
+
+
+
+\## 1-A 작업 시 금지사항
+
+
+
+\- Supabase DB 쓰기 금지
+
+\- migration 실제 적용 금지
+
+\- DROP TABLE 금지
+
+\- TRUNCATE 금지
+
+\- 기존 데이터 DELETE 금지
+
+\- anon에게 민감 테이블 전체 권한 부여 금지
+
+\- USING(true), WITH CHECK(true) 정책 금지
+
+\- service role 키 클라이언트 노출 금지
+
+\- commit/push 자동 실행 금지
+
+
+
+\## 1-A 이후
+
+
+
+1\. migration SQL 사람이 검토
+
+2\. Supabase MCP 또는 SQL Editor로 직접 적용
+
+3\. 실제 DB 구조 재검증
+
+4\. 기존 코드를 새 테이블 구조로 전환
+
