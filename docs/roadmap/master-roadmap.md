@@ -268,3 +268,10 @@ Bluebook
 31. 학생 production에는 승인된 계획과 비-demo 데이터만 노출한다.
 32. DB·migration·seed·UI 변경은 각 단계의 명시적 승인 후에만 수행한다.
 33. 이번 마스터 로드맵 작성에서는 DB 변경, seed 실행, commit/push를 하지 않았다.
+
+## 13. 2026-2 교수 demo 연결 정책
+
+- 회사법만 교수 weekly plan 승인 및 학기 리포트 live demo 대상이다.
+- 행정절차와행정구제는 weekly plan 데이터 구조 확인용으로 유지하며, 로그인 교수 연결은 보류한다.
+- 정식 운영에서는 실제 교수 계정별로 각 담당 교수 row와 offering을 별도로 연결해야 한다.
+- 연결 reference seed는 `supabase/seed/2026-demo-professor-offering-link.sql`에 분리하고, migration·auth user 생성·학생/weekly plan/curriculum/report 데이터 생성과 구분한다.
