@@ -60,18 +60,18 @@ Bluebook
 - [x] 1-D-4A/1-D-4A-1 전자공학과 이미지 도식 보정 — PDF 4쪽(인쇄 쪽수 3)의 이미지형 도식에서 41개 고유 과목을 추출했다.
 - [x] 1-D-4B 전자공학과 정확성 검토 — exact DB match 0개, 학점·코드·정확한 학기·필수 여부 미확인, draft seed 가능/active 전환 보류로 확정했다. 관련: `docs/architecture/electronic-engineering-curriculum-import-review.md`.
 - [x] 1-D-5A 전자공학과 draft seed SQL 작성 — 41개 과목과 참고 요건을 넣는 검토·재현용 SQL을 작성했지만 실행하지 않았다. 관련: `supabase/seed/2026-electronic-engineering-curriculum-draft.sql`.
-- [~] 1-D-5B-0 admission year nullable migration 작성 — draft의 `admission_year_from/to` NULL을 허용하고 active의 시작연도 NULL을 차단하는 새 migration을 CLI로 생성했다. 관련: `supabase/migrations/20260712134054_allow_null_admission_year_for_draft_curricula.sql`, `docs/architecture/curriculum-draft-admission-year-migration-review.md`.
-- [ ] 1-D-5B-1 migration 안전성 검토 — preflight, constraint, partial unique index, 기존 데이터 불변성을 최종 확인한다.
-- [ ] 1-D-5B-2 migration 실제 DB 적용 — 안전성 검토 후에만 단일 적용한다. 현재 원격에는 아직 적용하지 않았다.
-- [ ] 1-D-5C 전자공학과 draft seed 적용 — 1-D-5B-2 성공 및 seed preflight 통과 후에만 draft로 입력한다.
+- [x] 1-D-5B-0 admission year nullable migration 작성 — draft의 `admission_year_from/to` NULL을 허용하고 active의 시작연도 NULL을 차단하는 migration을 생성했다. 관련: `supabase/migrations/20260712134054_allow_null_admission_year_for_draft_curricula.sql`, `docs/architecture/curriculum-draft-admission-year-migration-review.md`.
+- [x] 1-D-5B-1 migration 안전성 검토 — preflight, constraint, partial unique index, 기존 데이터 불변성을 확인했다.
+- [x] 1-D-5B-2 migration 실제 DB 적용 — 원격에 단일 적용 후 nullable·constraint·index·RLS를 read-only 검증했다.
+- [x] 1-D-5C 전자공학과 draft seed 적용 — department reference seed 이후 draft version 1건, 과목 41개, requirement 12개, exception 8개를 반영하고 안전 invariant를 검증했다.
 - [ ] 1-D-5D 법학과 참고용 draft seed — exact match와 source 근거를 재확인한 후 별도 seed로 관리한다.
 - [!] 공식 졸업 계산 — 학점·입학연도·필수 여부·학교 공통 규정이 확정되기 전까지 학생에게 공식 판정을 제공하지 않는다.
 
-## 5. 현재 단계: 1-D-5B-0
+## 5. 현재 단계: 1-D-5C-9 완료
 
 ### 목적
 
-전자공학과 이미지 도식 기반 draft curriculum을 저장할 수 있도록 admission year 범위 제약을 보완한다. `sourceAcademicYear=2026`은 원본 자료 연도이며, 학생 입학연도 적용 범위와 동일하다고 추정하지 않는다.
+전자공학과 이미지 도식 기반 draft curriculum을 실제 DB에 참고용으로 저장했다. `sourceAcademicYear=2026`은 원본 자료 연도이며, 학생 입학연도 적용 범위와 동일하다고 추정하지 않는다.
 
 ### 입력과 완료 조건
 
@@ -80,7 +80,7 @@ Bluebook
 - active는 `admission_year_from`이 NULL이면 저장할 수 없어야 한다.
 - 기존 `20260712120940_curriculum_graduation_foundation.sql`은 변경하지 않는다.
 - 전자공학과 검토용 seed SQL은 NULL 범위를 사용하도록 정리돼 있다.
-- migration 적용과 seed 실행은 이 단계에서 하지 않았다.
+- migration과 draft seed 적용 후 원격 read-only 검증을 완료했다.
 
 ### 금지 범위
 
@@ -92,10 +92,10 @@ Bluebook
 
 ### Phase A — Curriculum Draft 저장
 
-- [~] 1-D-5B-0 admission year nullable migration 작성
-- [ ] 1-D-5B-1 migration 안전성 검토
-- [ ] 1-D-5B-2 migration 실제 DB 적용
-- [ ] 1-D-5C 전자공학과 draft seed 실제 적용
+- [x] 1-D-5B-0 admission year nullable migration 작성
+- [x] 1-D-5B-1 migration 안전성 검토
+- [x] 1-D-5B-2 migration 실제 DB 적용
+- [x] 1-D-5C 전자공학과 draft seed 실제 적용
 - [ ] 1-D-5D 법학과 참고용 draft seed 작성·적용
 
 ### Phase B — 학생 온보딩·장기 로드맵
@@ -216,7 +216,7 @@ Bluebook
 | 6 | 3-A 이후 weekly approval | 승인본만 production에 노출되는 transaction과 소유권 검증 구현 |
 | 7 | Phase E/F | 별도 demo seed와 `semester_reports` schema를 검토·적용한 뒤 익명 리포트 시연 |
 
-현재 즉시 진행 가능한 다음 단계는 1-D-5B-1 안전성 검토이며, 1-D-5B-2 적용 전까지 전자공학과 draft seed 실행은 보류한다.
+현재 즉시 진행 가능한 다음 단계는 1-D-5D 법학과 참고용 draft seed 검토이며, 전자공학과 active 전환·학생 배정·공식 졸업 계산은 보류한다.
 
 ## 11. 관련 산출물
 
@@ -243,25 +243,28 @@ Bluebook
 6. curriculum/graduation foundation migration은 원격에 20260712120940으로 적용됐다.
 7. 신규 curriculum/graduation 테이블은 현재 0건이다.
 8. 로컬 migration history는 원격 version과 정렬돼 있다.
-9. 20260712134054 migration은 draft admission year NULL을 허용하도록 생성됐다.
-10. 1-D-5B-0 migration은 아직 원격에 적용하지 않았다.
-11. 다음 작업은 1-D-5B-1 안전성 검토다.
-12. 안전성 검토 전 1-D-5B-2 적용을 실행하지 않는다.
-13. 전자공학과 draft seed SQL은 작성됐지만 실행하지 않았다.
-14. 전자공학과 seed는 1-D-5B-2 후 1-D-5C에서 수행한다.
-15. 법학과 참고용 seed는 전자공학과 seed와 분리된 1-D-5D다.
-16. `course_id` NULL은 draft에서 허용하고 active에서 exact match를 재검증한다.
-17. 공식 졸업 판정은 두 학과 모두 보류 상태다.
-18. student onboarding과 장기 로드맵은 Phase B의 후속 작업이다.
-19. 교수 weekly draft preview는 server-only이며 담당 offering 소유권 필터가 있다.
-20. 교수 승인 mutation과 approved DB 반영은 아직 구현하지 않았다.
-21. `course_weekly_plans`에는 승인된 주차 데이터가 아직 없다.
-22. 2026-2 term과 법학과 offering 2건은 실제 DB에 존재한다.
-23. 법학과 student_courses offering 연결은 0건이다.
-24. 합성 학생·주간 진행 데이터는 별도 demo seed로 관리해야 한다.
-25. `semester_reports` schema와 report demo 데이터는 아직 별도 작업이다.
-26. 리포트는 학기 종료 후 담당 교수만 생성하고 익명 집계한다.
-27. 실제 academic_terms 날짜를 demo 때문에 변경하지 않는다.
-28. 학생 production에는 승인된 계획과 비-demo 데이터만 노출한다.
-29. DB·migration·seed·UI 변경은 각 단계의 명시적 승인 후에만 수행한다.
-30. 이번 마스터 로드맵 작성에서는 DB 변경, seed 실행, commit/push를 하지 않았다.
+9. 20260712134054 migration은 원격에 적용됐고 read-only 검증됐다.
+10. 전자공학과 department reference row 1건이 생성됐다.
+11. 전자공학과 draft curriculum version 1건이 저장됐다.
+12. 전자공학과 draft 과목 41개, requirement 12개, exception 8개가 검증됐다.
+13. admission year 두 값은 NULL이고 `source_verified=false`다.
+14. course_id·credits·recommended_semester는 모두 NULL이고 `is_required=false`다.
+15. active curriculum, student assignment, electronic course catalog row는 생성되지 않았다.
+16. curriculum 관련 RLS는 활성이고 policy와 anon/authenticated grant는 없다.
+17. 현재 다음 단계는 법학과 참고용 draft seed 검토(1-D-5D)다.
+18. 법학과 참고용 seed는 전자공학과 seed와 분리된 1-D-5D다.
+19. `course_id` NULL은 draft에서 허용하고 active에서 exact match를 재검증한다.
+20. 공식 졸업 판정은 두 학과 모두 보류 상태다.
+21. student onboarding과 장기 로드맵은 Phase B의 후속 작업이다.
+22. 교수 weekly draft preview는 server-only이며 담당 offering 소유권 필터가 있다.
+23. 교수 승인 mutation과 approved DB 반영은 아직 구현하지 않았다.
+24. `course_weekly_plans`에는 승인된 주차 데이터가 아직 없다.
+25. 2026-2 term과 법학과 offering 2건은 실제 DB에 존재한다.
+26. 법학과 student_courses offering 연결은 0건이다.
+27. 합성 학생·주간 진행 데이터는 별도 demo seed로 관리해야 한다.
+28. `semester_reports` schema와 report demo 데이터는 아직 별도 작업이다.
+29. 리포트는 학기 종료 후 담당 교수만 생성하고 익명 집계한다.
+30. 실제 academic_terms 날짜를 demo 때문에 변경하지 않는다.
+31. 학생 production에는 승인된 계획과 비-demo 데이터만 노출한다.
+32. DB·migration·seed·UI 변경은 각 단계의 명시적 승인 후에만 수행한다.
+33. 이번 마스터 로드맵 작성에서는 DB 변경, seed 실행, commit/push를 하지 않았다.

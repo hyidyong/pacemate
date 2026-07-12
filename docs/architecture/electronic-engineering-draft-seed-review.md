@@ -82,4 +82,21 @@ where curriculum_version_id = :version_id;
 
 `blocksActivation=true`, `blocksGraduationCalculation=true`를 유지한다. `blocksDraftSeed=false`는 41개 과목의 JSON draft 구조와 seed template 구성이 가능하다는 뜻이며, 실제 DB 적용은 admission-year 범위와 department FK 확인 이후에만 가능하다.
 
-1-D-5B 실제 적용 검토는 **migration 적용 후 가능**하다. admission-year 범위는 계속 NULL로 보존하고, active 전환·학생 자동 배정·공식 졸업계산은 여전히 금지한다. 이번 단계에서는 migration과 seed SQL을 실행하지 않았다.
+## 실제 적용 결과 (1-D-5C-9)
+
+원격 DB read-only 검증 결과, 전자공학과 draft curriculum seed가 다음과 같이 반영됐다.
+
+- curriculum version: 1건, `status=draft`
+- version id: `0d9d82b3-2794-4a83-842c-542cb64bb2c6`
+- `admission_year_from=NULL`, `admission_year_to=NULL`
+- `source_verified=false`
+- `curriculum_courses=41`
+- `curriculum_requirements=12`
+- `curriculum_requirement_exceptions=8`
+- 41개 과목 모두 `course_id`, `credits`, `recommended_semester`가 NULL이고 `is_required=false`
+- active curriculum 0건
+- `student_curriculum_assignments` 관련 row 0건
+- 전자공학과 course catalog row 0건
+- curriculum 관련 9개 테이블 RLS 활성, policy 0건, anon/authenticated grant 0건
+
+seed 실행은 추가로 수행하지 않았으며, active 전환·학생 자동 배정·공식 졸업 계산은 계속 금지한다. 이후 단계에서는 본 draft를 참고 데이터로만 사용한다.
