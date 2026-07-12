@@ -5,6 +5,38 @@
 begin;
 
 -- ---------------------------------------------------------------------------
+-- 0. Fail closed when an expected object already exists with the wrong shape.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  item record;
+  actual_udt text;
+begin
+  for item in
+    select * from (values
+      ('student_profiles', 'is_onboarded', 'bool'),
+      ('professor_availability', 'specific_date', 'date'),
+      ('student_courses', 'offering_id', 'uuid'),
+      ('chat_sessions', 'offering_id', 'uuid'),
+      ('escalations', 'offering_id', 'uuid'),
+      ('counseling_requests', 'offering_id', 'uuid')
+    ) as expected(table_name, column_name, udt_name)
+  loop
+    select c.udt_name into actual_udt
+    from information_schema.columns c
+    where c.table_schema = 'public'
+      and c.table_name = item.table_name
+      and c.column_name = item.column_name;
+
+    if actual_udt is not null and actual_udt <> item.udt_name then
+      raise exception 'Existing public.%.% has type %, expected %',
+        item.table_name, item.column_name, actual_udt, item.udt_name;
+    end if;
+  end loop;
+end
+$$;
+
+-- ---------------------------------------------------------------------------
 -- A. Restore columns referenced by the current application.
 -- ---------------------------------------------------------------------------
 alter table public.student_profiles
@@ -12,6 +44,9 @@ alter table public.student_profiles
 
 alter table public.professor_availability
   add column if not exists specific_date date;
+
+alter table public.professor_availability
+  alter column day_of_week drop not null;
 
 alter table public.student_courses
   add column if not exists offering_id uuid;
@@ -39,8 +74,7 @@ create table if not exists public.academic_terms (
   is_active boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint academic_terms_date_order check (starts_on <= ends_on),
-  constraint academic_terms_school_semester_key unique (school_id, semester_label)
+  constraint academic_terms_date_order check (starts_on <= ends_on)
 );
 
 create table if not exists public.course_offerings (
@@ -55,6 +89,14 @@ create table if not exists public.course_offerings (
   updated_at timestamptz not null default now(),
   constraint course_offerings_date_order check (starts_on is null or ends_on is null or starts_on <= ends_on)
 );
+
+create unique index if not exists academic_terms_school_semester_idx
+  on public.academic_terms(school_id, semester_label)
+  where school_id is not null;
+
+create unique index if not exists academic_terms_global_semester_idx
+  on public.academic_terms(semester_label)
+  where school_id is null;
 
 create unique index if not exists course_offerings_identity_idx
   on public.course_offerings(course_id, professor_id, term_id, coalesce(section_label, ''));
@@ -166,6 +208,20 @@ begin
 end
 $$;
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'professor_availability_date_or_day'
+      and conrelid = 'public.professor_availability'::regclass
+  ) then
+    alter table public.professor_availability
+      add constraint professor_availability_date_or_day
+      check (day_of_week is not null or specific_date is not null);
+  end if;
+end
+$$;
+
 -- ---------------------------------------------------------------------------
 -- F. Indexes and updated_at triggers.
 -- ---------------------------------------------------------------------------
@@ -216,8 +272,9 @@ before update on public.student_weekly_progress
 for each row execute function public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
--- G. RLS/GRANT baseline for the Supabase Auth transition.
+-- G. RLS baseline for the Supabase Auth transition.
 -- Demo-cookie access remains server-only and is not represented by anon RLS.
+-- No direct Data API grants or auth.uid() policies are created in 1-B-1.
 -- ---------------------------------------------------------------------------
 alter table public.academic_terms enable row level security;
 alter table public.course_offerings enable row level security;
@@ -225,61 +282,9 @@ alter table public.course_weekly_plans enable row level security;
 alter table public.student_course_progress enable row level security;
 alter table public.student_weekly_progress enable row level security;
 
-revoke all on public.academic_terms from anon;
-revoke all on public.course_offerings from anon;
-revoke all on public.course_weekly_plans from anon;
-revoke all on public.student_course_progress from anon;
-revoke all on public.student_weekly_progress from anon;
-
-grant select on public.academic_terms to authenticated;
-grant select on public.course_offerings, public.course_weekly_plans to authenticated;
-grant select, insert, update on public.student_course_progress, public.student_weekly_progress to authenticated;
-
-drop policy if exists "authenticated read academic terms" on public.academic_terms;
-create policy "authenticated read academic terms"
-on public.academic_terms for select to authenticated
-using (true);
-
-drop policy if exists "authenticated read course offerings" on public.course_offerings;
-create policy "authenticated read course offerings"
-on public.course_offerings for select to authenticated
-using (
-  exists (
-    select 1 from public.student_courses sc
-    where sc.offering_id = course_offerings.id
-      and sc.student_id = (select auth.uid())
-  )
-  or exists (
-    select 1 from public.professors p
-    where p.id = course_offerings.professor_id
-      and p.profile_id = (select auth.uid())
-  )
-);
-
-drop policy if exists "authenticated read course weekly plans" on public.course_weekly_plans;
-create policy "authenticated read course weekly plans"
-on public.course_weekly_plans for select to authenticated
-using (
-  exists (
-    select 1 from public.course_offerings co
-    where co.id = course_weekly_plans.offering_id
-      and (
-        exists (select 1 from public.student_courses sc where sc.offering_id = co.id and sc.student_id = (select auth.uid()))
-        or exists (select 1 from public.professors p where p.id = co.professor_id and p.profile_id = (select auth.uid()))
-      )
-  )
-);
-
-drop policy if exists "students manage own course progress" on public.student_course_progress;
-create policy "students manage own course progress"
-on public.student_course_progress for all to authenticated
-using (student_id = (select auth.uid()))
-with check (student_id = (select auth.uid()));
-
-drop policy if exists "students manage own weekly progress" on public.student_weekly_progress;
-create policy "students manage own weekly progress"
-on public.student_weekly_progress for all to authenticated
-using (student_id = (select auth.uid()))
-with check (student_id = (select auth.uid()));
+revoke all on public.academic_terms, public.course_offerings,
+  public.course_weekly_plans, public.student_course_progress,
+  public.student_weekly_progress
+  from public, anon, authenticated;
 
 commit;

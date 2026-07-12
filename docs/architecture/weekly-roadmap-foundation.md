@@ -44,7 +44,7 @@ academic_terms
 
 ## 인증과 RLS 방향
 
-현재 앱은 `pacemate_profile_id` demo cookie를 사용하므로 이번 migration은 이를 RLS의 근거로 사용하지 않는다. 새 테이블은 `anon` 권한을 revoke하고, Supabase Auth 전환 이후 사용할 `authenticated` 정책만 초안으로 둔다. 학생 progress는 `auth.uid() = student_id`로 제한한다. 교수는 담당 offering의 weekly plan을 읽을 수 있지만 학생의 `private_note`에는 직접 권한을 주지 않는다.
+현재 앱은 `pacemate_profile_id` demo cookie를 사용하므로 이번 migration은 이를 RLS의 근거로 사용하지 않는다. 새 테이블은 RLS만 활성화하고 `public`, `anon`, `authenticated` 직접 권한과 정책을 부여하지 않는다. 따라서 publishable/anon Data API에서는 새 테이블이 조회되지 않으며, 1-C에서 server-only 접근 계층을 먼저 구현해야 한다. Supabase Auth 전환 이후 별도 migration에서 학생 progress를 `auth.uid() = student_id`로 제한하고, 교수는 담당 offering의 weekly plan만 읽도록 정책을 추가한다. 학생의 `private_note`에는 직접 권한을 주지 않는다.
 
 Supabase Auth 전환 전에는 새 테이블을 호출하는 server-only 서비스가 세션의 profile id, role, 담당 offering을 별도로 검증해야 한다. service role 사용은 필요한 최소 함수 범위로만 제한하고 브라우저에 노출하지 않는다.
 
@@ -56,7 +56,15 @@ Supabase Auth 전환 전에는 새 테이블을 호출하는 server-only 서비�
 4. 1-C에서 서버 서비스 구현과 기존 dashboard 호출부 전환
 5. 데이터 품질을 확인한 뒤에만 선택적 offering backfill 검토
 
-이 migration은 additive 구조다. 문제가 생기면 새 테이블을 참조하는 애플리케이션 코드가 없는지 확인한 뒤, 승인된 rollback migration으로 새 constraint·index·table을 역순 제거한다. 원격 DB에서 임의 `DROP`, `TRUNCATE`, 기존 row `DELETE`를 실행하지 않는다.
+## 실제 DB 1-B-1 읽기 검토 결과
+
+읽기 전용 Supabase MCP 조회 기준으로 현재 프로젝트에는 `academic_terms`, `course_offerings`, `course_weekly_plans`, `student_course_progress`, `student_weekly_progress`가 아직 없다. 다음 drift 컬럼도 실제 DB에 없다: `student_profiles.is_onboarded`, `student_courses.offering_id`, `chat_sessions.offering_id`, `escalations.offering_id`, `counseling_requests.offering_id`, `professor_availability.specific_date`.
+
+`student_courses`, `chat_sessions`, `escalations`, `counseling_requests`의 기존 FK는 확인되었고 모두 uuid 대상이다. 기존 `professor_availability.day_of_week`는 실제 DB에서 nullable이 아니므로 특정 날짜 슬롯을 허용하려면 migration에서 nullable로 바꾸고 `day_of_week` 또는 `specific_date` 중 하나를 요구하는 check를 추가해야 한다.
+
+현재 migration 목록에는 1-A foundation migration이 아직 적용되어 있지 않다. 보안 advisor는 기존 `professor_admin_tasks`의 authenticated `USING(true)/WITH CHECK(true)` 정책을 경고하고 있으며, 이번 migration에서는 이를 수정하지 않는다. 해당 보안 migration은 별도 승인 작업이다.
+
+이 migration은 additive 구조다. 문제가 생기면 새 테이블을 참조하는 애플리케이션 코드가 없는지 확인한 뒤, 승인된 rollback migration으로 새 constraint·index·table을 역순 제거한다. 원격 DB에서 임의 `DROP`, `TRUNCATE`, 기존 row `DELETE`를 실행하지 않는다. 1-B-1에서는 SQL을 적용하지 않았으므로 rollback도 실행하지 않는다.
 
 ## 1-C 전환 대상
 
