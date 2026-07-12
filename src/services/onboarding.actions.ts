@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { readDemoSession } from "@/lib/auth/demo-session";
 import type { StudentType } from "@/services/onboarding.service";
 import type { DemoProfile } from "@/services/session.service";
 
@@ -16,8 +17,8 @@ const allowedStudentTypes = new Set<StudentType>([
 ]);
 
 async function getProfileId() {
-  const cookieStore = await cookies();
-  return cookieStore.get("pacemate_profile_id")?.value ?? null;
+  const session = await readDemoSession();
+  return session?.role === "student" ? session.profileId : null;
 }
 
 function text(value: FormDataEntryValue | null) {

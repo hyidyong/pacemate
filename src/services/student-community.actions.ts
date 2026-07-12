@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 import { supabase } from "@/lib/supabase/client";
+import { readDemoSession } from "@/lib/auth/demo-session";
 
 async function getProfileId() {
-  const cookieStore = await cookies();
-  return cookieStore.get("pacemate_profile_id")?.value ?? null;
+  const session = await readDemoSession();
+  return session?.role === "student" ? session.profileId : null;
 }
 
 function requiredText(value: FormDataEntryValue | null, fallback = "") {

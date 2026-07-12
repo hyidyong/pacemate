@@ -3,8 +3,12 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { authProvider } from "@/lib/auth";
+import {
+  createDemoSession as createSignedDemoSession,
+  destroyDemoSession,
+} from "@/lib/auth/demo-session";
 import { getRoleByUserId } from "@/lib/db";
-import { getRoleHomePath } from "@/services/session.service";
+import { getRoleHomePath, type DemoProfile } from "@/services/session.service";
 import { supabase } from "@/lib/supabase/client";
 import demoUsers from "@/config/demo-users.json";
 
@@ -83,16 +87,7 @@ export async function createDemoSession(formData: FormData) {
   }
 
   // 세션 설정
-  cookieStore.set("pacemate_profile_id", profileId, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-  });
-  cookieStore.set("pacemate_role", role, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-  });
+  await createSignedDemoSession({ profileId, role: role as DemoProfile["role"] });
 
   // 온보딩 중 저장된 정보가 있다면 적용
   await applyPendingOnboarding(profileId, role as any, cookieStore.get("pacemate_pending_student_types")?.value);
@@ -121,8 +116,9 @@ export async function createDemoSession(formData: FormData) {
 
 export async function clearDemoSession() {
   const cookieStore = await cookies();
-  cookieStore.delete("pacemate_profile_id");
-  cookieStore.delete("pacemate_role");
+  await destroyDemoSession();
+  cookieStore.delete("pacemate_pending_role");
+  cookieStore.delete("pacemate_pending_student_types");
   redirect("/login");
 }
 

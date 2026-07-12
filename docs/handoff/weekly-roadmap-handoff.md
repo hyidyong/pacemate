@@ -220,3 +220,16 @@
 - 이번 확인 단계에서 schema, 기존 데이터, 앱 코드는 추가 변경 없음
 - 다음 단계: 1-C-0 demo session 및 server-only DB access 기반 구현
 
+
+## 1-C-0 진행 결과
+
+- signed demo session 구현 완료 (`pacemate_session`, HMAC-SHA256, httpOnly, SameSite=Lax, production Secure, 8시간 TTL)
+- 기존 legacy profile/role cookie는 로그아웃·호환 fallback 용도로만 유지
+- `PACEMATE_SESSION_SECRET`, `SUPABASE_SERVICE_ROLE_KEY` 변수명을 `.env.local.example`에 문서화
+- server-only Supabase admin client 추가
+- 주간 로드맵 read service 4개 추가: active term, student offerings, weekly plan, student weekly progress
+- 모든 read 함수는 세션·role·student ownership 검증 수행
+- `offering_id` NULL 상태에서 자동 생성/backfill하지 않음
+- save/private note/shared feedback/AI guide/기존 AI 미션 전환/UI 연결은 수행하지 않음
+- 실제 DB/schema/data/migration history 추가 변경 없음
+- 다음 단계: 1-C-1 초기 term/offering 데이터 및 read 연결 검토

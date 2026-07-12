@@ -1,0 +1,243 @@
+import type { PostgrestError } from "@supabase/supabase-js";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { requireDemoSession, type DemoSession } from "@/lib/auth/demo-session";
+import type {
+  AcademicTerm,
+  CourseOffering,
+  CourseWeeklyPlan,
+  StudentWeeklyProgress,
+} from "@/types/weekly-roadmap";
+
+export type WeeklyRoadmapServiceErrorCode =
+  | "unauthenticated"
+  | "wrong_role"
+  | "offering_not_assigned"
+  | "database_configuration_missing"
+  | "database_read_failed";
+
+export class WeeklyRoadmapServiceError extends Error {
+  constructor(
+    public readonly code: WeeklyRoadmapServiceErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "WeeklyRoadmapServiceError";
+  }
+}
+
+function requireStudent(session: DemoSession) {
+  if (session.role !== "student") {
+    throw new WeeklyRoadmapServiceError(
+      "wrong_role",
+      "Weekly roadmap data is available to students only",
+    );
+  }
+}
+
+function isConfigurationError(error: PostgrestError) {
+  return error.code === "42P01" || error.code === "42703" || error.code === "PGRST205";
+}
+
+function throwDatabaseError(error: PostgrestError): never {
+  if (isConfigurationError(error)) {
+    throw new WeeklyRoadmapServiceError(
+      "database_configuration_missing",
+      "Weekly roadmap database configuration is unavailable",
+    );
+  }
+
+  throw new WeeklyRoadmapServiceError(
+    "database_read_failed",
+    "Weekly roadmap data could not be read",
+  );
+}
+
+function getAdminClient() {
+  try {
+    return createSupabaseAdminClient();
+  } catch {
+    throw new WeeklyRoadmapServiceError(
+      "database_configuration_missing",
+      "Server-only Supabase configuration is unavailable",
+    );
+  }
+}
+
+async function getSessionOrThrow() {
+  try {
+    return await requireDemoSession();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("PACEMATE_SESSION_SECRET")) {
+      throw new WeeklyRoadmapServiceError(
+        "database_configuration_missing",
+        "Signed session configuration is unavailable",
+      );
+    }
+
+    throw new WeeklyRoadmapServiceError("unauthenticated", "A valid session is required");
+  }
+}
+
+export async function getActiveAcademicTermForSession(): Promise<AcademicTerm | null> {
+  const session = await getSessionOrThrow();
+  requireStudent(session);
+  const supabase = getAdminClient();
+  const { data, error } = await supabase
+    .from("academic_terms")
+    .select("id, school_id, semester_label, starts_on, ends_on, timezone, total_weeks, is_active, created_at, updated_at")
+    .eq("is_active", true)
+    .order("starts_on", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throwDatabaseError(error);
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    schoolId: data.school_id,
+    semesterLabel: data.semester_label,
+    startsOn: data.starts_on,
+    endsOn: data.ends_on,
+    timezone: data.timezone,
+    totalWeeks: data.total_weeks,
+    isActive: data.is_active,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+export async function getStudentCourseOfferingsForSession(): Promise<CourseOffering[]> {
+  const session = await getSessionOrThrow();
+  requireStudent(session);
+  const supabase = getAdminClient();
+  const { data: enrollments, error: enrollmentError } = await supabase
+    .from("student_courses")
+    .select("offering_id")
+    .eq("student_id", session.profileId)
+    .not("offering_id", "is", null);
+
+  if (enrollmentError) throwDatabaseError(enrollmentError);
+
+  const offeringIds = (enrollments ?? [])
+    .map((enrollment) => enrollment.offering_id)
+    .filter((offeringId): offeringId is string => typeof offeringId === "string");
+
+  if (!offeringIds.length) return [];
+
+  const { data, error } = await supabase
+    .from("course_offerings")
+    .select("id, course_id, professor_id, term_id, section_label, starts_on, ends_on, created_at, updated_at")
+    .in("id", offeringIds)
+    .order("created_at", { ascending: false });
+
+  if (error) throwDatabaseError(error);
+
+  return (data ?? []).map((offering) => ({
+    id: offering.id,
+    courseId: offering.course_id,
+    professorId: offering.professor_id,
+    termId: offering.term_id,
+    sectionLabel: offering.section_label,
+    startsOn: offering.starts_on,
+    endsOn: offering.ends_on,
+    createdAt: offering.created_at,
+    updatedAt: offering.updated_at,
+  }));
+}
+
+async function requireAssignedOffering(session: DemoSession, offeringId: string) {
+  requireStudent(session);
+  const supabase = getAdminClient();
+  const { data, error } = await supabase
+    .from("student_courses")
+    .select("offering_id")
+    .eq("student_id", session.profileId)
+    .eq("offering_id", offeringId)
+    .maybeSingle();
+
+  if (error) throwDatabaseError(error);
+  if (!data) {
+    throw new WeeklyRoadmapServiceError(
+      "offering_not_assigned",
+      "The requested offering is not assigned to this student",
+    );
+  }
+
+  return supabase;
+}
+
+export async function getCourseWeeklyPlanForSession(
+  offeringId: string,
+  weekNumber: number,
+): Promise<CourseWeeklyPlan | null> {
+  const session = await getSessionOrThrow();
+  const supabase = await requireAssignedOffering(session, offeringId);
+  const { data, error } = await supabase
+    .from("course_weekly_plans")
+    .select("id, offering_id, week_number, title, topic, content, learning_objectives, preview_guide, review_guide, assignment_json, source_syllabus_id, source_reference, extraction_confidence, review_required, professor_confirmed, created_at, updated_at")
+    .eq("offering_id", offeringId)
+    .eq("week_number", weekNumber)
+    .maybeSingle();
+
+  if (error) throwDatabaseError(error);
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    offeringId: data.offering_id,
+    weekNumber: data.week_number,
+    title: data.title,
+    topic: data.topic,
+    content: data.content,
+    learningObjectives: Array.isArray(data.learning_objectives) ? data.learning_objectives : [],
+    previewGuide: data.preview_guide,
+    reviewGuide: data.review_guide,
+    assignmentJson: data.assignment_json,
+    sourceSyllabusId: data.source_syllabus_id,
+    sourceReference: data.source_reference,
+    extractionConfidence: data.extraction_confidence,
+    reviewRequired: data.review_required,
+    professorConfirmed: data.professor_confirmed,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+export async function getStudentWeeklyProgressForSession(
+  offeringId: string,
+  weekNumber: number,
+): Promise<StudentWeeklyProgress | null> {
+  const session = await getSessionOrThrow();
+  const supabase = await requireAssignedOffering(session, offeringId);
+  const { data, error } = await supabase
+    .from("student_weekly_progress")
+    .select("id, student_id, offering_id, week_number, progress_status_override, difficulty_level, understanding_level, private_note, shared_feedback, share_feedback_with_professor, use_private_note_for_ai, guide_json, guide_version, input_hash, generated_at, created_at, updated_at")
+    .eq("student_id", session.profileId)
+    .eq("offering_id", offeringId)
+    .eq("week_number", weekNumber)
+    .maybeSingle();
+
+  if (error) throwDatabaseError(error);
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    studentId: data.student_id,
+    offeringId: data.offering_id,
+    weekNumber: data.week_number,
+    progressStatusOverride: data.progress_status_override,
+    difficultyLevel: data.difficulty_level,
+    understandingLevel: data.understanding_level,
+    privateNote: data.private_note,
+    sharedFeedback: data.shared_feedback,
+    shareFeedbackWithProfessor: data.share_feedback_with_professor,
+    usePrivateNoteForAi: data.use_private_note_for_ai,
+    guideJson: data.guide_json,
+    guideVersion: data.guide_version,
+    inputHash: data.input_hash,
+    generatedAt: data.generated_at,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}

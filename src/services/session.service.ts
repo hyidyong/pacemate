@@ -1,5 +1,5 @@
-import { cookies } from "next/headers";
 import { supabase } from "@/lib/supabase/client";
+import { readDemoSession } from "@/lib/auth/demo-session";
 
 export type DemoProfile = {
   id: string;
@@ -23,20 +23,23 @@ export function getRoleHomePath(role: DemoProfile["role"]) {
 }
 
 export async function getDemoProfile(): Promise<DemoProfile | null> {
-  const cookieStore = await cookies();
-  const profileId = cookieStore.get("pacemate_profile_id")?.value;
+  const session = await readDemoSession();
 
-  if (!profileId) {
+  if (!session) {
     return null;
   }
 
   const { data, error } = await supabase
     .from("profiles")
     .select("id, identifier, name, role, school_id, department_id")
-    .eq("id", profileId)
+    .eq("id", session.profileId)
     .maybeSingle();
 
   if (error || !data) {
+    return null;
+  }
+
+  if (session && session.role !== data.role) {
     return null;
   }
 
