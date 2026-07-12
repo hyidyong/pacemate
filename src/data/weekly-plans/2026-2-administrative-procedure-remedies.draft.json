@@ -1,0 +1,41 @@
+{
+  "status": "draft",
+  "termId": "783bfca3-3dae-400c-b6e8-08683c4ba3db",
+  "offeringId": "228bb6cc-497c-4065-bf83-c9b0d906812c",
+  "courseId": "72170705-9609-456c-91fd-664b03c5a4ac",
+  "courseName": "행정절차와행정구제",
+  "professorId": "022a2f9b-f1ac-473e-a145-8cabd31419e5",
+  "professorName": "김영수",
+  "semesterLabel": "2026-2",
+  "source": {
+    "type": "syllabus",
+    "syllabusId": "acb1b50a-1439-42d5-8348-71079c2029b0",
+    "verifiedByProfessor": false
+  },
+  "weeks": [
+    { "weekNumber": 1, "title": "행정절차법", "topics": ["행정절차법"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 2, "title": "정보공개와 개인정보보호", "topics": ["정보공개와 개인정보보호"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 3, "title": "행정상 강제집행", "topics": ["행정상 강제집행"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 4, "title": "행정벌", "topics": ["행정벌"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 5, "title": "행정심판", "topics": ["행정심판"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 6, "title": "행정소송", "topics": ["행정소송"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 7, "title": "국가배상과 손실보상", "topics": ["국가배상과 손실보상"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 8, "title": "행정절차·정보보호 복습", "topics": ["행정절차법", "정보공개와 개인정보보호"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 반복·복습 주차로 재배치한 해석 draft; 원문에 복습 주차 번호는 없음." },
+    { "weekNumber": 9, "title": "행정작용 복습", "topics": ["행정상 강제집행", "행정벌"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 반복·복습 주차로 재배치한 해석 draft; 원문에 복습 주차 번호는 없음." },
+    { "weekNumber": 10, "title": "행정구제 복습", "topics": ["행정심판", "행정소송"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 반복·복습 주차로 재배치한 해석 draft; 원문에 복습 주차 번호는 없음." },
+    { "weekNumber": 11, "title": "배상·보상 복습", "topics": ["국가배상과 손실보상"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 반복·복습 주차로 재배치한 해석 draft; 원문에 복습 주차 번호는 없음." },
+    { "weekNumber": 12, "title": "행정절차와 행정구제 종합 복습", "topics": ["행정절차법", "행정심판", "행정소송"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 종합 복습으로 재배치한 해석 draft." },
+    { "weekNumber": 13, "title": "행정절차와 행정구제 종합 복습", "topics": ["정보공개와 개인정보보호", "행정상 강제집행", "행정벌"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 종합 복습으로 재배치한 해석 draft." },
+    { "weekNumber": 14, "title": "종합정리", "topics": ["종합정리"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "syllabus parsed text에 종합정리가 직접 기재되어 있으나 주차는 명시되지 않음." },
+    { "weekNumber": 15, "title": "종합정리 (기말고사 시점 미상)", "topics": ["종합정리"], "activityType": "review", "isAssessment": false, "confidence": "low", "sourceNote": "syllabus에 기말고사는 언급되지만 평가 주차가 없어 시험 주차로 확정하지 않음." }
+  ],
+  "warnings": [
+    "평가 방식은 출석 10%, 기말시험 50%, 중간고사 40%로 parsed text에 기재되어 있다.",
+    "중간고사·기말고사 시점은 syllabus에 명시되지 않아 어떤 주차도 assessment로 확정하지 않았다.",
+    "과제·발표 항목은 parsed text에서 확인되지 않았다.",
+    "수업목표와 참고자료는 parsed text에서 확인되지 않았다.",
+    "모든 주차 배치는 교수 확인 전 draft이며 source.verifiedByProfessor는 false다.",
+    "2026-09-01을 1주차 시작 기준으로 삼았지만 학교 휴일·보강일은 주차 확정에 반영하지 않았다.",
+    "블루북은 주차 내용 근거로 사용하지 않았다."
+  ]
+}

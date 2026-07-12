@@ -1,0 +1,41 @@
+{
+  "status": "draft",
+  "termId": "783bfca3-3dae-400c-b6e8-08683c4ba3db",
+  "offeringId": "d0761612-d2db-413a-a800-1d554a6876eb",
+  "courseId": "6a9d0d8d-7010-4470-8af3-a72e09c59e88",
+  "courseName": "회사법",
+  "professorId": "7633254b-18cb-483d-a163-72eee0f22c97",
+  "professorName": "김재두",
+  "semesterLabel": "2026-2",
+  "source": {
+    "type": "syllabus",
+    "syllabusId": "9a6d69f8-b666-4b2f-8ee4-9caead241c89",
+    "verifiedByProfessor": false
+  },
+  "weeks": [
+    { "weekNumber": 1, "title": "회사의 개념", "topics": ["회사의 개념"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 2, "title": "회사의 종류와 능력", "topics": ["회사의 종류와 능력"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 3, "title": "주식회사 설립", "topics": ["주식회사 설립"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 4, "title": "주주의 지위", "topics": ["주주의 지위"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 5, "title": "주주총회", "topics": ["주주총회"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 6, "title": "이사와 이사회", "topics": ["이사와 이사회"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 7, "title": "재무질서", "topics": ["재무질서"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 8, "title": "유한회사", "topics": ["유한회사"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 9, "title": "합병과 분할", "topics": ["합병과 분할"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "syllabus parsed text에 직접 기재된 주제. 주차 번호는 원문에 없어 순서상 배치한 draft." },
+    { "weekNumber": 10, "title": "회사법 주제 복습", "topics": ["회사의 개념", "회사의 종류와 능력", "주식회사 설립"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 반복·복습 주차로 재배치한 해석 draft; 원문에 복습 주차 번호는 없음." },
+    { "weekNumber": 11, "title": "기관과 주주 관계 복습", "topics": ["주주의 지위", "주주총회", "이사와 이사회"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 반복·복습 주차로 재배치한 해석 draft; 원문에 복습 주차 번호는 없음." },
+    { "weekNumber": 12, "title": "회사 재무·형태 복습", "topics": ["재무질서", "유한회사"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 반복·복습 주차로 재배치한 해석 draft; 원문에 복습 주차 번호는 없음." },
+    { "weekNumber": 13, "title": "조직변경 복습", "topics": ["합병과 분할"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문 주제를 반복·복습 주차로 재배치한 해석 draft; 원문에 복습 주차 번호는 없음." },
+    { "weekNumber": 14, "title": "회사법 종합 복습", "topics": ["회사법 주제 종합 복습"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "원문에 없는 주차를 확정하지 않고 기존 원문 주제의 종합 복습으로만 표시한 draft." },
+    { "weekNumber": 15, "title": "종합 복습 (평가 시점 미상)", "topics": ["회사법 주제 종합 복습"], "activityType": "review", "isAssessment": false, "confidence": "low", "sourceNote": "syllabus에 기말고사와 평가 비율은 있으나 평가 주차가 없어 시험 주차로 확정하지 않음." }
+  ],
+  "warnings": [
+    "평가 방식은 출석 20%, 기말시험 30%, 중간고사 30%, 과제 20%로 parsed text에 기재되어 있다.",
+    "중간고사·기말고사 시점은 syllabus에 명시되지 않아 어떤 주차도 assessment로 확정하지 않았다.",
+    "과제 비율은 확인되지만 과제 내용·제출 주차는 확인되지 않았다.",
+    "수업목표와 참고자료는 parsed text에서 확인되지 않았다.",
+    "모든 주차 배치는 교수 확인 전 draft이며 source.verifiedByProfessor는 false다.",
+    "2026-09-01을 1주차 시작 기준으로 삼았지만 학교 휴일·보강일은 주차 확정에 반영하지 않았다.",
+    "블루북은 주차 내용 근거로 사용하지 않았다."
+  ]
+}
