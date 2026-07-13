@@ -17,9 +17,17 @@ type ApprovedCompanyLawContext = {
   plans: Array<{ weekNumber: number; title: string | null; topic: string | null }>;
 };
 
+function canReadServerOnlySupabase() {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 export async function getApprovedCompanyLawContext(
   offeringId?: string,
 ): Promise<ApprovedCompanyLawContext | null> {
+  if (!canReadServerOnlySupabase()) {
+    return null;
+  }
+
   const supabase = createSupabaseAdminClient();
   const { data: course, error: courseError } = await supabase
     .from("courses")
@@ -85,38 +93,48 @@ export async function getStudentWeeklyProgressForSession(): Promise<StudentWeekl
   const session = await requireDemoSession();
   if (session.role !== "student") return null;
 
-  const context = await getApprovedCompanyLawContext();
-  if (!context) return null;
+  return getStudentWeeklyProgressForStudent(session.profileId);
+}
 
-  const supabase = createSupabaseAdminClient();
-  const { data: savedRows, error: progressError } = await supabase
-    .from("student_weekly_progress")
-    .select(
-      "week_number, progress_status_override, difficulty_level, understanding_level, private_note, shared_feedback, share_feedback_with_professor",
-    )
-    .eq("student_id", session.profileId)
-    .eq("offering_id", context.offeringId)
-    .order("week_number", { ascending: true });
+export async function getStudentWeeklyProgressForStudent(
+  studentId: string,
+): Promise<StudentWeeklyProgressPreview | null> {
+  try {
+    const context = await getApprovedCompanyLawContext();
+    if (!context) return null;
 
-  if (progressError) throw new Error(`Failed to load student weekly progress: ${progressError.message}`);
+    const supabase = createSupabaseAdminClient();
+    const { data: savedRows, error: progressError } = await supabase
+      .from("student_weekly_progress")
+      .select(
+        "week_number, progress_status_override, difficulty_level, understanding_level, private_note, shared_feedback, share_feedback_with_professor",
+      )
+      .eq("student_id", studentId)
+      .eq("offering_id", context.offeringId)
+      .order("week_number", { ascending: true });
 
-  const saved = (savedRows ?? []).map((row) => ({
-    weekNumber: row.week_number,
-    progressStatusOverride: row.progress_status_override,
-    difficultyLevel: row.difficulty_level,
-    understandingLevel: row.understanding_level,
-    privateNote: row.private_note,
-    sharedFeedback: row.shared_feedback,
-    shareFeedbackWithProfessor: row.share_feedback_with_professor,
-  })) as StudentWeeklyProgressRecord[];
-  const weeks = mergeWeeklyProgressWithPlans(context.plans, saved);
-  const summary = summarizeStudentCourseProgress(saved);
+    if (progressError) throw new Error(`Failed to load student weekly progress: ${progressError.message}`);
 
-  return {
-    courseName: "회사법",
-    semesterLabel: context.semesterLabel,
-    offeringId: context.offeringId,
-    weeks,
-    summary,
-  };
+    const saved = (savedRows ?? []).map((row) => ({
+      weekNumber: row.week_number,
+      progressStatusOverride: row.progress_status_override,
+      difficultyLevel: row.difficulty_level,
+      understandingLevel: row.understanding_level,
+      privateNote: row.private_note,
+      sharedFeedback: row.shared_feedback,
+      shareFeedbackWithProfessor: row.share_feedback_with_professor,
+    })) as StudentWeeklyProgressRecord[];
+    const weeks = mergeWeeklyProgressWithPlans(context.plans, saved);
+    const summary = summarizeStudentCourseProgress(saved);
+
+    return {
+      courseName: "회사법",
+      semesterLabel: context.semesterLabel,
+      offeringId: context.offeringId,
+      weeks,
+      summary,
+    };
+  } catch {
+    return null;
+  }
 }

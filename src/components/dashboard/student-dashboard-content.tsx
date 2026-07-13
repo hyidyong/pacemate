@@ -34,6 +34,7 @@ export function StudentDashboardContent({
 
   return (
     <section className="dashboard-student-overview" aria-label="학생 대시보드">
+      {/* TODO: 알람 요약 UI를 붙일 때는 기존 notifications service 결과만 표시하고, 새 Supabase/API 로직은 별도 범위에서 설계한다. */}
       <DashboardSectionTabs
         activeSection={activeSection}
         onChange={setActiveSection}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import {
   CircleHelp,
   GraduationCap,
@@ -45,6 +46,7 @@ export function AppHeader({
   notifications,
   unreadCount,
 }: AppHeaderProps) {
+  const pathname = usePathname();
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfessorMenuOpen, setIsProfessorMenuOpen] = useState(false);
@@ -71,6 +73,7 @@ export function AppHeader({
   };
 
   const isMobileMenuVisible = isProfessor ? isProfessorMenuOpen : isMobileMenuOpen;
+  const isCoursesPage = pathname === "/courses" || pathname.startsWith("/courses/");
 
   const desktopRoutes = !isAuthenticated
     ? []
@@ -180,10 +183,12 @@ export function AppHeader({
           ) : null}
           {isAuthenticated && !isProfessor && !isOperator ? (
             <>
-              <Link href="/chatbot" className="header-action-link header-icon-link hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200" aria-label="AI 튜터">
-                <Bot aria-hidden="true" />
-                <span className="sr-only">AI 튜터</span>
-              </Link>
+              {!isCoursesPage ? (
+                <Link href="/chatbot" className="header-action-link header-icon-link hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200" aria-label="AI 튜터">
+                  <Bot aria-hidden="true" />
+                  <span className="sr-only">AI 튜터</span>
+                </Link>
+              ) : null}
               <Link href="/community" className="header-action-link header-action-community hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
                 <MessageSquareText aria-hidden="true" />
                 <span>커뮤니티</span>
@@ -208,7 +213,7 @@ export function AppHeader({
       </header>
 
       {/* --- MOBILE HEADER --- */}
-      <header className="flex md:hidden items-center justify-between gap-5 py-4 pb-7 px-4 relative z-50">
+      <header className="sticky top-0 flex md:hidden items-center justify-between gap-5 py-3 px-4 z-50 bg-[rgba(249,251,249,0.92)] backdrop-blur-xl shadow-[0_12px_30px_rgba(23,32,26,0.07)]">
         <Link href={homeHref} className="brand" aria-label="PaceMate home">
           <span>
             <strong>PaceMate</strong>

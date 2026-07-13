@@ -55,10 +55,10 @@ export function ProfessorMobileBottomNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/90 backdrop-blur-md"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 shadow-[0_-14px_34px_rgba(23,32,26,0.09)] backdrop-blur-md"
       aria-label="Professor mobile navigation"
     >
-      <div className="grid h-[60px] grid-cols-5 pb-[env(safe-area-inset-bottom)]">
+      <div className="grid h-[64px] grid-cols-5 pb-[env(safe-area-inset-bottom)]">
         {professorMobileNavItems.map(({ id, label, href, icon: Icon }) => {
           const isActive = activeItem === id;
 

@@ -691,10 +691,10 @@ select {
 }
 
 .card {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 18px 42px rgba(23, 32, 26, 0.08);
+  box-shadow: 0 16px 38px rgba(23, 32, 26, 0.09);
 }
 
 .card-header,
@@ -717,6 +717,63 @@ select {
   color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.55;
+}
+
+.course-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  margin: 18px 0 4px;
+}
+
+.course-search-field {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 24px rgba(23, 32, 26, 0.06);
+}
+
+.course-search-field svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.course-search-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--foreground);
+  background: transparent;
+  font-size: 15px;
+}
+
+.course-search-field input::placeholder {
+  color: #8a9a90;
+}
+
+.course-empty-state {
+  display: grid;
+  min-height: 160px;
+  margin-top: 18px;
+  place-items: center;
+  border-radius: 18px;
+  color: var(--muted-foreground);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 16px 36px rgba(23, 32, 26, 0.07);
+}
+
+.course-empty-state p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 .route-card {
@@ -4874,7 +4931,11 @@ select {
 @media (max-width: 620px) {
   .app-shell {
     width: min(100% - 20px, 1180px);
-    padding: 12px 0 24px;
+    padding: 0 0 24px;
+  }
+
+  .app-shell-main {
+    padding-top: 14px;
   }
 
   .app-shell-main--with-mobile-nav {
@@ -5083,7 +5144,7 @@ select {
   }
 
   .section {
-    padding: 22px 0;
+    padding: 18px 0;
   }
 
   .section-header h2 {
@@ -5097,6 +5158,26 @@ select {
   .card-header,
   .card-content {
     padding: 15px;
+  }
+
+  .course-search {
+    grid-template-columns: 1fr;
+    gap: 9px;
+    margin-top: 14px;
+  }
+
+  .course-search .button {
+    min-height: 44px;
+  }
+
+  .course-search-field {
+    min-height: 46px;
+    padding: 0 12px;
+    border-radius: 12px;
+  }
+
+  .course-search-field input {
+    font-size: 14px;
   }
 
   .product-panel {
@@ -5929,4 +6010,3 @@ select {
 .ai-tutor-loading-dot:nth-child(2) { animation-delay: 0.2s; }
 .ai-tutor-loading-dot:nth-child(3) { animation-delay: 0.4s; }
 @keyframes bounce-dots { 0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); } 50% { transform: translateY(0); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); } }
-

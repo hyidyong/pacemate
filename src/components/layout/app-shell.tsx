@@ -11,9 +11,10 @@ import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
 
 type AppShellProps = {
   children: React.ReactNode;
+  showAiTutorFab?: boolean;
 };
 
-export async function AppShell({ children }: AppShellProps) {
+export async function AppShell({ children, showAiTutorFab = true }: AppShellProps) {
   const profile = await getDemoProfile();
   const [notifications, unreadCount] = await Promise.all([
     getNotificationsForProfile(profile, 5),
@@ -64,7 +65,7 @@ export async function AppShell({ children }: AppShellProps) {
       )}
 
       {/* AI 튜터 FAB — 학생 전용 데스크톱에서만 표시 */}
-      {isStudent && (
+      {isStudent && showAiTutorFab && (
         <div className="hidden md:block fixed bottom-10 right-10 z-[100] group">
           <div className="absolute bottom-full right-0 mb-4 w-48 bg-white/95 backdrop-blur-sm text-gray-800 text-xs rounded-xl shadow-2xl p-3.5 border border-emerald-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
             <div className="font-bold text-emerald-600 mb-1 flex items-center gap-1">

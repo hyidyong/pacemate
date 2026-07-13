@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,18 +17,44 @@ import { getDemoProfile } from "@/services/session.service";
 
 export const dynamic = "force-dynamic";
 
-export default async function CoursesPage() {
+type CoursesPageProps = {
+  searchParams?: Promise<{
+    q?: string;
+  }>;
+};
+
+export default async function CoursesPage({ searchParams }: CoursesPageProps) {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
+  const params = await searchParams;
+  const query = params?.q?.trim() ?? "";
+  const normalizedQuery = query.toLowerCase();
   const courses = await getCourseSummaries();
   const sampleCourse = courses.find(
     (course) => course.code === sampleSyllabus.course.code,
   );
+  const filteredCourses = normalizedQuery
+    ? courses.filter((course) => {
+        const searchableText = [
+          course.name,
+          course.code,
+          course.description,
+          course.prerequisite_text,
+          course.category,
+          course.id === sampleCourse?.id ? sampleSyllabus.course.professor : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(normalizedQuery);
+      })
+    : courses;
 
   const isStudent = profile?.role === "student";
 
   return (
-    <AppShell>
+    <AppShell showAiTutorFab={false}>
       <section className="screen-hero">
         <Link href="/" className="status-line">
           <ArrowLeft size={15} aria-hidden="true" />
@@ -52,30 +78,6 @@ export default async function CoursesPage() {
         </div>
       </section>
       <section className="section">
-        <Card>
-          <CardHeader>
-            <CardTitle>현재 상태</CardTitle>
-            <CardDescription>
-              과목 데이터 구조와 관리자 입력 관리는 2단계 Supabase 스키마 이후
-              붙입니다.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="screen-list">
-              {[
-                "courses, course_professors, syllabi 테이블과 연결합니다.",
-                "관리자/조교 입력 화면과 CSV 업로드 진입점을 준비합니다.",
-                "과목 상세에서 후기, 질문, 상담 가능 시간을 이어 보여줍니다.",
-              ].map((item) => (
-                <li key={item}>
-                  <p>{item}</p>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      </section>
-      <section className="section">
         <div className="section-header">
           <div>
             <h2>등록된 과목</h2>
@@ -85,8 +87,30 @@ export default async function CoursesPage() {
             </p>
           </div>
         </div>
-        <div className="card-grid">
-          {courses.map((course) => (
+        <form action="/courses" className="course-search" role="search">
+          <label className="sr-only" htmlFor="course-search-input">
+            과목 검색
+          </label>
+          <div className="course-search-field">
+            <Search size={18} aria-hidden="true" />
+            <input
+              id="course-search-input"
+              name="q"
+              type="search"
+              defaultValue={query}
+              placeholder="과목명, 교수명, 과목 코드, 설명으로 검색"
+            />
+          </div>
+          <Button type="submit">검색</Button>
+          {query ? (
+            <Button asChild variant="outline">
+              <Link href="/courses">초기화</Link>
+            </Button>
+          ) : null}
+        </form>
+        {filteredCourses.length ? (
+          <div className="card-grid">
+            {filteredCourses.map((course) => (
             <Card key={course.id}>
               <CardHeader>
                 <div className="flex justify-between items-start gap-4">
@@ -114,8 +138,13 @@ export default async function CoursesPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="course-empty-state">
+            <p>검색 결과가 없어요.</p>
+          </div>
+        )}
       </section>
     </AppShell>
   );

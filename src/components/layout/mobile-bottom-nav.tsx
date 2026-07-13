@@ -17,7 +17,7 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-100 h-[60px]"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 h-[64px] bg-white/95 shadow-[0_-14px_34px_rgba(23,32,26,0.09)] backdrop-blur-md"
       aria-label="Mobile primary navigation"
     >
       <div className="grid grid-cols-4 h-full">
