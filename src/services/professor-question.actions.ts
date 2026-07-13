@@ -9,6 +9,7 @@ import { normalizeUuid } from "@/lib/uuid";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createUserNotifications } from "@/services/notifications.create.service";
 import { getAuthenticatedProfessorIdentity } from "@/services/professor-questions.server";
+import { generateProfessorGroundedAnswerDraft } from "@/services/professor-grounded-answer.server";
 
 const INVALID_REQUEST_MESSAGE = "요청 정보를 확인해 주세요.";
 const WRITE_FAILED_MESSAGE = "질문 설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -16,6 +17,14 @@ type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 function text(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+export async function draftGroundedProfessorAnswer(formData: FormData) {
+  const result = await generateProfessorGroundedAnswerDraft(text(formData.get("questionId")));
+  if (!result.ok) {
+    return { ok: false as const, message: "근거 기반 답변 초안을 만들지 못했습니다." };
+  }
+  return result;
 }
 
 export async function answerProfessorQuestions(formData: FormData) {
