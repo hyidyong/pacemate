@@ -92,8 +92,8 @@ function getVisibleEvents(events: AcademicEvent[], today: string, limit: number)
 export function AcademicScheduleCard({
   academicEvents,
   title = "학사일정",
-  description = "주요 학사 일정과 신청 기간을 확인하세요.",
-  notice = "학교 사정에 따라 일정이 변경될 수 있습니다.",
+  description = "",
+  notice = "",
   limit = 5,
   headingId = "academic-schedule-title",
 }: AcademicScheduleCardProps) {
@@ -116,8 +116,8 @@ export function AcademicScheduleCard({
           <h2 className="text-[15px] font-bold text-gray-800" id={headingId}>
             {title}
           </h2>
-          <p className="mt-1 text-xs text-gray-500">{description}</p>
-          <p className="mt-1 text-[11px] text-gray-400">{notice}</p>
+          {description ? <p className="mt-1 text-xs text-gray-500">{description}</p> : null}
+          {notice ? <p className="mt-1 text-[11px] text-gray-400">{notice}</p> : null}
         </div>
       </div>
 

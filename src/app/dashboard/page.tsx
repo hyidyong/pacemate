@@ -44,8 +44,8 @@ function formatDateLabel(value?: string | null) {
 
 const roleCopy = {
   student: {
-    title: "학생 대시보드",
-    description: "온보딩을 완료하고 전공 로드맵 추천으로 이어가세요.",
+    title: "오늘의 PaceMate",
+    description: "",
     icon: ClipboardList,
     primaryHref: "/onboarding",
     primaryLabel: "온보딩 시작",
@@ -217,9 +217,8 @@ export default async function DashboardPage() {
     <AppShell>
       <ScrollReveal>
         <section className="screen-hero">
-          <span className="status-line">현재 사용자: {profile.name}</span>
           <h1>{copy.title}</h1>
-          <p>{copy.description}</p>
+          {copy.description ? <p>{copy.description}</p> : null}
           <div className="actions">
             <Link href={copy.primaryHref} data-testid="dashboard-primary-action">
               <ShimmerButton>
@@ -237,7 +236,7 @@ export default async function DashboardPage() {
       </ScrollReveal>
 
       <ScrollReveal>
-        <NotificationStrip notifications={notifications} />
+        <NotificationStrip notifications={notifications} showSummary={profile.role !== "student"} />
       </ScrollReveal>
 
       {/* 학생 전용: 오늘 시간표 위젯 */}
@@ -271,7 +270,6 @@ export default async function DashboardPage() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
                       <h3 className="text-lg font-bold mb-1">과목 및 강의 계획 관리</h3>
-                      <p className="text-emerald-50 text-sm">수강 과목 로드맵 및 상세 정보</p>
                     </div>
                     <ArrowRight size={24} className="shrink-0 opacity-80" />
                   </div>

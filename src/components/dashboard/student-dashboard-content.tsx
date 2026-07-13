@@ -49,7 +49,7 @@ export function StudentDashboardContent({
       >
         {showTimetable && <TodayTimetableWidget myCourses={myCourses} />}
         {showTodo && <StudentTodoCard items={todoItems} />}
-        {showPortal && <PortalShortcutCard />}
+        {showPortal && <PortalShortcutCard description="" />}
         {showAcademic && <AcademicScheduleCard academicEvents={academicEvents} />}
       </div>
     </section>

@@ -12,7 +12,7 @@ function errorMessage(code: string, courseName: string | null) {
   if (code === "unauthenticated") return "로그인이 필요합니다.";
   if (code === "forbidden") return "학생 계정에서만 확인할 수 있습니다.";
   if (code === "offering_not_found" || code === "term_not_found") {
-    return `${label} 학기 완료 근거를 확인할 수 없습니다.`;
+    return `${label} 정보를 불러오지 못했습니다.`;
   }
   return "학기 완료 근거를 불러오지 못했습니다.";
 }
@@ -67,10 +67,6 @@ export function CourseTermEligibilityCard({
           {eligibility.reasons.map((reason) => <li key={reason}>{reason}</li>)}
         </ul>
       )}
-      <div className="mt-5 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">
-        <p>이 결과는 해당 과목의 학기 학습 완료 근거입니다.</p>
-        <p>졸업 가능 여부나 학점 취득을 확정하는 결과는 아닙니다.</p>
-      </div>
     </section>
   );
 }
