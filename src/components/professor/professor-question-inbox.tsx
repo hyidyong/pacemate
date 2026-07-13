@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Bot, CheckSquare, MessageSquareText, Trash2 } from "lucide-react";
 import {
   answerProfessorQuestions,
+  draftGroundedProfessorAnswer,
   deleteProfessorAutoReplyRule,
   saveProfessorAutoReplyRule,
   toggleProfessorAutoReplyRule,
@@ -26,6 +27,7 @@ export function ProfessorQuestionInboxView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [answer, setAnswer] = useState("");
   const [message, setMessage] = useState("");
+  const [draftSources, setDraftSources] = useState<Array<{ type: string; label: string }>>([]);
   const [isPending, startTransition] = useTransition();
   const groups = useMemo(
     () => inbox.groups.filter((group) => group.category === category),
@@ -60,6 +62,22 @@ export function ProfessorQuestionInboxView({
       if (result.ok) {
         setSelectedIds(new Set());
         setAnswer("");
+      }
+    });
+  }
+
+  function createGroundedDraft() {
+    if (selectedIds.size !== 1) return;
+    const formData = new FormData();
+    formData.set("questionId", [...selectedIds][0]);
+    startTransition(async () => {
+      const result = await draftGroundedProfessorAnswer(formData);
+      if (result.ok) {
+        setMessage("교수 검토가 필요한 AI 초안을 만들었습니다.");
+        setAnswer(result.draft);
+        setDraftSources(result.sources);
+      } else {
+        setMessage(result.message);
       }
     });
   }
@@ -158,6 +176,25 @@ export function ProfessorQuestionInboxView({
             placeholder="선택한 질문에 적용할 답변"
             className="mt-3 w-full rounded-md border bg-white p-3 text-sm"
           />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={createGroundedDraft}
+              disabled={isPending || selectedIds.size !== 1}
+              className="rounded-md border border-emerald-700 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 disabled:opacity-50"
+            >
+              근거 기반 AI 초안
+            </button>
+          </div>
+          {draftSources.length ? (
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-white p-3 text-xs text-gray-600">
+              <strong className="text-gray-800">사용 근거</strong>
+              <ul className="mt-1 list-disc pl-5">
+                {draftSources.map((source, index) => <li key={`${source.type}-${index}`}>{source.label}</li>)}
+              </ul>
+              <p className="mt-2 text-amber-700">AI 초안은 자동 전송되지 않으며 교수 검토·수정 후에만 답변됩니다.</p>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={submitBulkAnswer}

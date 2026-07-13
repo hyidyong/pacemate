@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
 import {
@@ -253,14 +252,7 @@ export async function getProfessorAnonymousWeeklyAggregate(): Promise<ProfessorA
     return { ok: true, report: { aggregates: [] } };
   }
 
-  let adminSupabase;
-  try {
-    adminSupabase = createSupabaseAdminClient();
-  } catch {
-    return failure("database_read_failed");
-  }
-
-  const { data: progressData, error: progressError } = await adminSupabase
+  const { data: progressData, error: progressError } = await supabase
     .from("student_weekly_progress")
     .select(STUDENT_WEEKLY_PROGRESS_SELECT)
     .in("offering_id", offeringIds);

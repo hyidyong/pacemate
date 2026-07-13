@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import type { RoadmapRevisionRequest } from "@/services/roadmap-revisions.service";
 import type { DemoProfile } from "@/services/session.service";
+import { normalizeProfessorCounselingRows } from "@/services/professor-counseling-data";
 
 export type ProfessorCourse = {
   id: string;
@@ -335,7 +336,9 @@ async function getCounselingRequests(
     },
   ];
 
-  return [...result, ...dummyData] as ProfessorCounselingRequest[];
+  return normalizeProfessorCounselingRows(
+    result as unknown as ProfessorCounselingRequest[],
+  );
 }
 
 async function getRoadmapRequests(): Promise<RoadmapRevisionRequest[]> {

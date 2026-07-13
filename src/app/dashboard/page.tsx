@@ -16,6 +16,8 @@ import type { AcademicEvent } from "@/types/academic-calendar";
 import { CourseTermEligibilityCard } from "@/components/dashboard/course-term-eligibility-card";
 import { resolveCompanyLaw2026OfferingForSession } from "@/services/company-law-offering.server";
 import { getCourseTermCompletionEligibility } from "@/services/course-term-completion-eligibility.server";
+import { getStudentLearningRecommendations } from "@/services/student-learning-recommendations.server";
+import { StudentLearningRecommendationsCard } from "@/components/dashboard/student-learning-recommendations-card";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
@@ -112,6 +114,7 @@ export default async function DashboardPage() {
   let todoItems: StudentTodoItem[] = [];
   let academicEvents: AcademicEvent[] = [];
   let eligibilityResult: Awaited<ReturnType<typeof getCourseTermCompletionEligibility>> | null = null;
+  let recommendationResult: Awaited<ReturnType<typeof getStudentLearningRecommendations>> | null = null;
   let eligibilityCourseName: string | null = null;
   if (profile.role === "student") {
     myCourses = await getMyCourses(profile.id);
@@ -205,6 +208,9 @@ export default async function DashboardPage() {
     eligibilityResult = offeringResolution.ok
       ? await getCourseTermCompletionEligibility(offeringResolution.offeringId)
       : offeringResolution;
+    recommendationResult = offeringResolution.ok
+      ? await getStudentLearningRecommendations(offeringResolution.offeringId)
+      : { ok: false, code: "read_failed" };
   }
 
   return (
@@ -251,6 +257,10 @@ export default async function DashboardPage() {
             <CourseTermEligibilityCard result={eligibilityResult} courseName={eligibilityCourseName} />
           </section>
         </ScrollReveal>
+      )}
+
+      {profile.role === "student" && recommendationResult && (
+        <ScrollReveal><section className="section" aria-label="학생 맞춤 학습 추천"><StudentLearningRecommendationsCard result={recommendationResult} /></section></ScrollReveal>
       )}
 
       <ScrollRevealList>

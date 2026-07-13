@@ -37,7 +37,7 @@ export async function createCourseReview(formData: FormData) {
   });
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "후기를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/reviews");
