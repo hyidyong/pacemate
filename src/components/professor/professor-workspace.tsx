@@ -51,6 +51,8 @@ import type {
 } from "@/types/professor-anonymous-weekly-aggregate";
 import { ProfessorCalendar } from "./professor-calendar";
 import { ProfessorCourseProgressReportView } from "./professor-course-progress-report";
+import { ProfessorQuestionInboxView } from "./professor-question-inbox";
+import type { ProfessorQuestionInbox } from "@/types/professor-questions";
 import {
   ProfessorHomeSectionTabs,
   type ProfessorHomeSection,
@@ -65,6 +67,7 @@ type ProfessorWorkspaceProps = {
   professorCourseProgressReportError: Extract<ProfessorCourseProgressReportResult, { ok: false }>["error"] | null;
   professorAnonymousWeeklyAggregate: ProfessorAnonymousWeeklyAggregateReport;
   professorAnonymousWeeklyAggregateError: Extract<ProfessorAnonymousWeeklyAggregateResult, { ok: false }>["error"] | null;
+  professorQuestionInbox: ProfessorQuestionInbox;
   professor: {
     id: string;
     name: string;
@@ -89,18 +92,6 @@ type ProfessorWorkspaceProps = {
 
 type ProfessorTab = "schedule" | "roadmap" | "questions" | "counseling" | "report";
 type SubMenu = string;
-
-type DummyQuestion = {
-  id: string;
-  studentName: string;
-  studentId: string;
-  major: string;
-  courseName: string;
-  question: string;
-  date: string;
-  status: "PENDING" | "ANSWERED";
-  answer?: string;
-};
 
 type ProfessorAdminTask = {
   id: string;
@@ -152,13 +143,6 @@ const sidebarMenus: Record<ProfessorTab, Array<{ id: SubMenu; label: string; ico
   ],
 };
 
-const initialDummyQuestions: DummyQuestion[] = [
-  { id: "dq1", studentName: "\uae40\ubbfc\uc900", studentId: "20240101", major: "\ubc95\ud559\uacfc", courseName: "\ubbfc\uc0ac\uc18c\uc1a1\ubc95(2)", question: "\uc0c1\uc18c\uc2ec\uc5d0\uc11c \uc0c8\ub85c\uc6b4 \uc99d\uac70\ub97c \uc81c\ucd9c\ud560 \uc218 \uc788\ub294 \uc694\uac74\uc774 \uad81\uae08\ud569\ub2c8\ub2e4.", date: "2026-07-04", status: "PENDING" },
-  { id: "dq2", studentName: "\uc774\uc218\uc9c4", studentId: "20250212", major: "\ud589\uc815\ud559\uacfc", courseName: "\ud68c\uc0ac\ubc95", question: "\uc8fc\uc8fc\ub300\ud45c\uc18c\uc1a1\uacfc \uc8fc\uc8fc\uc9c1\uc811\uc18c\uc1a1\uc758 \ucc28\uc774\uc810\uc744 \uc124\uba85\ud574\uc8fc\uc138\uc694.", date: "2026-07-05", status: "PENDING" },
-  { id: "dq3", studentName: "\ubc15\uc9c0\uc740", studentId: "20230555", major: "\uc815\uce58\uc678\uad50\ud559\uacfc", courseName: "\ud589\uc815\uc808\ucc28\uc640\ud589\uc815\uad6c\uc81c", question: "\ud589\uc815\uc2ec\ud310\uacfc \ubbfc\uc0ac\uc18c\uc1a1\uc758 \uad00\ud560 \uad6c\ubd84\uc740 \uc5b4\ub5bb\uac8c \ud558\ub098\uc694?", date: "2026-07-05", status: "PENDING" },
-  { id: "dq4", studentName: "\ucd5c\uc608\ub9b0", studentId: "20260012", major: "\ubc95\ud559\uacfc", courseName: "\ubbfc\ubc95\uc0ac\ub840\uc5f0\uc2b5", question: "\ucc44\uad8c\uc790\ub300\uc704\uad8c \ud589\uc0ac\uc758 \ubc94\uc704\uc5d0 \ub300\ud574 \uc88b\uc740 \ud310\ub840\uac00 \uc788\uc744\uae4c\uc694?", date: "2026-07-06", status: "PENDING" },
-];
-
 const counselingStatusLabels: Record<ProfessorCounselingRequest["status"] | "ANSWERED" | "PENDING", string> = {
   pending: "\uc2b9\uc778 \ub300\uae30",
   approved: "\uc2b9\uc778 \uc644\ub8cc",
@@ -191,6 +175,7 @@ export function ProfessorWorkspace({
   professorCourseProgressReportError,
   professorAnonymousWeeklyAggregate,
   professorAnonymousWeeklyAggregateError,
+  professorQuestionInbox,
 }: ProfessorWorkspaceProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ProfessorTab>(initialTab ?? "schedule");
@@ -206,8 +191,7 @@ export function ProfessorWorkspace({
   const [toast, setToast] = useState("");
   const [currentCounselingRequests, setCurrentCounselingRequests] = useState<ProfessorCounselingRequest[]>(counselingRequests);
   const [currentNotificationCounts, setCurrentNotificationCounts] = useState(notificationCounts);
-  const [dummyQuestions, setDummyQuestions] = useState<DummyQuestion[]>(initialDummyQuestions);
-  const [announcements, setAnnouncements] = useState<Array<{ question: string; answer: string; courseName: string }>>([]);
+  const [announcements] = useState<Array<{ question: string; answer: string; courseName: string }>>([]);
 
   // When tab changes: auto-select first sub-menu, close sidebar
   function changeTab(tab: ProfessorTab, sub?: string) {
@@ -356,7 +340,10 @@ export function ProfessorWorkspace({
 }, [faqs.length, roadmapRequests]);
 
   const pendingCounselingRequestCount = currentCounselingRequests.filter((r) => r.status === "pending").length;
-  const pendingQuestionCount = dummyQuestions.filter((q) => q.status === "PENDING").length;
+  const pendingQuestionCount = Object.values(professorQuestionInbox.categoryCounts).reduce(
+    (total, count) => total + count,
+    0,
+  );
   const sidebarBadgeCounts = {
     pendingCounseling: Math.max(currentNotificationCounts.counseling, pendingCounselingRequestCount),
     incomingQuestions: Math.max(currentNotificationCounts.question, pendingQuestionCount),
@@ -432,12 +419,9 @@ export function ProfessorWorkspace({
         );
       case "incoming-questions":
         return (
-          <IncomingQuestionsSub
-            dummyQuestions={dummyQuestions}
-            setDummyQuestions={setDummyQuestions}
-            showToast={showToast}
-            announcements={announcements}
-            setAnnouncements={setAnnouncements}
+          <ProfessorQuestionInboxView
+            inbox={professorQuestionInbox}
+            courses={courses.map((course) => ({ id: course.id, code: course.code, name: course.name }))}
           />
         );
       case "manual-faq":
@@ -1243,142 +1227,6 @@ function CourseFaqSub({
       ) : (
         <div className="community-empty">
           <p>등록된 FAQ가 없습니다.</p>
-        </div>
-      )}
-    </section>
-  );
-}
-
-// --- IncomingQuestionsSub ---
-function IncomingQuestionsSub({
-  dummyQuestions,
-  setDummyQuestions,
-  showToast,
-  announcements,
-  setAnnouncements,
-}: {
-  dummyQuestions: DummyQuestion[];
-  setDummyQuestions: React.Dispatch<React.SetStateAction<DummyQuestion[]>>;
-  showToast: (msg: string) => void;
-  announcements: Array<{ question: string; answer: string; courseName: string }>;
-  setAnnouncements: React.Dispatch<React.SetStateAction<Array<{ question: string; answer: string; courseName: string }>>>;
-}) {
-  const [answeringId, setAnsweringId] = useState<string | null>(null);
-  const [answerText, setAnswerText] = useState("");
-  const [registerAsNotice, setRegisterAsNotice] = useState(false);
-
-  function handleSubmitAnswer(q: DummyQuestion) {
-    if (!answerText.trim()) return;
-
-    setDummyQuestions((prev) =>
-      prev.map((item) =>
-        item.id === q.id
-          ? { ...item, status: "ANSWERED" as const, answer: answerText }
-          : item,
-      ),
-    );
-
-    if (registerAsNotice) {
-      setAnnouncements((prev) => [
-        ...prev,
-        { question: q.question, answer: answerText, courseName: q.courseName },
-      ]);
-    }
-
-    showToast("답변이 등록되었습니다.");
-    setAnsweringId(null);
-    setAnswerText("");
-    setRegisterAsNotice(false);
-  }
-
-  return (
-    <section className="professor-panel">
-      <div className="community-section-heading">
-        <h2>들어온 질문 보기</h2>
-        <Inbox size={18} aria-hidden="true" />
-      </div>
-      {dummyQuestions.length > 0 ? (
-        <div className="flex flex-col gap-4 mt-4">
-          {dummyQuestions.map((q) => (
-            <article key={q.id} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start mb-2">
-                <strong className="text-emerald-950 font-bold text-lg">{q.studentName}</strong>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${q.status === "PENDING" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"}`}>
-                  {q.status === "PENDING" ? "대기" : "답변 완료"}
-                </span>
-              </div>
-              <p className="text-gray-500 text-sm mb-3">{q.courseName} · {q.date}</p>
-              <p className="text-gray-800 text-sm leading-relaxed">{q.question}</p>
-
-              {q.status === "ANSWERED" && q.answer ? (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                  <strong className="text-sm font-semibold text-emerald-950 mb-1 block">답변:</strong>
-                  <p className="text-sm text-gray-700 leading-relaxed">{q.answer}</p>
-                </div>
-              ) : null}
-
-              {q.status === "PENDING" ? (
-                <div className="mt-4 pt-4 border-t border-gray-50">
-                  {answeringId === q.id ? (
-                    <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-sm font-semibold text-emerald-950">답변 입력</span>
-                        <textarea
-                          rows={3}
-                          value={answerText}
-                          onChange={(e) => setAnswerText(e.target.value)}
-                          placeholder="답변을 입력하세요"
-                          className="w-full border border-gray-200 rounded-md p-2 text-sm text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        />
-                      </div>
-                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={registerAsNotice}
-                          onChange={(e) => setRegisterAsNotice(e.target.checked)}
-                          className="rounded text-emerald-600 focus:ring-emerald-500"
-                        />
-                        <span>공지사항으로 함께 등록하기</span>
-                      </label>
-                      <div className="flex justify-end gap-2 mt-2">
-                        <button
-                          className="px-4 py-2 text-sm font-medium rounded-md border border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
-                          type="button"
-                          onClick={() => {
-                            setAnsweringId(null);
-                            setAnswerText("");
-                            setRegisterAsNotice(false);
-                          }}
-                        >
-                          취소
-                        </button>
-                        <button
-                          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
-                          type="button"
-                          onClick={() => handleSubmitAnswer(q)}
-                        >
-                          <Send size={14} aria-hidden="true" />
-                          제출
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      className="px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
-                      type="button"
-                      onClick={() => setAnsweringId(q.id)}
-                    >
-                      답변하기
-                    </button>
-                  )}
-                </div>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      ) : (
-        <div className="community-empty">
-          <p>들어온 질문이 없습니다.</p>
         </div>
       )}
     </section>

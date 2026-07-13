@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, MessageSquareText } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { getCounselingPageData } from "@/services/counseling.service";
+import { getStudentProfessorQuestionData } from "@/services/professor-questions.server";
 import { redirectNonStudent } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 import { AskProfessorForm } from "@/components/ask/ask-professor-form";
@@ -15,7 +15,7 @@ export default async function AskPage({
 }) {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
-  const data = await getCounselingPageData(profile);
+  const data = await getStudentProfessorQuestionData();
   const params = await searchParams;
   const defaultQuestion = params?.defaultQuestion || "";
 
@@ -41,6 +41,35 @@ export default async function AskPage({
             courses={data.courses} 
             defaultQuestion={defaultQuestion} 
           />
+        </div>
+      </section>
+      <section className="section max-w-3xl mx-auto w-full" aria-labelledby="my-professor-questions">
+        <div className="bg-card border rounded-xl p-6 shadow-sm">
+          <h2 id="my-professor-questions" className="mb-4 text-lg font-semibold">내 질문과 답변</h2>
+          {data.questions.length ? (
+            <div className="space-y-3">
+              {data.questions.map((question) => (
+                <article key={question.id} className="rounded-lg border p-4">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>{question.courseName}</span>
+                    <span>{question.category}</span>
+                    <span>{question.sourceKind === "tutor" ? "AI 튜터 전달" : "직접 질문"}</span>
+                  </div>
+                  <p className="text-sm">{question.question}</p>
+                  {question.answer ? (
+                    <div className="mt-3 rounded-md bg-emerald-50 p-3 text-sm text-emerald-950">
+                      <strong>{question.answerMode === "automatic" ? "자동 답변" : "교수 답변"}</strong>
+                      <p className="mt-1 whitespace-pre-wrap">{question.answer}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-muted-foreground">답변 대기 중입니다.</p>
+                  )}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">아직 등록한 질문이 없습니다.</p>
+          )}
         </div>
       </section>
     </AppShell>
