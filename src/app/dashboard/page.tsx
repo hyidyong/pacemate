@@ -44,7 +44,7 @@ function formatDateLabel(value?: string | null) {
 
 const roleCopy = {
   student: {
-    title: "오늘의 PaceMate",
+    title: "",
     description: "",
     icon: ClipboardList,
     primaryHref: "/onboarding",
@@ -227,9 +227,6 @@ export default async function DashboardPage() {
               </ShimmerButton>
             </Link>
             <form action={clearDemoSession}>
-              <Button type="submit" variant="outline" data-testid="dashboard-logout">
-                로그아웃
-              </Button>
             </form>
           </div>
         </section>
