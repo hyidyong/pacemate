@@ -539,9 +539,6 @@ export function ProfessorWorkspace({
             <h1 className="text-2xl lg:text-3xl font-bold text-slate-800 tracking-tight">
               {currentSidebarItems.find((item) => item.id === activeSub)?.label}
             </h1>
-            <p className="text-slate-500 mt-1 text-sm font-medium">
-              {professorTabs.find((t) => t.id === activeTab)?.label} 대시보드
-            </p>
           </div>
         </header>
 

@@ -107,17 +107,11 @@ export default async function WeeklyPlanPreviewPage() {
     <AppShell>
       <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
         <section className="mb-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">Professor workspace</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">주간 계획 초안 검토</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">2026-2 syllabus 기반 초안을 교수·내부 운영자만 읽기 전용으로 검토하는 화면입니다.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">주간 계획 초안 검토</h1>
         </section>
 
         <div role="alert" className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
           <strong>교수 승인 전 초안입니다.</strong> 승인 전에는 학생에게 공개되지 않으며, 승인 시 기존 `course_weekly_plans` 구조에 1~15주 row를 저장합니다. 승인 상태는 `review_required`와 `professor_confirmed` 조합으로 표시합니다.
-        </div>
-
-        <div aria-hidden="true" className="mb-8 hidden rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-          <strong>교수 승인 전 초안입니다.</strong> 이 내용은 정식 학생 로드맵이 아니며, 승인·저장·course_weekly_plans 동기화 기능이 없습니다. 교수 확인 여부: <strong>미확인 (verifiedByProfessor=false)</strong>
         </div>
 
         {loadError ? (

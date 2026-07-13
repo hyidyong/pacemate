@@ -11,6 +11,15 @@ export type ProfessorCourse = {
   category: string | null;
 };
 
+export type ProfessorProfile = {
+  id: string;
+  name: string;
+  office: string | null;
+  email: string | null;
+  bio: string | null;
+  department: { name: string }[];
+};
+
 export type ProfessorAvailability = {
   id: string;
   professor_id: string;
@@ -66,13 +75,7 @@ export type ProfessorTeachingSlot = {
 
 export type ProfessorPageData = {
   profile: DemoProfile | null;
-  professor: {
-    id: string;
-    name: string;
-    office: string | null;
-    email: string | null;
-    bio: string | null;
-  } | null;
+  professor: ProfessorProfile | null;
   courses: ProfessorCourse[];
   teachingSlots: ProfessorTeachingSlot[];
   availability: ProfessorAvailability[];
@@ -133,11 +136,29 @@ export async function getProfessorPageData(
   };
 }
 
+export async function getProfessorProfile(profile: DemoProfile | null): Promise<ProfessorProfile | null> {
+  if (profile?.role !== "professor") {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("professors")
+    .select("id, name, office, email, bio, department:departments(name)")
+    .eq("profile_id", profile.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load professor profile: ${error.message}`);
+  }
+
+  return data as ProfessorProfile | null;
+}
+
 async function getCurrentProfessor(profile: DemoProfile | null) {
   if (profile?.role === "professor") {
     const { data } = await supabase
       .from("professors")
-      .select("id, name, office, email, bio")
+      .select("id, name, office, email, bio, department:departments(name)")
       .eq("profile_id", profile.id)
       .maybeSingle();
 
@@ -148,7 +169,7 @@ async function getCurrentProfessor(profile: DemoProfile | null) {
 
   const { data } = await supabase
     .from("professors")
-    .select("id, name, office, email, bio")
+    .select("id, name, office, email, bio, department:departments(name)")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();

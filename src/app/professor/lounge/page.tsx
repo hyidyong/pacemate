@@ -22,10 +22,6 @@ export default async function ProfessorLoungePage() {
           교수 대시보드
         </Link>
         <h1>교수 라운지</h1>
-        <p>
-          학생 커뮤니티와 분리된 교수 전용 공간입니다. 수업 운영, 상담, 행정 팁을 익명 또는
-          실명으로 공유합니다.
-        </p>
         <div className="actions">
           <Button asChild variant="outline">
             <Link href="/professor?tab=counseling">

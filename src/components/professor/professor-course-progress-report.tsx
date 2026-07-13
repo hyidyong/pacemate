@@ -96,12 +96,7 @@ function AnonymousAggregateSection({
       aria-live="polite"
     >
       <div className="community-section-heading">
-        <div>
-          <h2 id="professor-anonymous-weekly-aggregate-title">주차별 익명 학습 집계</h2>
-          <p className="mt-1 text-sm font-normal text-slate-500">
-            개별 학생 정보 없이 주차별 학습 진행 현황을 확인합니다.
-          </p>
-        </div>
+        <h2 id="professor-anonymous-weekly-aggregate-title">주차별 익명 학습 집계</h2>
       </div>
 
       {error ? (
@@ -198,12 +193,7 @@ export function ProfessorCourseProgressReportView({
   return (
     <section className="professor-panel" aria-labelledby="professor-course-progress-report-title">
       <div className="community-section-heading">
-        <div>
-          <h2 id="professor-course-progress-report-title">과목 진행 현황</h2>
-          <p className="mt-1 text-sm font-normal text-slate-500">
-            담당 과목의 학습 상태와 최근 활동을 확인합니다.
-          </p>
-        </div>
+        <h2 id="professor-course-progress-report-title">과목 진행 현황</h2>
       </div>
 
       {report.offerings.length === 0 ? (

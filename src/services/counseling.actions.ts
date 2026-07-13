@@ -55,6 +55,14 @@ export async function createCounselingRequest(formData: FormData) {
     .single();
 
   if (error || !data) {
+    console.error("[counseling] counseling request insert failed", {
+      operation: "createCounselingRequest",
+      table: "counseling_requests",
+      code: error?.code ?? "missing_insert_result",
+      message: error?.message ?? "Insert returned no row",
+      details: error?.details ?? null,
+      hint: error?.hint ?? null,
+    });
     return { ok: false, message: "상담 신청을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 

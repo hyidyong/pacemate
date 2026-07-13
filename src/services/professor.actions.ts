@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createUserNotification } from "@/services/notifications.create.service";
 import {
   isWeekday,
@@ -18,6 +19,42 @@ function text(value: FormDataEntryValue | null, fallback = "") {
 function integer(value: FormDataEntryValue | null, fallback: number) {
   const parsed = Number.parseInt(text(value), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export async function updateProfessorProfile(formData: FormData) {
+  const profile = await getDemoProfile();
+
+  if (profile?.role !== "professor") {
+    return { ok: false, message: "교수 계정으로만 프로필을 수정할 수 있습니다.", professor: null };
+  }
+
+  const office = text(formData.get("office")) || null;
+  const email = text(formData.get("email")) || null;
+  const bio = text(formData.get("bio")) || null;
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, message: "이메일 형식을 확인해 주세요.", professor: null };
+  }
+
+  if ((office?.length ?? 0) > 120 || (email?.length ?? 0) > 255 || (bio?.length ?? 0) > 1000) {
+    return { ok: false, message: "입력한 내용의 길이를 확인해 주세요.", professor: null };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("professors")
+    .update({ office, email, bio })
+    .eq("profile_id", profile.id)
+    .select("id, name, office, email, bio, department:departments(name)")
+    .maybeSingle();
+
+  if (error || !data) {
+    return { ok: false, message: "프로필을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", professor: null };
+  }
+
+  revalidatePath("/professor");
+  revalidatePath("/professor/mypage");
+  return { ok: true, message: "프로필을 저장했습니다.", professor: data };
 }
 
 async function getCurrentProfessorForAction(profileId?: string | null) {
