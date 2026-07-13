@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CurriculumPreview } from "@/types/curriculum";
 import { buildElectronicEngineeringLongTermRoadmap } from "@/services/long-term-roadmap";
 import type { LongTermRoadmapInput } from "@/types/long-term-roadmap";
@@ -19,6 +19,13 @@ export function ElectronicEngineeringOnboardingWorkspace({
   currentSemester,
 }: ElectronicEngineeringOnboardingWorkspaceProps) {
   const [checkedCourseIds, setCheckedCourseIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    const defaultCourseIds = preview?.courses
+      .filter((course) => course.recommendedGrade === currentGrade)
+      .map((course) => course.id) ?? [];
+    setCheckedCourseIds(new Set(defaultCourseIds));
+  }, [preview, currentGrade]);
 
   const roadmapInput: LongTermRoadmapInput = useMemo(
     () => ({ currentGrade, currentSemester, completedCourseIds: [...checkedCourseIds] }),
