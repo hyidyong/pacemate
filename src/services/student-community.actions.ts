@@ -40,7 +40,7 @@ export async function addCourseToSchedule(formData: FormData) {
     .upsert(payload, { onConflict: "student_id,course_id,status" });
 
   if (error) {
-    return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/mypage");
@@ -64,7 +64,7 @@ export async function toggleFavoriteCourse(formData: FormData) {
     .eq("student_id", profileId);
 
   if (error) {
-    return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/mypage");
@@ -87,7 +87,7 @@ export async function removeCourseFromSchedule(formData: FormData) {
     .eq("student_id", profileId);
 
   if (error) {
-    return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/mypage");
@@ -130,7 +130,7 @@ export async function createCommunityPost(formData: FormData) {
     .single();
 
   if (error) {
-    return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/community");
@@ -161,7 +161,7 @@ export async function addCommunityComment(formData: FormData) {
     .single();
 
   if (error) {
-    return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/community");
@@ -193,7 +193,7 @@ export async function togglePostReaction(formData: FormData) {
       .eq("id", existing.id);
 
     if (error) {
-      return { ok: false, message: error.message };
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
     }
 
     revalidatePath("/community");
@@ -206,7 +206,7 @@ export async function togglePostReaction(formData: FormData) {
     .insert({ post_id: postId, user_id: profileId, type });
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/community");

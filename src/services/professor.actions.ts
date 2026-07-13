@@ -64,7 +64,7 @@ async function resolveOwnedCourse(courseValue: string, profileId?: string | null
     .maybeSingle();
 
   if (error) {
-    return { ok: false as const, message: error.message };
+    return { ok: false as const, message: "과목 권한을 확인하지 못했습니다." };
   }
 
   if (!data) {
@@ -118,14 +118,14 @@ export async function addProfessorAvailability(formData: FormData) {
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
     }
 
     revalidatePath("/professor");
     return { ok: true, message: "상담 가능 시간이 추가됐습니다." };
   } catch (err: any) {
     console.error("Action error:", err);
-    return { ok: false, message: err.message || "알 수 없는 오류가 발생했습니다." };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 }
 
@@ -153,7 +153,7 @@ export async function addProfessorFaq(formData: FormData) {
   });
 
   if (error) {
-    return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/professor");
@@ -188,7 +188,7 @@ export async function updateCounselingStatus(formData: FormData) {
     .single();
 
   if (error) {
-    return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   const notificationResult = await createUserNotification({
@@ -231,7 +231,7 @@ export async function updateCounselingDetails(formData: FormData) {
     .eq("id", requestId);
 
   if (error) {
-    return { ok: false, message: error.message };
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/professor");
@@ -292,7 +292,7 @@ export async function createRoadmapRevisionRequest(formData: FormData) {
     .single();
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   const notificationResult = await createUserNotification({
@@ -374,7 +374,7 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
     .single();
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   const notificationResult = await createUserNotification({
@@ -423,14 +423,14 @@ export async function addProfessorAdminTask(formData: FormData) {
     });
 
     if (error) {
-      return { ok: false, message: error.message };
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
     }
 
     revalidatePath("/professor");
     return { ok: true, message: "행정 업무가 추가됐습니다." };
   } catch (err: any) {
     console.error("Action error:", err);
-    return { ok: false, message: err.message || "알 수 없는 오류가 발생했습니다." };
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 }
 
@@ -440,13 +440,13 @@ export async function deleteProfessorAdminTask(formData: FormData) {
     if (!id) return { ok: false, message: "ID 누락" };
 
     const { error } = await supabase.from("professor_admin_tasks").delete().eq("id", id);
-    if (error) return { ok: false, message: error.message };
+    if (error) return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
 
     revalidatePath("/professor");
     return { ok: true, message: "행정 업무가 삭제됐습니다." };
   } catch (err: any) {
     console.error("Action error:", err);
-    return { ok: false, message: err.message || "알 수 없는 오류가 발생했습니다." };
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 }
 
@@ -462,12 +462,12 @@ export async function toggleProfessorAvailability(formData: FormData) {
       .update({ is_active: isActive })
       .eq("id", id);
 
-    if (error) return { ok: false, message: error.message };
+    if (error) return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
 
     revalidatePath("/professor");
     return { ok: true, message: isActive ? "상담 가능 상태로 변경됐습니다." : "상담 불가 상태로 변경됐습니다." };
   } catch (err: any) {
     console.error("Action error:", err);
-    return { ok: false, message: err.message || "알 수 없는 오류가 발생했습니다." };
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 }

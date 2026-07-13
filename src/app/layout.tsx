@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { PwaRegistration } from "@/components/notifications/pwa-registration";
@@ -15,8 +15,9 @@ export const metadata: Metadata = {
   description: "AI 기반 학업 어시스턴트 및 전공 적응 커뮤니티 플랫폼",
   metadataBase: new URL("https://pacemate-tau.vercel.app"),
   manifest: "/manifest.webmanifest",
-  themeColor: "#047857",
 };
+
+export const viewport: Viewport = { themeColor: "#047857" };
 
 export default function RootLayout({
   children,

@@ -56,7 +56,7 @@ export async function submitRoadmapFeedback(formData: FormData) {
     .single();
 
   if (error) {
-    return { ok: false, message: error.message };
+    return { ok: false, message: "피드백을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   const notificationResult = await createUserNotification({
