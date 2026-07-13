@@ -15,7 +15,7 @@
     "@radix-ui/react-popover": "^1.1.19",
     "@radix-ui/react-select": "3.0.0-rc.1780278394130",
     "@radix-ui/react-slot": "^1.3.0",
-    "@supabase/ssr": "0.12.0",
+    "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.0",
     "@tailwindcss/postcss": "^4.3.2",
     "autoprefixer": "^10.5.2",
