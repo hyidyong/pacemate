@@ -81,6 +81,17 @@ export type MyPageData = {
 };
 
 const defaultSchoolName = "계명대학교";
+const postSelectColumns =
+  "id, author_id, category, board_key, title, content, course_id, school_id, display_mode, anonymous_alias, view_count, is_resolved, created_at, course:courses(id, code, name), author:profiles(id, name, role)";
+
+function isMissingCommunityTypeColumn(error: { code?: string; message?: string } | null) {
+  return Boolean(
+    error &&
+      (error.code === "42703" ||
+        error.message?.includes("posts.community_type") ||
+        error.message?.includes("community_type")),
+  );
+}
 
 export async function ensureProfileSchool(profile: DemoProfile | null) {
   if (!profile || profile.school_id) {
@@ -204,15 +215,26 @@ export async function getMyCourses(
 
 async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+
+  let { data, error } = await supabase
     .from("posts")
-    .select(
-      "id, author_id, category, board_key, title, content, course_id, school_id, display_mode, anonymous_alias, view_count, is_resolved, created_at, course:courses(id, code, name), author:profiles(id, name, role)",
-    )
+    .select(postSelectColumns)
     .eq("status", "active")
     .eq("community_type", "student")
     .order("created_at", { ascending: false })
     .limit(80);
+
+  if (isMissingCommunityTypeColumn(error)) {
+    const fallback = await supabase
+      .from("posts")
+      .select(postSelectColumns)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(80);
+
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     throw new Error(`Failed to load posts: ${error.message}`);
