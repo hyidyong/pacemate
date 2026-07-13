@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase/client";
-import { readDemoSession } from "@/lib/auth/demo-session";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getDemoProfile } from "@/services/session.service";
 
 async function getProfileId() {
-  const session = await readDemoSession();
-  return session?.role === "student" ? session.profileId : null;
+  const profile = await getDemoProfile();
+  return profile?.role === "student" ? profile.id : null;
 }
 
 function requiredText(value: FormDataEntryValue | null, fallback = "") {
@@ -21,6 +21,7 @@ export async function addCourseToSchedule(formData: FormData) {
   if (!profileId || !courseId) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
+  const supabase = await createSupabaseServerClient();
 
   const payload = {
     student_id: profileId,
@@ -56,6 +57,7 @@ export async function toggleFavoriteCourse(formData: FormData) {
   if (!profileId || !enrollmentId) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
+  const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase
     .from("student_courses")
@@ -79,6 +81,7 @@ export async function removeCourseFromSchedule(formData: FormData) {
   if (!profileId || !enrollmentId) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
+  const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase
     .from("student_courses")
@@ -111,11 +114,13 @@ export async function createCommunityPost(formData: FormData) {
   if (!title || !content) {
     return { ok: false, message: "제목과 내용을 입력해 주세요." };
   }
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("posts")
     .insert({
       author_id: profileId,
+      community_type: "student",
       school_id: schoolId || null,
       course_id: courseId || null,
       category,
@@ -145,6 +150,17 @@ export async function addCommunityComment(formData: FormData) {
 
   if (!profileId || !postId || !content) {
     return { ok: false, message: "댓글 내용을 입력해 주세요." };
+  }
+  const supabase = await createSupabaseServerClient();
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("id", postId)
+    .eq("community_type", "student")
+    .maybeSingle();
+  if (!post) {
+    return { ok: false, message: "댓글을 등록할 수 없는 게시글입니다." };
   }
 
   const { data, error } = await supabase
@@ -176,6 +192,17 @@ export async function togglePostReaction(formData: FormData) {
 
   if (!profileId || !postId || (type !== "like" && type !== "scrap")) {
     return { ok: false, message: "반응을 저장할 수 없습니다." };
+  }
+  const supabase = await createSupabaseServerClient();
+
+  const { data: post } = await supabase
+    .from("posts")
+    .select("id")
+    .eq("id", postId)
+    .eq("community_type", "student")
+    .maybeSingle();
+  if (!post) {
+    return { ok: false, message: "반응을 저장할 수 없는 게시글입니다." };
   }
 
   const { data: existing } = await supabase

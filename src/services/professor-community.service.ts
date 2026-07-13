@@ -1,4 +1,6 @@
-import { supabase } from "@/lib/supabase/client";
+import "server-only";
+
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
 
 export type ProfessorLoungePost = {
@@ -18,11 +20,12 @@ export async function getProfessorLoungePosts(
   if (profile?.role !== "professor") {
     return [];
   }
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("posts")
     .select("id, title, content, category, display_mode, anonymous_alias, created_at, author:profiles(id, name, role)")
-    .eq("board_key", "professor")
+    .eq("community_type", "professor")
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(40);

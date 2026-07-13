@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Bot, BookOpenText, CalendarClock, House, MessagesSquare, Sparkles, UserCircle2 } from "lucide-react";
+import { Bot, Sparkles } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { ProfessorMobileBottomNav } from "@/components/layout/professor-mobile-bottom-nav";
 import {
   getNotificationsForProfile,
   getUnreadNotificationCount,
@@ -23,14 +24,6 @@ export async function AppShell({ children }: AppShellProps) {
   const isOperator = profile?.role === "assistant" || profile?.role === "admin";
   const isStudent = isAuthenticated && !isProfessor && !isOperator;
   const homeHref = profile ? getRoleHomePath(profile.role) : "/";
-  const professorMobileNavItems = [
-    { label: "홈", href: "/professor", icon: House },
-    { label: "과목 관리", href: "/professor?tab=roadmap&sub=roadmap-edit", icon: BookOpenText },
-    { label: "일정관리", href: "/professor?tab=schedule&sub=calendar", icon: CalendarClock },
-    { label: "마이페이지", href: "/mypage", icon: UserCircle2 },
-    { label: "커뮤니티", href: "/professor/lounge", icon: MessagesSquare },
-  ];
-
   return (
     <div className="app-shell">
       <AppHeader
@@ -53,25 +46,7 @@ export async function AppShell({ children }: AppShellProps) {
       {isStudent && <MobileBottomNav />}
 
       {/* 교수 전용 모바일 하단바 */}
-      {isAuthenticated && isProfessor && (
-        <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-gray-100 bg-white/90 backdrop-blur-md"
-          aria-label="Professor mobile navigation"
-        >
-          <div className="mx-auto flex h-[60px] max-w-4xl items-center justify-around px-2">
-            {professorMobileNavItems.map(({ label, href, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-[11px] font-medium text-gray-400 transition-colors hover:text-emerald-600"
-              >
-                <Icon size={18} />
-                <span className="leading-none">{label}</span>
-              </Link>
-            ))}
-          </div>
-        </nav>
-      )}
+      {isAuthenticated && isProfessor && <ProfessorMobileBottomNav />}
 
       {/* 운영자 전용 단순 모바일 하단바 */}
       {isAuthenticated && isOperator && !isProfessor && (

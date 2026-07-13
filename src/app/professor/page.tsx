@@ -12,6 +12,7 @@ import type { ProfessorCourseProgressReport } from "@/types/professor-course-pro
 import { getProfessorAnonymousWeeklyAggregate } from "@/services/professor-anonymous-weekly-aggregate.server";
 import type { ProfessorAnonymousWeeklyAggregateReport } from "@/types/professor-anonymous-weekly-aggregate";
 import { getProfessorQuestionInbox } from "@/services/professor-questions.server";
+import { ProfessorProfileSummary } from "@/components/professor/professor-profile-summary";
 
 // ✅ [Opt 4] ProfessorWorkspace(50KB)를 Lazy Load — 교수 페이지 초기 JS 대폭 감소
 const ProfessorWorkspace = dynamicImport(
@@ -86,6 +87,8 @@ export default async function ProfessorPage({
       <section className="screen-hero professor-hero">
         <h1>교수 대시보드</h1>
       </section>
+
+      {data.professor ? <ProfessorProfileSummary professor={data.professor} courses={data.courses} /> : null}
 
       {profile?.role === "professor" ? (
         <section className="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6">

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDemoProfile } from "@/services/session.service";
 
 function text(value: FormDataEntryValue | null, fallback = "") {
@@ -22,9 +22,11 @@ export async function createProfessorLoungePost(formData: FormData) {
   if (!title || content.length < 5) {
     return { ok: false, message: "제목과 내용을 조금 더 구체적으로 입력해 주세요." };
   }
+  const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.from("posts").insert({
     author_id: profile.id,
+    community_type: "professor",
     school_id: profile.school_id,
     category,
     board_key: "professor",

@@ -1,4 +1,6 @@
-import { supabase } from "@/lib/supabase/client";
+import "server-only";
+
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
 
 export type CourseRecord = {
@@ -84,6 +86,7 @@ export async function ensureProfileSchool(profile: DemoProfile | null) {
   if (!profile || profile.school_id) {
     return;
   }
+  const supabase = await createSupabaseServerClient();
 
   const { data: school } = await supabase
     .from("schools")
@@ -102,6 +105,7 @@ export async function ensureProfileSchool(profile: DemoProfile | null) {
 export async function getMyPageData(
   profile: DemoProfile | null,
 ): Promise<MyPageData> {
+  const supabase = await createSupabaseServerClient();
   await ensureProfileSchool(profile);
   const [schoolName, courses, myCourses] = await Promise.all([
     getSchoolName(profile),
@@ -143,6 +147,7 @@ export async function getCommunityData(
 }
 
 async function getSchoolName(profile: DemoProfile | null) {
+  const supabase = await createSupabaseServerClient();
   if (profile?.school_id) {
     const { data } = await supabase
       .from("schools")
@@ -159,6 +164,7 @@ async function getSchoolName(profile: DemoProfile | null) {
 }
 
 async function getCourses(): Promise<CourseRecord[]> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("courses")
     .select(
@@ -179,6 +185,7 @@ export async function getMyCourses(
   if (!profileId) {
     return [];
   }
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("student_courses")
@@ -196,12 +203,14 @@ export async function getMyCourses(
 }
 
 async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("posts")
     .select(
       "id, author_id, category, board_key, title, content, course_id, school_id, display_mode, anonymous_alias, view_count, is_resolved, created_at, course:courses(id, code, name), author:profiles(id, name, role)",
     )
     .eq("status", "active")
+    .eq("community_type", "student")
     .order("created_at", { ascending: false })
     .limit(80);
 
@@ -272,6 +281,7 @@ export async function getPostComments(postIds: string[]): Promise<Record<string,
   if (!postIds.length) {
     return {};
   }
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("comments")
@@ -296,6 +306,7 @@ async function getScrapedPosts(profileId?: string): Promise<CommunityPostRecord[
   if (!profileId) {
     return [];
   }
+  const supabase = await createSupabaseServerClient();
 
   const { data } = await supabase
     .from("post_reactions")
@@ -321,6 +332,7 @@ async function getMyPosts(profileId?: string): Promise<CommunityPostRecord[]> {
 
 async function getLikedPosts(profileId?: string): Promise<CommunityPostRecord[]> {
   if (!profileId) return [];
+  const supabase = await createSupabaseServerClient();
   const { data } = await supabase.from("post_reactions").select("post_id").eq("user_id", profileId).eq("type", "like");
   const postIds = new Set((data ?? []).map(item => item.post_id));
   const posts = await getPosts(profileId);
@@ -329,6 +341,7 @@ async function getLikedPosts(profileId?: string): Promise<CommunityPostRecord[]>
 
 async function getCommentedPosts(profileId?: string): Promise<CommunityPostRecord[]> {
   if (!profileId) return [];
+  const supabase = await createSupabaseServerClient();
   const { data } = await supabase.from("comments").select("post_id").eq("author_id", profileId).eq("status", "active");
   const postIds = new Set((data ?? []).map(item => item.post_id));
   const posts = await getPosts(profileId);
