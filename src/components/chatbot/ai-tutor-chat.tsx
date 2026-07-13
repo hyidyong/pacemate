@@ -2,11 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Send, Bot, User, AlertCircle, Sparkles, Hand, Menu, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { askAiTutor } from "@/services/ai-tutor.actions";
-import { useAppStore, type ChatSession } from "@/store/app-store";
+import { escalateTutorQuestion } from "@/services/ask.actions";
+import { useAppStore } from "@/store/app-store";
+import type { ProfessorQuestionCourseOption } from "@/types/professor-questions";
 // TODO: Supabase integration for loading/saving messages from db
 
 type Message = {
@@ -16,16 +18,15 @@ type Message = {
   isEscalated?: boolean;
   category?: string;
   originalQuestion?: string;
+  sourceMessageId?: string | null;
 };
 
-export function AiTutorChat({ studentId }: { studentId: string }) {
+export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOption[] }) {
   const router = useRouter();
   const { 
     isChatSidebarOpen, 
     setIsChatSidebarOpen,
     cachedSessions,
-    activeChatSessionId,
-    setActiveChatSessionId
   } = useAppStore();
 
   const [messages, setMessages] = useState<Message[]>([{
@@ -35,6 +36,8 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
   }]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState(courses[0]?.id ?? "");
+  const [escalationMessage, setEscalationMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,7 +45,10 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
   }, [messages, isLoading]);
 
   // 스와이프로 뒤로가기 (Framer Motion drag)
-  const handleDragEnd = (e: any, info: any) => {
+  const handleDragEnd = (
+    _event: MouseEvent | TouchEvent | PointerEvent,
+    info: PanInfo,
+  ) => {
     if (info.offset.x > 100 && info.velocity.x > 200) {
       router.back();
     }
@@ -63,7 +69,7 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
     setIsLoading(true);
 
     try {
-      const result = await askAiTutor(userMessage, studentId);
+      const result = await askAiTutor(userMessage);
       
       setMessages([
         ...newMessages,
@@ -74,6 +80,7 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
           category: result.category,
           isEscalated: result.isEscalated,
           originalQuestion: userMessage,
+          sourceMessageId: result.sourceMessageId,
         }
       ]);
     } catch (error) {
@@ -90,9 +97,16 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
     }
   };
 
-  const handleAskProfessor = (originalQuestion: string) => {
-    const summary = `[AI 튜터 미해결 질문] ${originalQuestion.slice(0, 50)}${originalQuestion.length > 50 ? '...' : ''}`;
-    router.push(`/ask?defaultQuestion=${encodeURIComponent(summary)}`);
+  const handleAskProfessor = async (message: Message) => {
+    if (!message.sourceMessageId || !message.category || !selectedCourseId || isLoading) return;
+    setIsLoading(true);
+    const formData = new FormData();
+    formData.set("courseId", selectedCourseId);
+    formData.set("category", message.category);
+    formData.set("sourceMessageId", message.sourceMessageId);
+    const result = await escalateTutorQuestion(formData);
+    setEscalationMessage(result.message);
+    setIsLoading(false);
   };
 
   return (
@@ -211,15 +225,34 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
                         </div>
                       )}
                     </div>
-                    {m.isEscalated && m.originalQuestion && (
-                      <button 
-                        className="flex items-center gap-1.5 text-xs text-rose-600 bg-white border border-rose-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-rose-50 transition-colors mt-1"
-                        onClick={() => handleAskProfessor(m.originalQuestion!)}
-                      >
-                        <Hand size={14} />
-                        교수님/조교에게 직접 질문하기
-                      </button>
-                    )}
+                    {m.isEscalated && m.originalQuestion ? (
+                      <div className="mt-1 flex flex-col gap-2 rounded-lg border border-rose-200 bg-white p-2">
+                        <select
+                          aria-label="질문을 전달할 과목"
+                          value={selectedCourseId}
+                          onChange={(event) => setSelectedCourseId(event.target.value)}
+                          className="rounded-md border px-2 py-1.5 text-xs text-gray-700"
+                        >
+                          {courses.map((course) => (
+                            <option key={course.id} value={course.id}>{course.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          className="flex items-center gap-1.5 text-xs text-rose-600"
+                          disabled={!m.sourceMessageId || !selectedCourseId || isLoading}
+                          onClick={() => handleAskProfessor(m)}
+                          type="button"
+                        >
+                          <Hand size={14} />
+                          교수에게 이 질문 전달하기
+                        </button>
+                        {!m.sourceMessageId ? (
+                          <span className="text-xs text-gray-500">
+                            대화 원문을 안전하게 저장하지 못해 전달할 수 없습니다.
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -237,6 +270,11 @@ export function AiTutorChat({ studentId }: { studentId: string }) {
               </div>
             </div>
           )}
+          {escalationMessage ? (
+            <p className="mx-auto max-w-3xl text-sm text-gray-600" aria-live="polite">
+              {escalationMessage}
+            </p>
+          ) : null}
           <div ref={chatEndRef} />
         </div>
 

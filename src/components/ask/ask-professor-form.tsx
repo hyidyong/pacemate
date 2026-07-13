@@ -1,87 +1,92 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { submitQuestionToProfessor } from "@/services/ask.actions";
-import type { CounselingCourseOption } from "@/types/counseling";
+import {
+  professorQuestionCategories,
+  type ProfessorQuestionCategory,
+  type ProfessorQuestionCourseOption,
+} from "@/types/professor-questions";
 
-export function AskProfessorForm({ 
-  courses, 
-  defaultQuestion 
-}: { 
-  courses: CounselingCourseOption[]; 
-  defaultQuestion: string 
+export function AskProfessorForm({
+  courses,
+  defaultQuestion,
+}: {
+  courses: ProfessorQuestionCourseOption[];
+  defaultQuestion: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [courseId, setCourseId] = useState(courses[0]?.id || "");
-  const [professorId, setProfessorId] = useState(courses[0]?.professors[0]?.id || "");
+  const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
+  const [category, setCategory] = useState<ProfessorQuestionCategory>("수업 운영");
   const [question, setQuestion] = useState(defaultQuestion);
-  const [message, setMessage] = useState("");
+  const [resultMessage, setResultMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const submissionKeyRef = useRef("");
 
-  const selectedCourse = courses.find((c) => c.id === courseId);
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!courseId || !question.trim() || isPending) return;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!courseId || !professorId || !question.trim()) return;
-
+    submissionKeyRef.current ||= crypto.randomUUID();
     const formData = new FormData();
     formData.set("courseId", courseId);
-    formData.set("professorId", professorId);
+    formData.set("category", category);
     formData.set("question", question);
+    formData.set("submissionKey", submissionKeyRef.current);
 
     startTransition(async () => {
       const result = await submitQuestionToProfessor(formData);
-      setMessage(result.message);
-      setTimeout(() => setMessage(""), 3000);
+      setResultMessage({ ok: result.ok, text: result.message });
       if (result.ok) {
         setQuestion("");
+        submissionKeyRef.current = "";
       }
     });
-  };
+  }
 
   return (
     <>
-      {message && (
-        <div className={`fixed bottom-10 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-full shadow-xl z-50 text-white font-medium transition-all animate-in fade-in slide-in-from-bottom-5 ${message.includes("성공") ? "bg-emerald-600" : "bg-destructive"}`}>
-          {message}
+      {resultMessage ? (
+        <div
+          aria-live="polite"
+          className={`fixed bottom-10 left-1/2 z-50 -translate-x-1/2 rounded-full px-6 py-3 font-medium text-white shadow-xl ${resultMessage.ok ? "bg-emerald-600" : "bg-destructive"}`}
+        >
+          {resultMessage.text}
         </div>
-      )}
+      ) : null}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2">
             <span className="text-sm font-semibold text-muted-foreground">질문 대상 과목</span>
-            <select 
+            <select
               value={courseId}
-              onChange={(e) => {
-                setCourseId(e.target.value);
-                const course = courses.find(c => c.id === e.target.value);
-                if (course && course.professors.length > 0) {
-                  setProfessorId(course.professors[0].id);
-                } else {
-                  setProfessorId("");
-                }
-              }}
-              className="h-10 px-3 py-2 rounded-md border bg-background text-sm"
+              onChange={(event) => setCourseId(event.target.value)}
+              className="h-10 rounded-md border bg-background px-3 py-2 text-sm"
+              required
             >
-              {courses.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.name}
+                </option>
               ))}
             </select>
           </label>
-          
+
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-semibold text-muted-foreground">대상 교수/조교</span>
-            <select 
-              value={professorId}
-              onChange={(e) => setProfessorId(e.target.value)}
-              className="h-10 px-3 py-2 rounded-md border bg-background text-sm"
-              disabled={!selectedCourse || selectedCourse.professors.length === 0}
+            <span className="text-sm font-semibold text-muted-foreground">질문 분류</span>
+            <select
+              value={category}
+              onChange={(event) => setCategory(event.target.value as ProfessorQuestionCategory)}
+              className="h-10 rounded-md border bg-background px-3 py-2 text-sm"
             >
-              {selectedCourse?.professors.map(p => (
-                <option key={p.id} value={p.id}>{p.name} 교수님/조교님</option>
+              {professorQuestionCategories.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
               ))}
             </select>
           </label>
@@ -89,27 +94,29 @@ export function AskProfessorForm({
 
         <label className="flex flex-col gap-2">
           <span className="text-sm font-semibold text-muted-foreground">질문 내용</span>
-          <textarea 
+          <textarea
             value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="질문 내용을 자세히 적어주세요. (강의 내용, 학사 일정, 과제 등)"
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="강의 내용이나 수업 운영에 관한 질문을 자세히 적어 주세요."
             rows={6}
-            className="px-3 py-3 rounded-md border bg-background text-sm resize-y"
+            maxLength={2000}
+            className="resize-y rounded-md border bg-background px-3 py-3 text-sm"
             required
           />
         </label>
 
-        <div className="flex justify-end gap-3 pt-4 border-t">
-          <Button 
-            type="button" 
-            variant="outline" 
-            onClick={() => router.back()}
-            disabled={isPending}
-          >
+        {!courses.length ? (
+          <p className="text-sm text-muted-foreground">
+            담당 교수가 안전하게 연결된 수강 과목이 없습니다.
+          </p>
+        ) : null}
+
+        <div className="flex justify-end gap-3 border-t pt-4">
+          <Button type="button" variant="outline" onClick={() => router.back()} disabled={isPending}>
             취소
           </Button>
-          <Button type="submit" disabled={isPending || !question.trim()}>
-            <Send size={16} className="mr-2" />
+          <Button type="submit" disabled={isPending || !courseId || !question.trim()}>
+            <Send size={16} className="mr-2" aria-hidden="true" />
             질문 제출하기
           </Button>
         </div>

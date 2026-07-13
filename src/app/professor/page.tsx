@@ -11,6 +11,7 @@ import { getProfessorCourseProgressReport } from "@/services/professor-course-pr
 import type { ProfessorCourseProgressReport } from "@/types/professor-course-progress-report";
 import { getProfessorAnonymousWeeklyAggregate } from "@/services/professor-anonymous-weekly-aggregate.server";
 import type { ProfessorAnonymousWeeklyAggregateReport } from "@/types/professor-anonymous-weekly-aggregate";
+import { getProfessorQuestionInbox } from "@/services/professor-questions.server";
 
 // ✅ [Opt 4] ProfessorWorkspace(50KB)를 Lazy Load — 교수 페이지 초기 JS 대폭 감소
 const ProfessorWorkspace = dynamicImport(
@@ -50,12 +51,14 @@ export default async function ProfessorPage({
     questionCount,
     courseProgressReportResult,
     anonymousWeeklyAggregateResult,
+    professorQuestionInbox,
   ] = await Promise.all([
     getProfessorPageData(profile),
     getUnreadNotificationCountByCategory(profile, "counseling"),
     getUnreadNotificationCountByCategory(profile, "question"),
     getProfessorCourseProgressReport(),
     getProfessorAnonymousWeeklyAggregate(),
+    getProfessorQuestionInbox(),
   ]);
 
   const professorCourseProgressReport: ProfessorCourseProgressReport = courseProgressReportResult.ok
@@ -111,6 +114,7 @@ export default async function ProfessorPage({
           professorCourseProgressReportError={professorCourseProgressReportError}
           professorAnonymousWeeklyAggregate={professorAnonymousWeeklyAggregate}
           professorAnonymousWeeklyAggregateError={professorAnonymousWeeklyAggregateError}
+          professorQuestionInbox={professorQuestionInbox}
           roadmapRequests={data.roadmapRequests}
           teachingSlots={data.teachingSlots}
         />

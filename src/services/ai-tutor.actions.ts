@@ -1,6 +1,9 @@
 "use server";
 
 import { supabase } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getDemoProfile } from "@/services/session.service";
+import { normalizeQuestionCategory } from "@/lib/professor-question-normalization";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -106,10 +109,16 @@ export async function submitProgressFeedback(courseId: string, studentId: string
   await generateWeeklyGuide(courseId, studentId, nextWeek, feedback);
 }
 
-export async function askAiTutor(message: string, studentId: string) {
+export async function askAiTutor(message: string) {
+  const profile = await getDemoProfile();
+  const question = message.trim();
+  if (!profile || profile.role !== "student" || !question || question.length > 2000) {
+    return { response: "질문을 확인할 수 없습니다.", isEscalated: false, sourceMessageId: null };
+  }
+  const requestSupabase = await createSupabaseServerClient();
   // 1. Fetch available contextual data (Notices, FAQs, Syllabi, etc.)
-  const { data: faqs } = await supabase.from("faqs").select("question, answer").limit(5);
-  const { data: courses } = await supabase.from("courses").select("name, description");
+  const { data: faqs } = await requestSupabase.from("faqs").select("question, answer").limit(5);
+  const { data: courses } = await requestSupabase.from("courses").select("name, description");
 
   const pdfSyllabusMock = `
 [PDF 강의계획서 데이터]
@@ -163,7 +172,7 @@ ${pdfSyllabusMock}
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `참고 자료:\n${contextData}\n\n학생 질문: ${message}` },
+          { role: "user", content: `참고 자료:\n${contextData}\n\n학생 질문: ${question}` },
         ],
         response_format: { type: "json_object" },
         temperature: 0.1,
@@ -171,12 +180,14 @@ ${pdfSyllabusMock}
     });
 
     if (!res.ok) {
-      console.error("OpenAI API Error:", await res.text());
-      return { response: "AI API 연동에 실패했습니다.", isEscalated: false };
+      return { response: "AI 응답을 불러오지 못했습니다.", isEscalated: false, sourceMessageId: null };
     }
 
     const json = await res.json();
     const result = JSON.parse(json.choices[0].message.content);
+    const category = normalizeQuestionCategory(
+      typeof result.category === "string" ? result.category : "",
+    ) ?? "수업 운영";
 
     let isEscalated = false;
     let finalResponse = result.response;
@@ -184,14 +195,39 @@ ${pdfSyllabusMock}
     const exceptionKeywords = ["공식 소스에 포함되어 있지 않습니다", "확인할 수 없습니다", "정보가 없습니다"];
     const hasExceptionKeyword = exceptionKeywords.some(kw => finalResponse.includes(kw));
 
-    if (result.confidence < 0.7 || result.category === "상담 필요" || hasExceptionKeyword) {
+    if (result.confidence < 0.7 || category === "상담 필요" || hasExceptionKeyword) {
       isEscalated = true;
       finalResponse = "[AI 신뢰도 낮음] 이 질문은 정확한 답변을 위해 교수님/조교님께 전달하시는 것을 권장합니다.\n\n" + result.response;
     }
 
-    return { response: finalResponse, category: result.category, isEscalated };
-  } catch (error) {
-    console.error("AI Error:", error);
-    return { response: "오류가 발생했습니다.", isEscalated: false };
+    let sourceMessageId: string | null = null;
+    if (isEscalated) {
+      const { data: session, error: sessionError } = await requestSupabase
+        .from("chat_sessions")
+        .insert({ user_id: profile.id, title: question.slice(0, 80) })
+        .select("id")
+        .single();
+      if (!sessionError && session) {
+        const { data: sourceMessage, error: sourceError } = await requestSupabase
+          .from("chat_messages")
+          .insert({ session_id: session.id, role: "user", content: question })
+          .select("id")
+          .single();
+        if (!sourceError && sourceMessage) {
+          sourceMessageId = sourceMessage.id;
+          await requestSupabase.from("chat_messages").insert({
+            session_id: session.id,
+            role: "assistant",
+            content: finalResponse,
+            confidence: typeof result.confidence === "number" ? result.confidence : null,
+            source_json: { category, escalated: true },
+          });
+        }
+      }
+    }
+
+    return { response: finalResponse, category, isEscalated, sourceMessageId };
+  } catch {
+    return { response: "AI 응답 처리 중 오류가 발생했습니다.", isEscalated: false, sourceMessageId: null };
   }
 }
