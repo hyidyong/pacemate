@@ -124,6 +124,7 @@ export default async function NotificationsPage({
               <CheckCheck size={16} aria-hidden="true" />
             </Button>
           </form>
+          <Link href="/notifications/settings" className="rounded-md border px-4 py-2 text-sm font-semibold">알림 설정</Link>
         </div>
 
         <div className="notifications-summary-card">
