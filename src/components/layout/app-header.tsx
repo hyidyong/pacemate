@@ -3,14 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
 import {
   CircleHelp,
   GraduationCap,
   MessageSquareText,
   ShieldCheck,
   UserRound,
-  Bot,
   Menu,
   X,
   ChevronDown
@@ -46,7 +44,6 @@ export function AppHeader({
   notifications,
   unreadCount,
 }: AppHeaderProps) {
-  const pathname = usePathname();
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfessorMenuOpen, setIsProfessorMenuOpen] = useState(false);
@@ -73,7 +70,6 @@ export function AppHeader({
   };
 
   const isMobileMenuVisible = isProfessor ? isProfessorMenuOpen : isMobileMenuOpen;
-  const isCoursesPage = pathname === "/courses" || pathname.startsWith("/courses/");
 
   const desktopRoutes = !isAuthenticated
     ? []
@@ -82,8 +78,7 @@ export function AppHeader({
       : isOperator
         ? appRoutes.filter((route) => route.href === "/admin")
         : appRoutes
-            .filter((route) => !["/community", "/mypage", "/professor", "/admin"].includes(route.href))
-            .slice(0, 6);
+            .filter((route) => ["/dashboard", "/roadmap", "/courses", "/reviews"].includes(route.href));
 
   const mobileRouteHrefs = !isAuthenticated
     ? []
@@ -91,7 +86,7 @@ export function AppHeader({
       ? ["/professor"]
       : isOperator
         ? ["/admin"]
-        : ["/dashboard", "/mypage", "/chatbot", "/counseling", "/community"];
+        : ["/dashboard", "/mypage", "/counseling", "/community"];
   const mobileRoutes = appRoutes.filter((route) => mobileRouteHrefs.includes(route.href));
 
   return (
@@ -183,12 +178,6 @@ export function AppHeader({
           ) : null}
           {isAuthenticated && !isProfessor && !isOperator ? (
             <>
-              {!isCoursesPage ? (
-                <Link href="/chatbot" className="header-action-link header-icon-link hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200" aria-label="AI 튜터">
-                  <Bot aria-hidden="true" />
-                  <span className="sr-only">AI 튜터</span>
-                </Link>
-              ) : null}
               <Link href="/community" className="header-action-link header-action-community hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
                 <MessageSquareText aria-hidden="true" />
                 <span>커뮤니티</span>
