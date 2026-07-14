@@ -1,5 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireDemoSession } from "@/lib/auth/demo-session";
+import { getDemoProfile } from "@/services/session.service";
 import type {
   StudentWeeklyProgressPreview,
   StudentWeeklyProgressRecord,
@@ -90,10 +90,10 @@ export async function getApprovedCompanyLawContext(
 }
 
 export async function getStudentWeeklyProgressForSession(): Promise<StudentWeeklyProgressPreview | null> {
-  const session = await requireDemoSession();
-  if (session.role !== "student") return null;
+  const profile = await getDemoProfile();
+  if (profile?.role !== "student") return null;
 
-  return getStudentWeeklyProgressForStudent(session.profileId);
+  return getStudentWeeklyProgressForStudent(profile.id);
 }
 
 export async function getStudentWeeklyProgressForStudent(
