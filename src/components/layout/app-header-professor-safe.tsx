@@ -271,7 +271,6 @@ export function AppHeader({
                   <h3 className="font-bold text-emerald-800 text-sm mb-1 border-b border-emerald-100 pb-2">학습 및 진도</h3>
                   <Link href="/dashboard" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">대시보드 홈</Link>
                   <Link href="/roadmap" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">나의 로드맵</Link>
-                  <Link href="/courses" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">수강 과목 목록</Link>
                 </div>
                 <div className="flex flex-col gap-3">
                   <h3 className="font-bold text-emerald-800 text-sm mb-1 border-b border-emerald-100 pb-2">상담 및 지원</h3>
