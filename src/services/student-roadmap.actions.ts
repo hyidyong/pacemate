@@ -5,6 +5,15 @@ import { getPersonalizedWeeklyRoadmapForSession } from "@/services/personalized-
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getDemoProfile } from "@/services/session.service";
 
+function createStudentRoadmapActionSupabaseClient() {
+  try {
+    return createSupabaseAdminClient();
+  } catch (error) {
+    console.error("Student roadmap action Supabase admin client is unavailable", error);
+    return null;
+  }
+}
+
 export async function generateStudentPersonalizedRoadmap(offeringId: string) {
   if (!offeringId) return { ok: false, message: "과목을 선택해 주세요." };
   try {
@@ -21,7 +30,10 @@ export async function saveStudentRoadmapWeekProgress(offeringId: string, weekNum
   if (profile?.role !== "student" || !offeringId || weekNumber < 1 || weekNumber > 15) {
     return { ok: false, message: "유효한 과목과 주차를 선택해 주세요." };
   }
-  const supabase = createSupabaseAdminClient();
+  const supabase = createStudentRoadmapActionSupabaseClient();
+  if (!supabase) {
+    return { ok: false, message: "로드맵 데이터베이스 설정을 확인해 주세요." };
+  }
   const { error } = await supabase.from("student_weekly_progress").upsert({
     student_id: profile.id,
     offering_id: offeringId,
