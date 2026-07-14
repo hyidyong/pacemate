@@ -24,6 +24,7 @@ type Props = {
   selectedOfferingId: string;
   initialWeeks: Week[];
   completedWeeks: number[];
+  hasPersonalizedRoadmap: boolean;
 };
 
 export function StudentRoadmapWorkspace({
@@ -31,6 +32,7 @@ export function StudentRoadmapWorkspace({
   selectedOfferingId,
   initialWeeks,
   completedWeeks,
+  hasPersonalizedRoadmap,
 }: Props) {
   const router = useRouter();
   const [activeWeek, setActiveWeek] = useState(1);
@@ -46,7 +48,6 @@ export function StudentRoadmapWorkspace({
     () => initialWeeks.find((item) => item.week_number === activeWeek),
     [activeWeek, initialWeeks],
   );
-  const hasRoadmap = initialWeeks.length > 0;
 
   if (!offerings.length) {
     return (
@@ -59,10 +60,12 @@ export function StudentRoadmapWorkspace({
   function selectOffering(nextOfferingId: string) {
     setActiveWeek(1);
     setMessage(null);
-    router.push(`/roadmap?offering=${encodeURIComponent(nextOfferingId)}`);
+    router.push(nextOfferingId ? `/roadmap?offering=${encodeURIComponent(nextOfferingId)}` : "/roadmap");
   }
 
   function generateRoadmap() {
+    if (!selectedOfferingId) return;
+
     startTransition(async () => {
       const result = await generateStudentPersonalizedRoadmap(selectedOfferingId);
       setMessage(result.message);
@@ -71,12 +74,12 @@ export function StudentRoadmapWorkspace({
   }
 
   function saveProgress() {
+    if (!selectedOfferingId) return;
+
     startTransition(async () => {
       const result = await saveStudentRoadmapWeekProgress(selectedOfferingId, activeWeek);
       setMessage(result.message);
-      if (result.ok) {
-        setSavedWeeks((weeks) => [...new Set([...weeks, activeWeek])]);
-      }
+      if (result.ok) setSavedWeeks((weeks) => [...new Set([...weeks, activeWeek])]);
     });
   }
 
@@ -91,6 +94,7 @@ export function StudentRoadmapWorkspace({
             onChange={(event) => selectOffering(event.target.value)}
             value={selectedOfferingId}
           >
+            <option disabled value="">과목을 선택해 주세요</option>
             {offerings.map((item) => (
               <option key={item.offeringId} value={item.offeringId}>
                 {item.courseName}
@@ -100,62 +104,70 @@ export function StudentRoadmapWorkspace({
         </div>
         <button
           className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
-          disabled={isPending}
+          disabled={isPending || !selectedOfferingId}
           onClick={generateRoadmap}
           type="button"
         >
-          <Sparkles size={16} />
+          {isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
           {isPending ? "로드맵 생성 중" : "로드맵 생성 / 업데이트"}
         </button>
       </div>
 
       {message ? <p className="mt-3 text-sm text-slate-600" role="status">{message}</p> : null}
 
-      <div className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="주차별 로드맵">
-        {Array.from({ length: 15 }, (_, index) => index + 1).map((number) => {
-          const completed = savedWeeks.includes(number);
-          const stateClass = completed
-            ? "bg-green-50 text-green-600 shadow-sm"
-            : number === activeWeek
-              ? "bg-blue-50 text-blue-600 shadow-sm"
-              : "bg-gray-100 text-gray-500";
-
-          return (
-            <button
-              aria-label={`${number}주차${completed ? " 진행 저장 완료" : ""}`}
-              aria-pressed={number === activeWeek}
-              className={`h-9 w-9 shrink-0 rounded-full text-sm font-semibold transition-colors ${stateClass}`}
-              key={number}
-              onClick={() => setActiveWeek(number)}
-              type="button"
-            >
-              {completed ? <Check className="mx-auto" size={15} /> : number}
-            </button>
-          );
-        })}
-      </div>
-
-      {week ? (
-        <article id="learning-progress" className="mt-5 rounded-2xl bg-slate-50 p-5 shadow-sm">
-          <p className="text-sm font-bold text-slate-900">{week.week_number}주차 · {week.baseline_title}</p>
-          <p className="mt-2 text-sm text-slate-600">{week.personalized_goal}</p>
-          <p className="mt-3 text-xs leading-5 text-slate-500">{week.review_guide}</p>
-          <button
-            className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
-            disabled={isPending}
-            onClick={saveProgress}
-            type="button"
-          >
-            진행저장
-          </button>
-        </article>
-      ) : (
+      {!selectedOfferingId ? (
         <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
-          로드맵 생성 버튼을 눌러 이 과목의 개인화 계획을 생성하세요.
+          과목을 선택해 주세요. 선택 전에는 로드맵 데이터가 표시되지 않습니다.
         </div>
+      ) : (
+        <>
+          <div className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="주차별 로드맵">
+            {Array.from({ length: 15 }, (_, index) => index + 1).map((number) => {
+              const completed = savedWeeks.includes(number);
+              const stateClass = completed
+                ? "bg-green-50 text-green-600 shadow-sm"
+                : number === activeWeek
+                  ? "bg-blue-50 text-blue-600 shadow-sm"
+                  : "bg-gray-100 text-gray-500";
+
+              return (
+                <button
+                  aria-label={`${number}주차${completed ? " 진행 저장 완료" : ""}`}
+                  aria-pressed={number === activeWeek}
+                  className={`h-9 w-9 shrink-0 rounded-full text-sm font-semibold transition-colors ${stateClass}`}
+                  key={number}
+                  onClick={() => setActiveWeek(number)}
+                  type="button"
+                >
+                  {completed ? <Check className="mx-auto" size={15} /> : number}
+                </button>
+              );
+            })}
+          </div>
+
+          {week ? (
+            <article id="learning-progress" className="mt-5 rounded-2xl bg-slate-50 p-5 shadow-sm">
+              <p className="text-sm font-bold text-slate-900">{week.week_number}주차 · {week.baseline_title}</p>
+              <p className="mt-2 text-sm text-slate-600">{week.personalized_goal}</p>
+              <p className="mt-3 text-xs leading-5 text-slate-500">{week.review_guide}</p>
+              <button
+                className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
+                disabled={isPending || !hasPersonalizedRoadmap}
+                onClick={saveProgress}
+                type="button"
+              >
+                진행저장
+              </button>
+            </article>
+          ) : (
+            <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
+              승인된 강의계획서를 불러오지 못했습니다. 담당 교수에게 주차별 강의계획서 승인을 요청해 주세요.
+            </div>
+          )}
+        </>
       )}
 
-      {hasRoadmap ? (
+      {hasPersonalizedRoadmap ? (
         <div className="mt-8 flex flex-col items-center gap-3 rounded-2xl bg-gray-50 px-5 py-6 text-center shadow-sm">
           <p className="text-xs text-gray-400">시간표나 온보딩 정보가 바뀌었나요?</p>
           <button
