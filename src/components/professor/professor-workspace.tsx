@@ -60,6 +60,7 @@ import {
 import { ProfessorPortalShortcutCard } from "./professor-portal-shortcut-card";
 import { getCourseRoadmap, addCourseNotice, addCourseTextbook, removeCourseAssignment } from "@/services/course-settings.actions";
 import { professorCourseManagementItems } from "@/lib/professor-navigation";
+import { saveProfessorRoadmapPersonalization } from "@/services/personalized-weekly-roadmap.actions";
 
 // ============== TYPES ==============
 type ProfessorWorkspaceProps = {
@@ -940,15 +941,11 @@ function RoadmapEditSub({
 
   function handleDirectRoadmapUpdate() {
     const formData = new FormData();
-    formData.set("course", directCourse);
-    formData.set("title", directTitle);
-    formData.set("shortReason", directReason);
-    formData.set("basics", directBasics);
-    formData.set("generalStudyMethod", directGeneralMethod);
-    formData.set("courseStudyMethod", directCourseMethod);
-    formData.set("weeklyFocus", directFocus);
-    runAction(updateOwnCourseRoadmap, formData, () => {
-      setDirectReason("");
+    formData.set("courseId", directCourse.split("|")[1] ?? "");
+    formData.set("foundationKnowledge", directBasics);
+    formData.set("focusKeywords", directFocus);
+    formData.set("professorNotes", [directGeneralMethod, directCourseMethod].filter(Boolean).join("\n\n"));
+    runAction(saveProfessorRoadmapPersonalization, formData, () => {
       setDirectBasics("");
       setDirectGeneralMethod("");
       setDirectCourseMethod("");
