@@ -4,17 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
+  CalendarDays,
   CircleHelp,
-  GraduationCap,
+  LayoutDashboard,
+  LibraryBig,
   MessageSquareText,
+  Route,
   ShieldCheck,
+  Star,
   UserRound,
   Menu,
   X,
   ChevronDown
 } from "lucide-react";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
-import { appRoutes } from "@/lib/navigation";
 import type { UserNotification } from "@/types/notifications";
 
 // ✅ Lazy load framer-motion — 헤더에서 초기 번들 ~160KB 절감
@@ -26,6 +29,28 @@ const AnimatePresence = dynamic(
   () => import("framer-motion").then((m) => ({ default: m.AnimatePresence })),
   { ssr: false }
 );
+
+type HeaderRoute = {
+  href: string;
+  label: string;
+};
+
+const desktopRoutes: HeaderRoute[] = [
+  { href: "/dashboard", label: "대시보드" },
+  { href: "/roadmap", label: "로드맵" },
+  { href: "/courses", label: "과목" },
+  { href: "/counseling", label: "상담" },
+  { href: "/reviews", label: "수강 후기" },
+];
+
+const mobileRoutes = desktopRoutes;
+const mobileRouteIcons = {
+  "/dashboard": LayoutDashboard,
+  "/roadmap": Route,
+  "/courses": LibraryBig,
+  "/counseling": CalendarDays,
+  "/reviews": Star,
+} as const;
 
 interface AppHeaderProps {
   isAuthenticated: boolean;
@@ -70,24 +95,6 @@ export function AppHeader({
   };
 
   const isMobileMenuVisible = isProfessor ? isProfessorMenuOpen : isMobileMenuOpen;
-
-  const desktopRoutes = !isAuthenticated
-    ? []
-    : isProfessor
-      ? appRoutes.filter((route) => route.href === "/professor")
-      : isOperator
-        ? appRoutes.filter((route) => route.href === "/admin")
-        : appRoutes
-            .filter((route) => ["/dashboard", "/roadmap", "/courses", "/reviews"].includes(route.href));
-
-  const mobileRouteHrefs = !isAuthenticated
-    ? []
-    : isProfessor
-      ? ["/professor"]
-      : isOperator
-        ? ["/admin"]
-        : ["/dashboard", "/mypage", "/counseling", "/community"];
-  const mobileRoutes = appRoutes.filter((route) => mobileRouteHrefs.includes(route.href));
 
   return (
     <>
@@ -135,7 +142,6 @@ export function AppHeader({
                 <div className="flex flex-col gap-3">
                   <h3 className="font-bold text-emerald-800 text-sm mb-1 border-b border-emerald-100 pb-2">상담 및 지원</h3>
                   <Link href="/chatbot" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">AI 튜터에게 질문</Link>
-                  <Link href="/counseling" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">교수님 상담 신청</Link>
                   <Link href="/support" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">운영팀 문의</Link>
                 </div>
                 <div className="flex flex-col gap-3 bg-emerald-50 -my-6 -mr-6 p-6">
@@ -238,7 +244,7 @@ export function AppHeader({
             <div className="flex flex-col gap-4">
               <h2 className="text-xl font-bold text-gray-900 border-b pb-2">메뉴</h2>
               {mobileRoutes.map((route) => {
-                const Icon = route.icon;
+                const Icon = mobileRouteIcons[route.href as keyof typeof mobileRouteIcons];
                 return (
                   <Link
                     href={route.href}
