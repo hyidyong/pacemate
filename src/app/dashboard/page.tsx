@@ -27,6 +27,8 @@ import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/u
 import { HoverGlowCard } from "@/components/ui/hover-glow-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 
+export const dynamic = "force-dynamic";
+
 function getTodoTypeFromText(text: string): StudentTodoItem["type"] | null {
   const normalized = text.toLowerCase();
   if (/(과제|레포트|보고서|제출|마감)/.test(normalized)) {
