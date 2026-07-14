@@ -1,8 +1,21 @@
+"use client";
+
+import { useState } from "react";
+import { BarChart3, CircleHelp, MessageSquareText, Sparkles, UsersRound, X } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type {
   ProfessorAnonymousWeeklyAggregate,
   ProfessorAnonymousWeeklyAggregateReport,
   ProfessorAnonymousWeeklyAggregateResult,
-  ProfessorAnonymousWeeklyAggregateStatus,
 } from "@/types/professor-anonymous-weekly-aggregate";
 import type {
   ProfessorCourseProgressReport,
@@ -38,18 +51,6 @@ const STATUS_META: readonly {
   { key: "needs_review", label: "검토 필요", className: "bg-amber-50 text-amber-700" },
 ];
 
-const ANONYMOUS_STATUS_META: readonly {
-  key: ProfessorAnonymousWeeklyAggregateStatus;
-  label: string;
-  className: string;
-}[] = [
-  { key: "not_started", label: "미시작", className: "bg-slate-100 text-slate-700" },
-  { key: "in_progress", label: "진행 중", className: "bg-blue-50 text-blue-700" },
-  { key: "covered", label: "학습 완료", className: "bg-emerald-50 text-emerald-700" },
-  { key: "needs_review", label: "검토 필요", className: "bg-amber-50 text-amber-700" },
-  { key: "skipped", label: "건너뜀", className: "bg-violet-50 text-violet-700" },
-];
-
 function formatLastActivity(value: string | null): string {
   if (value === null) {
     return "활동 기록 없음";
@@ -59,10 +60,6 @@ function formatLastActivity(value: string | null): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
-}
-
-function formatAverage(value: number | null): string {
-  return value === null ? "응답 없음" : value.toFixed(1);
 }
 
 function groupAnonymousAggregates(aggregates: ProfessorAnonymousWeeklyAggregate[]) {
@@ -77,7 +74,48 @@ function groupAnonymousAggregates(aggregates: ProfessorAnonymousWeeklyAggregate[
     }
   }
 
-  return [...groups.entries()].map(([offeringId, weeks]) => ({ offeringId, weeks }));
+  return [...groups.entries()].map(([offeringId, weeks]) => ({
+    offeringId,
+    courseName: weeks[0]?.courseName ?? "담당 과목",
+    weeks,
+  }));
+}
+
+type DifficultyChartRow = {
+  name: string;
+  concept: string;
+  high: number;
+  mid: number;
+  low: number;
+  questions: number;
+};
+
+const DEMO_CHART_ROWS: DifficultyChartRow[] = [
+  { name: "1주", concept: "핵심 개념 소개", high: 18, mid: 52, low: 30, questions: 2 },
+  { name: "2주", concept: "기초 이론 적용", high: 32, mid: 48, low: 20, questions: 4 },
+  { name: "3주", concept: "사례 분석", high: 46, mid: 39, low: 15, questions: 7 },
+  { name: "4주", concept: "심화 쟁점", high: 68, mid: 24, low: 8, questions: 11 },
+  { name: "5주", concept: "종합 문제 해결", high: 54, mid: 34, low: 12, questions: 8 },
+  { name: "6주", concept: "중간 복습", high: 27, mid: 46, low: 27, questions: 3 },
+];
+
+const DEMO_PROFESSOR_MEMOS = [
+  "4주차 심화 쟁점의 사례를 한 번 더 설명해 주시면 좋겠습니다.",
+  "판례와 기본 개념을 연결하는 연습 문제를 추가로 받고 싶습니다.",
+  "5주차 종합 문제 풀이 순서를 수업에서 다시 확인하고 싶습니다.",
+];
+
+function toDifficultyChartRows(aggregates: ProfessorAnonymousWeeklyAggregate[]): DifficultyChartRow[] {
+  return aggregates
+    .filter((aggregate) => !aggregate.suppressed && aggregate.difficultyResponseCount > 0)
+    .map((aggregate) => ({
+      name: `${aggregate.weekNumber}주`,
+      concept: aggregate.weeklyTitle,
+      high: aggregate.difficultyPercentages.HIGH,
+      mid: aggregate.difficultyPercentages.MID,
+      low: aggregate.difficultyPercentages.LOW,
+      questions: aggregate.professorMemos.length,
+    }));
 }
 
 function AnonymousAggregateSection({
@@ -87,7 +125,19 @@ function AnonymousAggregateSection({
   report: ProfessorAnonymousWeeklyAggregateReport;
   error: ProfessorAnonymousWeeklyAggregateError | null;
 }) {
+  const [detailOpen, setDetailOpen] = useState(false);
   const groups = groupAnonymousAggregates(report.aggregates);
+  const allAggregates = groups.flatMap((group) => group.weeks);
+  const realChartRows = toDifficultyChartRows(allAggregates);
+  const realProfessorMemos = allAggregates.flatMap((aggregate) => aggregate.professorMemos);
+  const hasRealDifficulty = realChartRows.length > 0;
+  const hasRealFeedback = hasRealDifficulty || realProfessorMemos.length > 0;
+  const chartRows = hasRealDifficulty ? realChartRows : DEMO_CHART_ROWS;
+  const professorMemos = hasRealFeedback ? realProfessorMemos : DEMO_PROFESSOR_MEMOS;
+  const hardest = chartRows.reduce((current, row) => row.high > current.high ? row : current, chartRows[0]);
+  const responseCount = hasRealFeedback
+    ? allAggregates.reduce((sum, aggregate) => sum + aggregate.difficultyResponseCount, 0)
+    : 32;
 
   return (
     <section
@@ -95,78 +145,149 @@ function AnonymousAggregateSection({
       aria-labelledby="professor-anonymous-weekly-aggregate-title"
       aria-live="polite"
     >
-      <div className="community-section-heading">
-        <h2 id="professor-anonymous-weekly-aggregate-title">주차별 익명 학습 집계</h2>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Learning pulse</p>
+          <h2 id="professor-anonymous-weekly-aggregate-title" className="mt-1 text-2xl font-bold text-slate-900">
+            학생 학습 체감 리포트
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">난이도 분포와 학생이 직접 전달한 질문만 안전하게 취합합니다.</p>
+        </div>
+        <button
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+          onClick={() => setDetailOpen(true)}
+          type="button"
+        >
+          <Sparkles size={16} aria-hidden="true" />
+          데모 리포트 상세 보기
+        </button>
       </div>
 
       {error ? (
-        <div className="community-empty mt-4">
-          <p>주차별 익명 집계를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
+        <div className="mt-5 rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-800 shadow-sm">
+          실데이터 집계를 불러오지 못해 예시 리포트를 표시합니다.
         </div>
-      ) : groups.length === 0 ? (
-        <div className="community-empty mt-4">
-          <p>표시할 주차별 익명 집계가 없습니다.</p>
+      ) : !hasRealFeedback ? (
+        <div className="mt-5 rounded-2xl bg-blue-50/80 px-5 py-4 text-sm text-blue-800 shadow-sm">
+          수집된 학생 피드백이 아직 부족합니다. 예시 데이터를 확인해 보세요.
         </div>
-      ) : (
-        <div className="mt-5 space-y-5">
-          {groups.map((group, offeringIndex) => (
-            <article
-              key={group.offeringId}
-              className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5"
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
-                담당 강의 {offeringIndex + 1}
-              </p>
-              <h3 className="mt-1 text-lg font-bold text-slate-900">강의 {offeringIndex + 1}</h3>
+      ) : null}
 
-              <div className="mt-4 space-y-3">
-                {group.weeks.map((aggregate) => (
-                  <div
-                    key={`${aggregate.offeringId}-${aggregate.weekNumber}`}
-                    className="rounded-xl border border-slate-200 bg-white p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h4 className="font-semibold text-slate-900">{aggregate.weekNumber}주차</h4>
-                      <span className="text-sm text-slate-500">표본 {aggregate.sampleSize}명</span>
-                    </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <article className="rounded-2xl bg-rose-50 p-4 shadow-sm">
+          <BarChart3 className="text-rose-500" size={20} aria-hidden="true" />
+          <p className="mt-3 text-xs font-semibold text-rose-700">가장 어려웠던 개념</p>
+          <p className="mt-1 line-clamp-2 font-bold text-slate-900">{hardest?.concept ?? "응답 대기 중"}</p>
+          <p className="mt-1 text-xs text-slate-500">어려움 {hardest?.high ?? 0}%</p>
+        </article>
+        <article className="rounded-2xl bg-blue-50 p-4 shadow-sm">
+          <MessageSquareText className="text-blue-500" size={20} aria-hidden="true" />
+          <p className="mt-3 text-xs font-semibold text-blue-700">교수님 전달 질문 수</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{professorMemos.length}건</p>
+          <p className="mt-1 text-xs text-slate-500">개인 메모는 포함하지 않음</p>
+        </article>
+        <article className="rounded-2xl bg-emerald-50 p-4 shadow-sm">
+          <UsersRound className="text-emerald-500" size={20} aria-hidden="true" />
+          <p className="mt-3 text-xs font-semibold text-emerald-700">난이도 응답</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{responseCount}건</p>
+          <p className="mt-1 text-xs text-slate-500">주차별 응답 누적</p>
+        </article>
+        <article className="rounded-2xl bg-violet-50 p-4 shadow-sm">
+          <CircleHelp className="text-violet-500" size={20} aria-hidden="true" />
+          <p className="mt-3 text-xs font-semibold text-violet-700">분석 과목</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{Math.max(groups.length, 1)}개</p>
+          <p className="mt-1 text-xs text-slate-500">담당 과목 기준</p>
+        </article>
+      </div>
 
-                    {aggregate.suppressed ? (
-                      <p className="mt-4 text-sm text-slate-500">표본 5명 미만으로 비공개</p>
-                    ) : aggregate.statusCounts === null ? (
-                      <p className="mt-4 text-sm text-slate-500">집계 데이터를 표시할 수 없습니다.</p>
-                    ) : (
-                      <>
-                        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                          {ANONYMOUS_STATUS_META.map((status) => (
-                            <div key={status.key} className={`rounded-lg px-3 py-2 ${status.className}`}>
-                              <p className="text-xs font-medium">{status.label}</p>
-                              <p className="mt-1 text-lg font-bold">{aggregate.statusCounts?.[status.key] ?? 0}명</p>
-                            </div>
-                          ))}
-                        </div>
-                        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                          <div className="rounded-lg bg-slate-50 px-3 py-2">
-                            <dt className="text-slate-500">평균 난이도</dt>
-                            <dd className="mt-1 font-semibold text-slate-800">
-                              {formatAverage(aggregate.averageDifficulty)}
-                            </dd>
-                          </div>
-                          <div className="rounded-lg bg-slate-50 px-3 py-2">
-                            <dt className="text-slate-500">평균 이해도</dt>
-                            <dd className="mt-1 font-semibold text-slate-800">
-                              {formatAverage(aggregate.averageUnderstanding)}
-                            </dd>
-                          </div>
-                        </dl>
-                      </>
-                    )}
-                  </div>
-                ))}
+      <div className="mt-5 rounded-3xl bg-gradient-to-br from-slate-50 to-blue-50/70 p-4 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-slate-900">주차별 난이도 분포</p>
+            <p className="mt-1 text-xs text-slate-500">{hasRealDifficulty ? "실제 학생 응답" : "예시 데이터 미리보기"}</p>
+          </div>
+          {!hasRealDifficulty ? <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-blue-600 shadow-sm">DEMO</span> : null}
+        </div>
+        <div className="mt-4 h-72 w-full" aria-label="주차별 난이도 누적 막대 차트">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartRows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 12 }} />
+              <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: "#94a3b8", fontSize: 11 }} unit="%" />
+              <Tooltip />
+              <Legend iconType="circle" />
+              <Bar dataKey="high" name="어려움" stackId="difficulty" fill="#fda4af" radius={[0, 0, 4, 4]} />
+              <Bar dataKey="mid" name="보통" stackId="difficulty" fill="#fde68a" />
+              <Bar dataKey="low" name="쉬움" stackId="difficulty" fill="#a7f3d0" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {detailOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/40 p-3 backdrop-blur-sm sm:p-6" role="presentation">
+          <section
+            aria-labelledby="professor-feedback-detail-title"
+            aria-modal="true"
+            className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7"
+            role="dialog"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                  {hasRealFeedback ? "LIVE REPORT" : "DEMO REPORT"}
+                </span>
+                <h3 id="professor-feedback-detail-title" className="mt-3 text-2xl font-bold text-slate-900">학생 학습 체감 상세 리포트</h3>
+                <p className="mt-2 text-sm text-slate-500">주차별 난이도 변화와 전달 질문을 함께 살펴보세요.</p>
               </div>
-            </article>
-          ))}
+              <button
+                aria-label="상세 리포트 닫기"
+                className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200"
+                onClick={() => setDetailOpen(false)}
+                type="button"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]">
+              <div className="rounded-2xl bg-slate-50 p-4 sm:p-5">
+                <h4 className="font-bold text-slate-900">난이도 응답 추이</h4>
+                <div className="mt-4 h-80 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartRows} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                      <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                      <YAxis domain={[0, 100]} axisLine={false} tickLine={false} unit="%" />
+                      <Tooltip />
+                      <Legend iconType="circle" />
+                      <Bar dataKey="high" name="어려움" stackId="difficulty" fill="#fb7185" />
+                      <Bar dataKey="mid" name="보통" stackId="difficulty" fill="#facc15" />
+                      <Bar dataKey="low" name="쉬움" stackId="difficulty" fill="#34d399" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <aside className="rounded-2xl bg-blue-50/70 p-4 sm:p-5">
+                <div className="flex items-center gap-2 text-blue-700">
+                  <MessageSquareText size={18} aria-hidden="true" />
+                  <h4 className="font-bold">학생 전달 메모</h4>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {professorMemos.length ? professorMemos.map((memo, index) => (
+                    <blockquote className="rounded-2xl bg-white p-4 text-sm leading-6 text-slate-700 shadow-sm" key={`${memo}-${index}`}>
+                      <span className="mr-2 text-xs font-bold text-blue-500">Q{index + 1}</span>
+                      {memo}
+                    </blockquote>
+                  )) : (
+                    <p className="rounded-2xl bg-white p-4 text-sm text-slate-500 shadow-sm">전달된 질문이 아직 없습니다.</p>
+                  )}
+                </div>
+              </aside>
+            </div>
+          </section>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

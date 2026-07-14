@@ -26,6 +26,8 @@ export default async function RoadmapPage({
       weeks: [],
       completedWeeks: [] as number[],
       hasPersonalizedRoadmap: false,
+      courseGuide: null,
+      weeklyFeedback: [],
     };
   });
 
@@ -53,8 +55,10 @@ export default async function RoadmapPage({
 
       <StudentRoadmapWorkspace
         completedWeeks={roadmapWorkspace.completedWeeks}
+        courseGuide={roadmapWorkspace.courseGuide}
         hasPersonalizedRoadmap={roadmapWorkspace.hasPersonalizedRoadmap}
         initialWeeks={roadmapWorkspace.weeks}
+        initialWeeklyFeedback={roadmapWorkspace.weeklyFeedback}
         offerings={roadmapWorkspace.offerings}
         suggestProfessorPlanRefresh={refresh === "professor-plan"}
         selectedOfferingId={roadmapWorkspace.selectedOfferingId}

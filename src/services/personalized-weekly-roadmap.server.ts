@@ -14,10 +14,15 @@ import {
   buildFallbackRoadmaps,
   shouldRegeneratePersonalizedRoadmap,
 } from "@/services/personalized-weekly-roadmap.rules";
+import type {
+  StudentDifficultyRating,
+  StudentRoadmapCourseGuide,
+  StudentWeeklyFeedbackDraft,
+} from "@/types/student-weekly-progress";
 
 type Source = { source_version: number; foundation_knowledge: string; focus_keywords: unknown; professor_notes: string };
 type Persisted = { source_version: number; onboarding_hash: string; input_hash: string };
-type DatabaseError = { code?: string } | null;
+type DatabaseError = { code?: string; message?: string } | null;
 type StudentProfile = DemoProfile & { role: "student" };
 type TimetableEnrollment = {
   id: string;
@@ -35,6 +40,17 @@ type StudyProgressInput = {
   understanding_level: number | null;
   private_note: string | null;
   use_private_note_for_ai: boolean;
+};
+type WeeklyFeedbackRow = {
+  week_number: number;
+  progress_status_override: string | null;
+  difficulty_level: number | null;
+  difficulty_rating?: StudentDifficultyRating | null;
+  private_note: string | null;
+  shared_feedback: string | null;
+  professor_memo?: string | null;
+  share_feedback_with_professor: boolean;
+  updated_at: string | null;
 };
 
 async function getStudentProfile(): Promise<StudentProfile | null> {
@@ -215,6 +231,41 @@ function toPersonalizationProgress(rows: readonly StudyProgressInput[]) {
 
 function isMissingPersonalizedRoadmapTable(error: DatabaseError) {
   return error?.code === "PGRST205";
+}
+
+function isMissingWeeklyFeedbackColumns(error: DatabaseError) {
+  return error?.code === "PGRST204"
+    || error?.code === "42703"
+    || /difficulty_rating|professor_memo/i.test(error?.message ?? "");
+}
+
+async function getWeeklyFeedbackRows(
+  supabase: SupabaseAdminClient,
+  studentId: string,
+  offeringId: string,
+) {
+  const modern = await supabase
+    .from("student_weekly_progress")
+    .select("week_number,progress_status_override,difficulty_level,difficulty_rating,private_note,shared_feedback,professor_memo,share_feedback_with_professor,updated_at")
+    .eq("student_id", studentId)
+    .eq("offering_id", offeringId)
+    .order("week_number");
+  if (!isMissingWeeklyFeedbackColumns(modern.error)) return modern;
+
+  return supabase
+    .from("student_weekly_progress")
+    .select("week_number,progress_status_override,difficulty_level,private_note,shared_feedback,share_feedback_with_professor,updated_at")
+    .eq("student_id", studentId)
+    .eq("offering_id", offeringId)
+    .order("week_number");
+}
+
+function toDifficultyRating(row: WeeklyFeedbackRow): StudentDifficultyRating | null {
+  if (row.difficulty_rating === "HIGH" || row.difficulty_rating === "MID" || row.difficulty_rating === "LOW") {
+    return row.difficulty_rating;
+  }
+  if (row.difficulty_level === null) return null;
+  return row.difficulty_level >= 4 ? "HIGH" : row.difficulty_level === 3 ? "MID" : "LOW";
 }
 
 function readLegacyRoadmapWeek(row: { week_number: number; guide_json: unknown }) {
@@ -435,7 +486,15 @@ export async function getSavedPersonalizedRoadmapForSession(offeringId: string) 
 export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?: string) {
   const profile = await getStudentProfile();
   if (!profile) {
-    return { offerings: [], selectedOfferingId: "", weeks: [], completedWeeks: [] as number[], hasPersonalizedRoadmap: false };
+    return {
+      offerings: [],
+      selectedOfferingId: "",
+      weeks: [],
+      completedWeeks: [] as number[],
+      hasPersonalizedRoadmap: false,
+      courseGuide: null as StudentRoadmapCourseGuide | null,
+      weeklyFeedback: [] as StudentWeeklyFeedbackDraft[],
+    };
   }
 
   const offerings = await getStudentRoadmapOfferingsForSession().catch((error) => {
@@ -447,29 +506,50 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
     : "";
 
   if (!selectedOfferingId) {
-    return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[], hasPersonalizedRoadmap: false };
+    return {
+      offerings,
+      selectedOfferingId,
+      weeks: [],
+      completedWeeks: [] as number[],
+      hasPersonalizedRoadmap: false,
+      courseGuide: null as StudentRoadmapCourseGuide | null,
+      weeklyFeedback: [] as StudentWeeklyFeedbackDraft[],
+    };
   }
 
   const supabase = createRoadmapSupabaseClient();
   if (!supabase) {
-    return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[], hasPersonalizedRoadmap: false };
+    return {
+      offerings,
+      selectedOfferingId,
+      weeks: [],
+      completedWeeks: [] as number[],
+      hasPersonalizedRoadmap: false,
+      courseGuide: null as StudentRoadmapCourseGuide | null,
+      weeklyFeedback: [] as StudentWeeklyFeedbackDraft[],
+    };
   }
-  const [savedWeeks, progressResult, plansResult] = await Promise.all([
+  const [savedWeeks, progressResult, plansResult, courseResult, sourceResult] = await Promise.all([
     getSavedPersonalizedRoadmapForSession(selectedOfferingId).catch((error) => {
       console.error("Saved personalized roadmap could not be loaded", error);
       return [];
     }),
-    supabase
-      .from("student_weekly_progress")
-      .select("week_number,progress_status_override")
-      .eq("student_id", profile.id)
-      .eq("offering_id", selectedOfferingId)
-      .eq("progress_status_override", "covered"),
+    getWeeklyFeedbackRows(supabase, profile.id, selectedOfferingId),
     supabase
       .from("course_weekly_plans")
       .select("week_number,title,topic,content")
       .eq("offering_id", selectedOfferingId)
       .order("week_number"),
+    supabase
+      .from("course_offerings")
+      .select("course:courses(name,description,prerequisite_text)")
+      .eq("id", selectedOfferingId)
+      .maybeSingle(),
+    supabase
+      .from("course_roadmap_personalization_sources")
+      .select("foundation_knowledge,focus_keywords,professor_notes")
+      .eq("offering_id", selectedOfferingId)
+      .maybeSingle(),
   ]);
 
   if (progressResult.error) {
@@ -478,6 +558,14 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
 
   if (plansResult.error) {
     console.error("Student roadmap syllabus could not be read", plansResult.error);
+  }
+
+  if (courseResult.error) {
+    console.error("Student roadmap course guide could not be read", courseResult.error);
+  }
+
+  if (sourceResult.error && !isMissingPersonalizedRoadmapTable(sourceResult.error)) {
+    console.error("Student roadmap study guide source could not be read", sourceResult.error);
   }
 
   const baselineWeeks = getSyllabusBaseline(
@@ -492,14 +580,55 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
     learning_activities: [],
     review_guide: row.content,
   }));
+  const selectedWeeks = savedWeeks.length ? savedWeeks : baselineWeeks;
+  const rawCourse = courseResult.data?.course;
+  const course = (Array.isArray(rawCourse) ? rawCourse[0] : rawCourse) as {
+    name?: string | null;
+    description?: string | null;
+    prerequisite_text?: string | null;
+  } | null | undefined;
+  const source = sourceResult.data as {
+    foundation_knowledge?: string | null;
+    focus_keywords?: unknown;
+    professor_notes?: string | null;
+  } | null;
+  const focusKeywords = Array.isArray(source?.focus_keywords)
+    ? source.focus_keywords.filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+    : [];
+  const weeklyFocus = selectedWeeks
+    .slice(0, 3)
+    .map((row) => row.baseline_topic)
+    .filter(Boolean)
+    .join(" · ");
+  const courseGuide: StudentRoadmapCourseGuide = {
+    courseName: course?.name?.trim() || offerings.find((item) => item.offeringId === selectedOfferingId)?.courseName || "선택 과목",
+    description: course?.description?.trim() || "강의계획서의 주차별 핵심 주제를 따라 개념 이해와 복습을 반복합니다.",
+    prerequisites: source?.foundation_knowledge?.trim() || course?.prerequisite_text?.trim() || "별도로 등록된 선수 지식이 없습니다.",
+    studyGuide: source?.professor_notes?.trim()
+      || (focusKeywords.length ? `핵심 키워드 ${focusKeywords.join(", ")}를 중심으로 예습과 복습을 진행하세요.` : "강의 전 핵심 주제를 미리 읽고, 수업 후 개인 메모와 질문을 남겨 복습하세요.")
+      + (weeklyFocus ? ` 이번 학기 주요 흐름은 ${weeklyFocus}입니다.` : ""),
+  };
+  const weeklyFeedback: StudentWeeklyFeedbackDraft[] = progressResult.error
+    ? []
+    : ((progressResult.data ?? []) as WeeklyFeedbackRow[]).map((row) => ({
+        weekNumber: row.week_number,
+        difficultyRating: toDifficultyRating(row),
+        personalMemo: row.private_note ?? "",
+        professorMemo: row.professor_memo ?? (row.share_feedback_with_professor ? row.shared_feedback ?? "" : ""),
+        updatedAt: row.updated_at,
+      }));
 
   return {
     offerings,
     selectedOfferingId,
-    weeks: savedWeeks.length ? savedWeeks : baselineWeeks,
+    weeks: selectedWeeks,
     hasPersonalizedRoadmap: savedWeeks.length > 0,
+    courseGuide,
+    weeklyFeedback,
     completedWeeks: progressResult.error
       ? []
-      : (progressResult.data ?? []).map((row) => row.week_number),
+      : ((progressResult.data ?? []) as WeeklyFeedbackRow[])
+          .filter((row) => row.progress_status_override === "covered")
+          .map((row) => row.week_number),
   };
 }

@@ -92,3 +92,27 @@ test("falls back to weekly progress storage when roadmap migrations are not depl
   assert.match(source, /from\("student_weekly_progress"\)\s*\.upsert/);
   assert.match(source, /guide_json/);
 });
+
+test("renders syllabus guidance and editable weekly learning feedback", async () => {
+  const source = await readFile(new URL("./student-roadmap-workspace.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /학습 방법/);
+  assert.match(source, /필요한 선수 지식/);
+  assert.match(source, /DIFFICULTY_OPTIONS/);
+  assert.match(source, /난이도 \$\{option\.label\}/);
+  assert.match(source, /개인 메모/);
+  assert.match(source, /나만 볼 수 있어요/);
+  assert.match(source, /교수님\/조교님께 전달할 의견이나 질문을 적어주세요/);
+  assert.match(source, /진행도 및 데이터 저장/);
+});
+
+test("saves feedback only after checking the student's timetable enrollment", async () => {
+  const source = await readFile(new URL("../../services/student-roadmap.actions.ts", import.meta.url), "utf8");
+
+  assert.match(source, /from\("student_courses"\)/);
+  assert.match(source, /\.eq\("student_id", profile\.id\)/);
+  assert.match(source, /\.eq\("offering_id", offeringId\)/);
+  assert.match(source, /difficulty_rating: feedback\.difficultyRating/);
+  assert.match(source, /private_note: personalMemo/);
+  assert.match(source, /professor_memo: professorMemo/);
+});

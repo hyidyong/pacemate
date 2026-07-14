@@ -1,3 +1,5 @@
+import type { StudentDifficultyRating } from "@/types/student-weekly-progress";
+
 export const MINIMUM_ANONYMOUS_GROUP_SIZE = 5 as const;
 
 export type ProfessorAnonymousWeeklyAggregateStatus =
@@ -11,14 +13,28 @@ export type ProfessorAnonymousWeeklyAggregateStatusCounts = {
   [Status in ProfessorAnonymousWeeklyAggregateStatus]: number;
 };
 
+export type ProfessorWeeklyDifficultyCounts = {
+  [Rating in StudentDifficultyRating]: number;
+};
+
+export type ProfessorWeeklyDifficultyPercentages = {
+  [Rating in StudentDifficultyRating]: number;
+};
+
 export type ProfessorAnonymousWeeklyAggregate = {
   offeringId: string;
+  courseName: string;
   weekNumber: number;
+  weeklyTitle: string;
   sampleSize: number;
   suppressed: boolean;
   statusCounts: ProfessorAnonymousWeeklyAggregateStatusCounts | null;
   averageDifficulty: number | null;
   averageUnderstanding: number | null;
+  difficultyResponseCount: number;
+  difficultyCounts: ProfessorWeeklyDifficultyCounts;
+  difficultyPercentages: ProfessorWeeklyDifficultyPercentages;
+  professorMemos: string[];
 };
 
 export type ProfessorAnonymousWeeklyAggregateReport = {
