@@ -25,10 +25,20 @@ type TimetableEnrollment = {
   semester_label: string | null;
   course: { name?: string | null } | Array<{ name?: string | null }> | null;
 };
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>;
 
 async function getStudentProfile(): Promise<StudentProfile | null> {
   const profile = await getDemoProfile();
   return profile?.role === "student" ? (profile as StudentProfile) : null;
+}
+
+function createRoadmapSupabaseClient(): SupabaseAdminClient | null {
+  try {
+    return createSupabaseAdminClient();
+  } catch (error) {
+    console.error("Student roadmap Supabase admin client is unavailable", error);
+    return null;
+  }
 }
 
 function courseName(course: TimetableEnrollment["course"]) {
@@ -36,7 +46,7 @@ function courseName(course: TimetableEnrollment["course"]) {
 }
 
 async function resolveMissingTimetableOfferings(
-  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  supabase: SupabaseAdminClient,
   studentId: string,
   enrollments: TimetableEnrollment[],
 ) {
@@ -184,7 +194,7 @@ function readLegacyRoadmapWeek(row: { week_number: number; guide_json: unknown }
 }
 
 async function getLegacyRoadmapWeeks(
-  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  supabase: SupabaseAdminClient,
   studentId: string,
   offeringId: string,
 ) {
@@ -233,7 +243,8 @@ async function generateWithOpenAi(context: unknown): Promise<AiWeeklyRoadmap[] |
 export async function getPersonalizedWeeklyRoadmapForSession(offeringId: string) {
   const profile = await getStudentProfile();
   if (!profile) throw new Error("Student role is required");
-  const supabase = createSupabaseAdminClient();
+  const supabase = createRoadmapSupabaseClient();
+  if (!supabase) throw new Error("Student roadmap database is unavailable");
   const { data: enrollment, error: enrollmentError } = await supabase
     .from("student_courses")
     .select("id")
@@ -323,7 +334,8 @@ export async function getPersonalizedWeeklyRoadmapForSession(offeringId: string)
 export async function getStudentRoadmapOfferingsForSession() {
   const profile = await getStudentProfile();
   if (!profile) return [];
-  const supabase = createSupabaseAdminClient();
+  const supabase = createRoadmapSupabaseClient();
+  if (!supabase) return [];
   const { data: enrollments, error } = await supabase
     .from("student_courses")
     .select("id, offering_id, course_id, semester_label, course:courses(name)")
@@ -352,7 +364,8 @@ export async function getStudentRoadmapOfferingsForSession() {
 export async function getSavedPersonalizedRoadmapForSession(offeringId: string) {
   const profile = await getStudentProfile();
   if (!profile) return [];
-  const supabase = createSupabaseAdminClient();
+  const supabase = createRoadmapSupabaseClient();
+  if (!supabase) return [];
   const { data, error } = await supabase
     .from("student_personalized_weekly_roadmaps")
     .select("week_number,baseline_title,baseline_topic,baseline_content,personalized_goal,learning_activities,review_guide,generation_status,generated_by_ai")
@@ -370,7 +383,10 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
     return { offerings: [], selectedOfferingId: "", weeks: [], completedWeeks: [] as number[] };
   }
 
-  const offerings = await getStudentRoadmapOfferingsForSession();
+  const offerings = await getStudentRoadmapOfferingsForSession().catch((error) => {
+    console.error("Student roadmap offerings could not be loaded", error);
+    return [];
+  });
   const selectedOfferingId = offerings.some((offering) => offering.offeringId === requestedOfferingId)
     ? requestedOfferingId!
     : offerings[0]?.offeringId ?? "";
@@ -379,9 +395,15 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
     return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[] };
   }
 
-  const supabase = createSupabaseAdminClient();
+  const supabase = createRoadmapSupabaseClient();
+  if (!supabase) {
+    return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[] };
+  }
   const [weeks, progressResult] = await Promise.all([
-    getSavedPersonalizedRoadmapForSession(selectedOfferingId),
+    getSavedPersonalizedRoadmapForSession(selectedOfferingId).catch((error) => {
+      console.error("Saved personalized roadmap could not be loaded", error);
+      return [];
+    }),
     supabase
       .from("student_weekly_progress")
       .select("week_number,progress_status_override")
@@ -391,13 +413,15 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
   ]);
 
   if (progressResult.error) {
-    throw new Error("Student roadmap progress could not be read");
+    console.error("Student roadmap progress could not be read", progressResult.error);
   }
 
   return {
     offerings,
     selectedOfferingId,
     weeks,
-    completedWeeks: (progressResult.data ?? []).map((row) => row.week_number),
+    completedWeeks: progressResult.error
+      ? []
+      : (progressResult.data ?? []).map((row) => row.week_number),
   };
 }
