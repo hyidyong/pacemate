@@ -2,6 +2,7 @@ import "server-only";
 
 import { normalizeUuid } from "@/lib/uuid";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const NOTIFICATION_CATEGORIES = [
   "question",
@@ -115,6 +116,14 @@ export async function createUserNotification(
 export async function createUserNotifications(
   inputs: readonly UserNotificationCreateInput[],
 ): Promise<NotificationCreateResult> {
+  const supabase = await createSupabaseServerClient();
+  return createUserNotificationsWithClient(supabase, inputs);
+}
+
+export async function createUserNotificationsWithClient(
+  supabase: SupabaseClient,
+  inputs: readonly UserNotificationCreateInput[],
+): Promise<NotificationCreateResult> {
   if (inputs.length === 0) {
     return { ok: false, message: INVALID_NOTIFICATION_MESSAGE };
   }
@@ -130,7 +139,6 @@ export async function createUserNotifications(
   }
 
   try {
-    const supabase = await createSupabaseServerClient();
     const { error } = await supabase
       .from("user_notifications")
       .insert(normalizedInputs.map(toDatabaseNotification));

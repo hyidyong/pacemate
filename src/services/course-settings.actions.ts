@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { supabase } from "@/lib/supabase/client";
-import { createUserNotifications } from "@/services/notifications.create.service";
+import { createUserNotificationsWithClient } from "@/services/notifications.create.service";
 import { getDemoProfile } from "@/services/session.service";
 
 export async function getCourseRoadmap(courseId: string) {
@@ -56,16 +57,51 @@ export async function addCourseNotice(formData: FormData) {
     return { message: "교수 권한이 필요합니다." };
   }
 
-  const courseId = formData.get("courseId") as string;
-  const title = formData.get("title") as string;
-  const content = formData.get("content") as string;
+  let admin;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch (error) {
+    console.error("Course notice admin client is unavailable:", error);
+    return { message: "공지사항 저장을 시작할 수 없습니다." };
+  }
+
+  const courseId = String(formData.get("courseId") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const content = String(formData.get("content") ?? "").trim();
 
   if (!courseId || !title || !content) {
     return { message: "모든 필드를 입력해주세요." };
   }
 
+  const { data: professor } = await admin
+    .from("professors")
+    .select("id")
+    .eq("profile_id", profile.id)
+    .maybeSingle();
+  if (!professor) {
+    return { message: "교수 정보를 확인할 수 없습니다." };
+  }
+
+  const [{ data: courseMapping }, { data: courseOffering }] = await Promise.all([
+    admin
+      .from("course_professors")
+      .select("course_id")
+      .eq("course_id", courseId)
+      .eq("professor_id", professor.id)
+      .limit(1),
+    admin
+      .from("course_offerings")
+      .select("course_id")
+      .eq("course_id", courseId)
+      .eq("professor_id", professor.id)
+      .limit(1),
+  ]);
+  if (!courseMapping?.length && !courseOffering?.length) {
+    return { message: "해당 과목에 공지를 등록할 권한이 없습니다." };
+  }
+
   // 1. Save Notice
-  const { error: noticeError } = await supabase.from("posts").insert({
+  const { error: noticeError } = await admin.from("posts").insert({
     author_id: profile.id,
     course_id: courseId,
     board_key: "course_notice",
@@ -81,13 +117,15 @@ export async function addCourseNotice(formData: FormData) {
   }
 
   // 2. Notify Students
-  const { data: studentCourses } = await supabase
+  const { data: studentCourses } = await admin
     .from("student_courses")
     .select("student_id, courses(name)")
     .eq("course_id", courseId)
-    .eq("status", "interested"); // Or whatever status is active
+    .in("status", ["completed", "interested"]);
 
   revalidatePath("/professor");
+  revalidatePath("/dashboard");
+  revalidatePath("/notices");
 
   if (studentCourses && studentCourses.length > 0) {
     const courseName = Array.isArray(studentCourses[0].courses)
@@ -103,7 +141,7 @@ export async function addCourseNotice(formData: FormData) {
       targetHref: `/courses/${courseId}`,
     }));
 
-    const notificationResult = await createUserNotifications(notifications);
+    const notificationResult = await createUserNotificationsWithClient(admin, notifications);
     if (!notificationResult.ok) {
       return { message: "공지사항은 등록됐지만 알림 전송에 실패했습니다." };
     }
@@ -118,21 +156,56 @@ export async function addCourseTextbook(formData: FormData) {
     return { message: "교수 권한이 필요합니다." };
   }
 
-  const courseId = formData.get("courseId") as string;
-  const name = formData.get("name") as string;
-  const link = formData.get("link") as string;
+  let admin;
+  try {
+    admin = createSupabaseAdminClient();
+  } catch (error) {
+    console.error("Course textbook admin client is unavailable:", error);
+    return { message: "교과서 저장을 시작할 수 없습니다." };
+  }
+
+  const courseId = String(formData.get("courseId") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const link = String(formData.get("link") ?? "").trim();
 
   if (!courseId || !name) {
     return { message: "교재 이름을 입력해주세요." };
   }
 
-  // 1. Save Textbook
-  const { error: textbookError } = await supabase.from("posts").insert({
+  const { data: professor } = await admin
+    .from("professors")
+    .select("id")
+    .eq("profile_id", profile.id)
+    .maybeSingle();
+  if (!professor) {
+    return { message: "교수 정보를 확인할 수 없습니다." };
+  }
+
+  const [{ data: courseMapping }, { data: courseOffering }] = await Promise.all([
+    admin
+      .from("course_professors")
+      .select("course_id")
+      .eq("course_id", courseId)
+      .eq("professor_id", professor.id)
+      .limit(1),
+    admin
+      .from("course_offerings")
+      .select("course_id")
+      .eq("course_id", courseId)
+      .eq("professor_id", professor.id)
+      .limit(1),
+  ]);
+  if (!courseMapping?.length && !courseOffering?.length) {
+    return { message: "해당 과목에 교과서를 등록할 권한이 없습니다." };
+  }
+
+  // Store textbooks in the course notice feed so students see the course-scoped update.
+  const { error: textbookError } = await admin.from("posts").insert({
     author_id: profile.id,
     course_id: courseId,
-    board_key: "course_material",
+    board_key: "course_notice",
     category: "textbook",
-    title: name,
+    title: `[교과서] ${name}`,
     content: link || "링크 없음",
     display_mode: "public",
   });
@@ -143,13 +216,15 @@ export async function addCourseTextbook(formData: FormData) {
   }
 
   // 2. Notify Students
-  const { data: studentCourses } = await supabase
+  const { data: studentCourses } = await admin
     .from("student_courses")
     .select("student_id, courses(name)")
     .eq("course_id", courseId)
-    .eq("status", "interested");
+    .in("status", ["completed", "interested"]);
 
   revalidatePath("/professor");
+  revalidatePath("/dashboard");
+  revalidatePath("/notices");
 
   if (studentCourses && studentCourses.length > 0) {
     const courseName = Array.isArray(studentCourses[0].courses)
@@ -165,7 +240,7 @@ export async function addCourseTextbook(formData: FormData) {
       targetHref: `/courses/${courseId}`,
     }));
 
-    const notificationResult = await createUserNotifications(notifications);
+    const notificationResult = await createUserNotificationsWithClient(admin, notifications);
     if (!notificationResult.ok) {
       return { message: "교재는 등록됐지만 알림 전송에 실패했습니다." };
     }

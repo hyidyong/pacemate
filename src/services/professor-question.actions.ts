@@ -8,7 +8,10 @@ import {
 import { normalizeUuid } from "@/lib/uuid";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createUserNotifications } from "@/services/notifications.create.service";
-import { getAuthenticatedProfessorIdentity } from "@/services/professor-questions.server";
+import {
+  getAuthenticatedProfessorIdentity,
+  getAuthenticatedQuestionStaffIdentity,
+} from "@/services/professor-questions.server";
 import { generateProfessorGroundedAnswerDraft } from "@/services/professor-grounded-answer.server";
 
 const INVALID_REQUEST_MESSAGE = "요청 정보를 확인해 주세요.";
@@ -28,7 +31,7 @@ export async function draftGroundedProfessorAnswer(formData: FormData) {
 }
 
 export async function answerProfessorQuestions(formData: FormData) {
-  const identity = await getAuthenticatedProfessorIdentity();
+  const identity = await getAuthenticatedQuestionStaffIdentity();
   const answer = text(formData.get("answer"));
   const questionIds = formData
     .getAll("questionId")

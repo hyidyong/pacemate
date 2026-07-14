@@ -38,38 +38,45 @@ function toDemoProfile(profile: AuthMappedProfile): DemoProfile {
 }
 
 export async function getDemoProfile(): Promise<DemoProfile | null> {
+  const session = await readDemoSession();
   const supabase = await createSupabaseServerClient();
-  const { data: authData } = await supabase.auth.getUser();
 
-  if (authData.user) {
+  if (session) {
     const { data, error } = await supabase
       .from("profiles")
       .select("id, identifier, name, role, school_id, department_id, auth_user_id")
-      .eq("auth_user_id", authData.user.id)
+      .eq("id", session.profileId)
       .maybeSingle();
 
-    if (error || !data || data.auth_user_id !== authData.user.id) {
-      return null;
-    }
-
+    if (error || !data || session.role !== data.role) return null;
     return toDemoProfile(data as AuthMappedProfile);
   }
 
-  // Compatibility path for pages that still have only the signed demo cookie.
-  const session = await readDemoSession();
-  if (!session) {
-    return null;
-  }
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user) return null;
 
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, identifier, name, role, school_id, department_id, auth_user_id")
+    .eq("auth_user_id", authData.user.id)
+    .maybeSingle();
+
+  if (error || !data || data.auth_user_id !== authData.user.id) return null;
+
+  return toDemoProfile(data as AuthMappedProfile);
+}
+
+export async function getSignedDemoProfile(): Promise<DemoProfile | null> {
+  const session = await readDemoSession();
+  if (!session) return null;
+
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("profiles")
     .select("id, identifier, name, role, school_id, department_id, auth_user_id")
     .eq("id", session.profileId)
     .maybeSingle();
 
-  if (error || !data || session.role !== data.role) {
-    return null;
-  }
-
+  if (error || !data || session.role !== data.role) return null;
   return toDemoProfile(data as AuthMappedProfile);
 }

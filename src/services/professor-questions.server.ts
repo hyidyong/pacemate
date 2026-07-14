@@ -21,7 +21,7 @@ type ServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 type AuthProfile = {
   id: string;
-  role: "student" | "professor";
+  role: "student" | "professor" | "assistant";
 };
 
 type QuestionRow = {
@@ -105,34 +105,35 @@ export async function getProfessorQuestionInbox(): Promise<ProfessorQuestionInbo
     rules: [],
   };
   const supabase = await createSupabaseServerClient();
-  const profile = await getAuthProfile(supabase, "professor");
+  const profile = await getAuthProfile(supabase, ["professor", "assistant"]);
   if (!profile) {
     return emptyInbox;
   }
 
-  const { data: professorRow, error: professorError } = await supabase
-    .from("professors")
-    .select("id")
-    .eq("profile_id", profile.id)
-    .maybeSingle();
+  const { data: professorRow, error: professorError } = profile.role === "professor"
+    ? await supabase.from("professors").select("id").eq("profile_id", profile.id).maybeSingle()
+    : { data: null, error: null };
   const professorId = professorRow ? normalizeUuid(professorRow.id) : null;
-  if (professorError || !professorId) {
-    return emptyInbox;
-  }
+  if (profile.role === "professor" && (professorError || !professorId)) return emptyInbox;
+
+  let questionQuery = supabase
+    .from("escalations")
+    .select(
+      "id, course_id, category, question, status, answer, created_at, answered_at, answer_mode, source_kind, question_fingerprint",
+    )
+    .order("created_at", { ascending: false });
+  if (professorId) questionQuery = questionQuery.eq("professor_id", professorId);
 
   const [{ data: questionData, error: questionError }, { data: ruleData, error: ruleError }] =
     await Promise.all([
-      supabase
-        .from("escalations")
-        .select(
-          "id, course_id, category, question, status, answer, created_at, answered_at, answer_mode, source_kind, question_fingerprint",
-        )
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("professor_question_auto_reply_rules")
-        .select("id, course_id, category, pattern, answer, is_enabled")
-        .eq("professor_id", professorId)
-        .order("created_at", { ascending: false }),
+      questionQuery,
+      profile.role === "assistant"
+        ? Promise.resolve({ data: [] as AutoReplyRuleRow[], error: null })
+        : supabase
+            .from("professor_question_auto_reply_rules")
+            .select("id, course_id, category, pattern, answer, is_enabled")
+            .eq("professor_id", professorId)
+            .order("created_at", { ascending: false }),
     ]);
 
   if (questionError || ruleError) {
@@ -267,7 +268,7 @@ export async function getAuthenticatedProfessorIdentity(): Promise<{
 } | null> {
   const supabase = await createSupabaseServerClient();
   const profile = await getAuthProfile(supabase, "professor");
-  if (!profile) {
+  if (!profile || profile.role !== "professor") {
     return null;
   }
   const { data, error } = await supabase
@@ -281,9 +282,32 @@ export async function getAuthenticatedProfessorIdentity(): Promise<{
     : { supabase, profileId: profile.id, professorId };
 }
 
+export async function getAuthenticatedQuestionStaffIdentity(): Promise<{
+  supabase: ServerClient;
+  profileId: string;
+  role: "professor" | "assistant";
+  professorId: string | null;
+} | null> {
+  const supabase = await createSupabaseServerClient();
+  const profile = await getAuthProfile(supabase, ["professor", "assistant"]);
+  if (!profile || (profile.role !== "professor" && profile.role !== "assistant")) return null;
+  if (profile.role === "assistant") {
+    return { supabase, profileId: profile.id, role: profile.role, professorId: null };
+  }
+  const { data, error } = await supabase
+    .from("professors")
+    .select("id")
+    .eq("profile_id", profile.id)
+    .maybeSingle();
+  const professorId = data ? normalizeUuid(data.id) : null;
+  return error || !professorId
+    ? null
+    : { supabase, profileId: profile.id, role: profile.role, professorId };
+}
+
 async function getAuthProfile(
   supabase: ServerClient,
-  expectedRole: AuthProfile["role"],
+  expectedRole: AuthProfile["role"] | readonly AuthProfile["role"][],
 ): Promise<AuthProfile | null> {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError || !authData.user) {
@@ -300,11 +324,11 @@ async function getAuthProfile(
     !data ||
     !id ||
     data.auth_user_id !== authData.user.id ||
-    data.role !== expectedRole
+    !(Array.isArray(expectedRole) ? expectedRole.includes(data.role) : data.role === expectedRole)
   ) {
     return null;
   }
-  return { id, role: expectedRole };
+  return { id, role: data.role as AuthProfile["role"] };
 }
 
 async function getStudentQuestionCourses(
