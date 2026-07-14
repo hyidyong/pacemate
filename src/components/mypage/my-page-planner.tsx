@@ -362,7 +362,7 @@ export function MyPagePlanner({
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-8 pb-20 md:pb-8">
       <MyPageSectionTabs activeTab={activeTab} onChange={setActiveTab} />
       {/* SECTION 1: 2D Timetable */}
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "all" || activeTab === "timetable" ? "" : "hidden"}`}>
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-xl font-bold flex items-center gap-2">
             내 시간표
@@ -454,7 +454,7 @@ export function MyPagePlanner({
       </section>
 
       {/* SECTION 2: Course Search & Add */}
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "all" || activeTab === "timetable" ? "" : "hidden"}`}>
         <div className="p-5 border-b border-gray-100 flex items-center gap-3">
           <CalendarPlus className="text-emerald-500" size={20} />
           <h2 className="text-xl font-bold">시간표 과목 검색 및 등록</h2>
@@ -569,7 +569,7 @@ export function MyPagePlanner({
       </section>
 
       {/* SECTION 3: To-do Management */}
-      <section id="todo" className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <section id="todo" className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "all" || activeTab === "todo" ? "" : "hidden"}`}>
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold">To-do 관리</h2>
@@ -678,7 +678,7 @@ export function MyPagePlanner({
       </section>
 
       {/* SECTION 4: Community Tabs */}
-      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "all" || activeTab === "community" ? "" : "hidden"}`}>
         <div className="border-b border-gray-100 px-2 pt-2 flex overflow-x-auto hide-scrollbar">
           <button 
             onClick={() => setActiveCommunityTab("my")}
