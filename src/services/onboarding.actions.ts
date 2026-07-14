@@ -138,7 +138,16 @@ export async function completeStudentOnboarding(formData: FormData) {
     redirect("/login");
   }
 
-  await ensureDefaultSchoolAndDepartment(profileId);
+  const department = text(formData.get("department"));
+  const grade = optionalNumber(formData.get("grade"));
+  const semester = optionalNumber(formData.get("semester"));
+  const completedCourseIds = csv(formData.get("completedCourses"));
+
+  if ((department !== "law" && department !== "electronic-engineering") || !grade || !semester) {
+    redirect("/onboarding?error=required");
+  }
+
+  await ensureDefaultSchoolAndDepartment(profileId, department);
 
   const { data: currentProfile } = await supabase
     .from("student_profiles")
@@ -156,6 +165,9 @@ export async function completeStudentOnboarding(formData: FormData) {
     {
       profile_id: profileId,
       user_types: existingTypes.length ? existingTypes : ["current_student"],
+      grade,
+      semester,
+      completed_courses_text: completedCourseIds.join(",") || null,
       is_onboarded: true,
     },
     { onConflict: "profile_id" },
@@ -174,16 +186,12 @@ export async function completeStudentOnboarding(formData: FormData) {
   redirect(returnTo || "/roadmap");
 }
 
-async function ensureDefaultSchoolAndDepartment(profileId: string) {
+async function ensureDefaultSchoolAndDepartment(profileId: string, departmentKey = "law") {
   const { data: profile } = await supabase
     .from("profiles")
     .select("school_id, department_id")
     .eq("id", profileId)
     .maybeSingle();
-
-  if (profile?.school_id && profile?.department_id) {
-    return;
-  }
 
   const { data: school } = await supabase
     .from("schools")
@@ -191,22 +199,24 @@ async function ensureDefaultSchoolAndDepartment(profileId: string) {
     .eq("name", "계명대학교")
     .maybeSingle();
 
-  if (!school?.id) {
+  const schoolId = profile?.school_id ?? school?.id;
+  if (!schoolId) {
     return;
   }
 
+  const departmentName = departmentKey === "electronic-engineering" ? "전자공학과" : "법학과";
   const { data: department } = await supabase
     .from("departments")
     .select("id")
-    .eq("school_id", school.id)
-    .eq("name", "법학과")
+    .eq("school_id", schoolId)
+    .eq("name", departmentName)
     .maybeSingle();
 
   await supabase
     .from("profiles")
     .update({
-      school_id: profile?.school_id ?? school.id,
-      department_id: profile?.department_id ?? department?.id ?? null,
+      school_id: schoolId,
+      department_id: department?.id ?? profile?.department_id ?? null,
     })
     .eq("id", profileId);
 }

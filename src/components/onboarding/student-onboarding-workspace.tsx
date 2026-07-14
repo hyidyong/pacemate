@@ -7,12 +7,12 @@ import { completeStudentOnboarding } from "@/services/onboarding.actions";
 import type { CurriculumPreview } from "@/types/curriculum";
 
 type StudentOnboardingWorkspaceProps = {
-  electronicCurriculumPreview?: CurriculumPreview | null;
+  curriculumPreviews?: Partial<Record<"law" | "electronic-engineering", CurriculumPreview>>;
   error?: string | null;
 };
 
 export function StudentOnboardingWorkspace({
-  electronicCurriculumPreview = null,
+  curriculumPreviews = {},
   error = null,
 }: StudentOnboardingWorkspaceProps) {
   return (
@@ -20,9 +20,7 @@ export function StudentOnboardingWorkspace({
       {error ? <p className="form-error">{error}</p> : null}
       <input name="returnTo" type="hidden" value="/roadmap" />
       <ElectronicEngineeringOnboardingWorkspace
-        preview={electronicCurriculumPreview}
-        currentGrade={null}
-        currentSemester={null}
+        previews={curriculumPreviews}
       />
       <div className="onboarding-submit-bar">
         <Button type="submit">

@@ -28,14 +28,19 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   }
 
   const isAssistant = profile.role === "assistant";
-  let electronicCurriculumPreview: CurriculumPreview | null = null;
+  let curriculumPreviews: Partial<Record<"law" | "electronic-engineering", CurriculumPreview>> = {};
   if (!isAssistant) {
-    try {
-      const curriculumResult = await getDraftCurriculumByDepartment("electronic-engineering");
-      electronicCurriculumPreview =
-        curriculumResult.kind === "preview" ? curriculumResult : electronicEngineeringDemoCurriculum;
-    } catch {
-      electronicCurriculumPreview = electronicEngineeringDemoCurriculum;
+    const curriculumResults = await Promise.all(["law", "electronic-engineering"].map(async (department) => {
+      try {
+        const result = await getDraftCurriculumByDepartment(department);
+        return result.kind === "preview" ? [department, result] as const : null;
+      } catch {
+        return null;
+      }
+    }));
+    curriculumPreviews = Object.fromEntries(curriculumResults.filter((result): result is readonly ["law" | "electronic-engineering", CurriculumPreview] => result !== null));
+    if (!curriculumPreviews["electronic-engineering"]) {
+      curriculumPreviews["electronic-engineering"] = electronicEngineeringDemoCurriculum;
     }
   }
   const error = params?.error ? decodeURIComponent(params.error) : null;
@@ -81,7 +86,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             </div>
           </form>
         ) : (
-          <StudentOnboardingWorkspace electronicCurriculumPreview={electronicCurriculumPreview} error={error} />
+          <StudentOnboardingWorkspace curriculumPreviews={curriculumPreviews} error={error} />
         )}
       </section>
     </AppShell>
