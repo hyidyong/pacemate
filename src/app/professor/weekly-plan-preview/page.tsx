@@ -7,16 +7,25 @@ import type { WeeklyPlanReview } from "@/types/weekly-roadmap";
 
 export const dynamic = "force-dynamic";
 
-export default async function WeeklyPlanPreviewPage() {
+export default async function WeeklyPlanPreviewPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ courseId?: string }>;
+}) {
   const profile = await getDemoProfile();
   if (!profile) redirect("/login");
   if (profile.role !== "professor") redirect(getRoleHomePath(profile.role));
 
+  const params = await searchParams;
+  const selectedCourseId = typeof params?.courseId === "string" ? params.courseId : "";
   let drafts: WeeklyPlanReview[] = [];
   let loadError = false;
 
   try {
-    drafts = await getWeeklyPlanDraftsForProfessorSession(profile);
+    const allDrafts = await getWeeklyPlanDraftsForProfessorSession(profile);
+    drafts = selectedCourseId
+      ? allDrafts.filter((draft) => draft.courseId === selectedCourseId)
+      : allDrafts;
   } catch {
     loadError = true;
   }

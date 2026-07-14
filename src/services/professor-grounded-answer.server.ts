@@ -104,7 +104,13 @@ async function professorOwnsCourse(supabase: any, professorId: string, courseId:
 async function readCourseSources(supabase: any, professorId: string, courseId: string) {
   const [faqResult, syllabusResult, noticeResult, answerResult, offeringResult] = await Promise.all([
     supabase.from("faqs").select("id, question, answer").eq("course_id", courseId).eq("professor_id", professorId).not("approved_at", "is", null),
-    supabase.from("syllabi").select("id, source_name, parsed_text").eq("course_id", courseId),
+    supabase
+      .from("syllabi")
+      .select("id, source_name, parsed_text")
+      .eq("course_id", courseId)
+      .eq("parsing_status", "completed")
+      .order("updated_at", { ascending: false })
+      .limit(1),
     supabase.from("posts").select("id, title, content").eq("course_id", courseId).eq("board_key", "course_notice").eq("status", "active"),
     supabase.from("escalations").select("id, question, answer").eq("course_id", courseId).eq("status", "answered").not("answer", "is", null).limit(20),
     supabase.from("course_offerings").select("id").eq("course_id", courseId).eq("professor_id", professorId),

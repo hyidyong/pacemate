@@ -409,14 +409,27 @@ export function ProfessorWorkspace({
           <section className="rounded-2xl bg-white p-6 shadow-sm">
             <h2 className="text-xl font-bold text-slate-900">주간 계획 초안 검토</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              교수 승인 전 주차별 계획을 검토하고 확정할 수 있습니다.
+              담당 과목을 선택해 교수 승인 전 주차별 계획을 검토하고 확정할 수 있습니다.
             </p>
-            <Link
-              className="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-              href="/professor/weekly-plan-preview"
-            >
-              주간 계획 초안 열기
-            </Link>
+            {courses.length === 0 ? (
+              <p className="mt-5 text-sm text-slate-500">담당 과목 정보가 없습니다.</p>
+            ) : (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {courses.map((course) => (
+                  <article key={course.id} className="rounded-xl bg-slate-50 p-4 shadow-sm">
+                    <p className="text-xs font-semibold text-emerald-700">담당 과목</p>
+                    <h3 className="mt-1 font-bold text-slate-900">{course.name}</h3>
+                    <p className="mt-1 text-xs text-slate-500">{course.code}</p>
+                    <Link
+                      className="mt-4 inline-flex rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                      href={`/professor/weekly-plan-preview?courseId=${encodeURIComponent(course.id)}`}
+                    >
+                      {course.name} 초안 열기
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         );
       case "sensitive-request":

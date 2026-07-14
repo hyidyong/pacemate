@@ -11,7 +11,10 @@ export async function getCourseRoadmap(courseId: string) {
     .from("syllabi")
     .select("parsed_text")
     .eq("course_id", courseId)
-    .single();
+    .eq("parsing_status", "completed")
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error || !data) {
     return { success: false, parsedText: null };

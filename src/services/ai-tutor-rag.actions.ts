@@ -184,7 +184,13 @@ async function loadTutorKnowledgeSources(
   offeringIds: readonly string[],
 ): Promise<TutorKnowledgeSource[]> {
   const [{ data: syllabusRows }, { data: weeklyPlanRows }, { data: noticeRows }, { data: faqRows }, { data: profile }] = await Promise.all([
-    admin.from("syllabi").select("id, source_name, parsed_text, raw_extracted_text, parsed_data, updated_at").eq("course_id", courseId).order("created_at", { ascending: false }).limit(1),
+    admin
+      .from("syllabi")
+      .select("id, source_name, parsed_text, raw_extracted_text, parsed_data, updated_at")
+      .eq("course_id", courseId)
+      .eq("parsing_status", "completed")
+      .order("updated_at", { ascending: false })
+      .limit(1),
     offeringIds.length
       ? admin
           .from("course_weekly_plans")
