@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { createDemoSession } from "@/services/demo-auth.service";
-import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
+import { getRoleHomePath, getSignedDemoProfile } from "@/services/session.service";
 import { DemoLoginButton } from "@/components/login/demo-login-button";
 
 type LoginPageProps = {
@@ -32,7 +32,7 @@ const errorMessages: Record<string, string> = {
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const [params, profile] = await Promise.all([searchParams, getDemoProfile()]);
+  const [params, profile] = await Promise.all([searchParams, getSignedDemoProfile()]);
   if (profile) {
     redirect(getRoleHomePath(profile.role));
   }

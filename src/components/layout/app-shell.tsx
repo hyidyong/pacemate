@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header-professor-safe";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { ProfessorMobileBottomNav } from "@/components/layout/professor-mobile-bottom-nav";
 import { SiteFooter } from "@/components/layout/site-footer";
 import {
   getNotificationsForProfile,
@@ -54,6 +55,8 @@ export async function AppShell({
       {showSiteFooter ? <SiteFooter hasMobileNav={isStudent || isProfessor || isOperator} /> : null}
 
       {isStudent && <MobileBottomNav />}
+
+      {isAuthenticated && isProfessor && <ProfessorMobileBottomNav />}
 
       {isAuthenticated && isOperator && !isProfessor && (
         <nav
