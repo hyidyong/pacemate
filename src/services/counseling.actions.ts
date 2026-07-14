@@ -72,7 +72,7 @@ export async function createCounselingRequest(formData: FormData) {
     category: "counseling",
     title: "새 상담 신청",
     body: `${profile.name} 학생이 ${topic} 상담을 신청했습니다.`,
-    targetHref: "/professor?tab=counseling",
+    targetHref: `/professor?tab=counseling&sub=pending-counseling&requestId=${encodeURIComponent(data.id)}`,
   });
 
   revalidatePath("/counseling");

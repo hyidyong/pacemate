@@ -22,8 +22,8 @@ export function ProfessorProfileSummary({
   ];
 
   return (
-    <section className="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6" aria-label="교수 프로필">
-      <article className="rounded-2xl border border-emerald-100 bg-white px-5 py-4 shadow-sm sm:px-6">
+    <section aria-label="교수 프로필">
+      <article className="rounded-3xl border border-emerald-100 bg-white px-5 py-5 shadow-sm sm:px-6">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <h2 className="text-lg font-bold text-slate-800">{professor.name} 교수</h2>
           <span className="text-sm font-medium text-slate-500">

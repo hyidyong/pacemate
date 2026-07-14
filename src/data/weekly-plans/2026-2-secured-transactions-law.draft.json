@@ -1,0 +1,38 @@
+{
+  "status": "draft",
+  "termId": "783bfca3-3dae-400c-b6e8-08683c4ba3db",
+  "offeringId": "6f4c0b92-2d2a-4b9d-a6ec-6fa6f6f4c001",
+  "courseId": "0b452ae6-8578-45b2-8a42-4373064ebed6",
+  "courseName": "담보물권법",
+  "professorId": "7633254b-18cb-483d-a163-72eee0f22c97",
+  "professorName": "김재두",
+  "semesterLabel": "2026-2",
+  "source": {
+    "type": "syllabus",
+    "syllabusId": "cf6049ce-df4f-4b6a-9e55-635535d485d0",
+    "verifiedByProfessor": false
+  },
+  "weeks": [
+    { "weekNumber": 1, "title": "담보물권법 개관", "topics": ["담보물권의 의의와 기능", "물권법과의 연결 구조"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "과목명과 전공 설명을 바탕으로 도입 주차를 구성한 초안입니다." },
+    { "weekNumber": 2, "title": "유치권의 성립요건", "topics": ["유치권의 개념", "성립 요건과 효과"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "담보물권법 기본 단원을 주차 흐름에 맞게 배치한 초안입니다." },
+    { "weekNumber": 3, "title": "질권의 설정과 효력", "topics": ["동산질권", "권리질권", "질권의 우선변제"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "담보물권법 기본 단원을 주차 흐름에 맞게 배치한 초안입니다." },
+    { "weekNumber": 4, "title": "저당권의 기본 구조", "topics": ["저당권의 성립", "저당권의 효력 범위"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "담보물권법 핵심 단원을 중심으로 구성한 초안입니다." },
+    { "weekNumber": 5, "title": "저당권과 용익관계", "topics": ["피담보채권", "부종성과 수반성", "이용관계"], "activityType": "lecture", "isAssessment": false, "confidence": "medium", "sourceNote": "세부 쟁점은 교수 확인 후 조정이 필요한 초안입니다." },
+    { "weekNumber": 6, "title": "근저당권", "topics": ["근저당권의 개념", "확정 전후 법률관계"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "실무 비중이 큰 근저당권 단원을 독립 주차로 분리했습니다." },
+    { "weekNumber": 7, "title": "공동저당과 물상보증", "topics": ["공동저당", "물상보증인의 지위"], "activityType": "lecture", "isAssessment": false, "confidence": "medium", "sourceNote": "중간 전 복합 쟁점 단원으로 배치한 초안입니다." },
+    { "weekNumber": 8, "title": "중간 점검 및 사례 정리", "topics": ["유치권·질권 복습", "저당권 사례 검토"], "activityType": "review", "isAssessment": true, "confidence": "medium", "sourceNote": "중간고사 시점이 명시되지 않아 중간 점검 주차로 임시 배치했습니다." },
+    { "weekNumber": 9, "title": "비전형 담보", "topics": ["가등기담보", "양도담보의 구조"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "후반부 심화 주제로 구성한 초안입니다." },
+    { "weekNumber": 10, "title": "양도담보와 소유권 유보", "topics": ["양도담보 판례", "소유권 유보와 담보 기능"], "activityType": "lecture", "isAssessment": false, "confidence": "medium", "sourceNote": "판례 중심 수업 여부에 따라 세부 주차 조정이 필요할 수 있습니다." },
+    { "weekNumber": 11, "title": "집행과 우선변제", "topics": ["담보권 실행", "우선순위와 배당"], "activityType": "lecture", "isAssessment": false, "confidence": "high", "sourceNote": "실무 쟁점 연결을 위해 후반부에 배치했습니다." },
+    { "weekNumber": 12, "title": "통합 사례연습 1", "topics": ["유치권·질권 사례", "저당권 관련 분쟁"], "activityType": "discussion", "isAssessment": false, "confidence": "medium", "sourceNote": "사례형 수업을 가정한 초안으로, 교수 확인 후 조정 가능합니다." },
+    { "weekNumber": 13, "title": "통합 사례연습 2", "topics": ["근저당권 사례", "비전형 담보 사례"], "activityType": "discussion", "isAssessment": false, "confidence": "medium", "sourceNote": "후반부 주요 판례·사례 정리용 주차 초안입니다." },
+    { "weekNumber": 14, "title": "전체 복습", "topics": ["핵심 쟁점 총정리", "오답·오해하기 쉬운 논점 정리"], "activityType": "review", "isAssessment": false, "confidence": "medium", "sourceNote": "기말 전 종합 복습 주차로 구성한 초안입니다." },
+    { "weekNumber": 15, "title": "기말 대비 정리", "topics": ["담보물권 전 범위 최종 정리"], "activityType": "review", "isAssessment": true, "confidence": "low", "sourceNote": "정확한 평가 시점이 명시되지 않아 기말 대비 정리 주차로 임시 배치했습니다." }
+  ],
+  "warnings": [
+    "현재 데모용 초안은 파일 기반으로 제공되며, 실제 강의계획서 세부 주차와 다를 수 있습니다.",
+    "중간·기말 평가 시점은 강의계획서 원문 검토 후 확정이 필요합니다.",
+    "사례연습·토론 비중은 교수 검토 후 lecture/review 형태로 조정될 수 있습니다.",
+    "source.verifiedByProfessor가 false이므로 교수 최종 확인 전까지는 확정본이 아닙니다."
+  ]
+}

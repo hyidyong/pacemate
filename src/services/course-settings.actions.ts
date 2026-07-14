@@ -106,12 +106,15 @@ export async function addCourseNotice(formData: FormData) {
   // 1. Save Notice
   const { error: noticeError } = await admin.from("posts").insert({
     author_id: profile.id,
+    school_id: profile.school_id,
     course_id: courseId,
+    community_type: "student",
     board_key: "course_notice",
     category: "notice",
     title,
     content,
     display_mode: "public",
+    status: "active",
   });
 
   if (noticeError) {
@@ -129,6 +132,8 @@ export async function addCourseNotice(formData: FormData) {
   revalidatePath("/professor");
   revalidatePath("/dashboard");
   revalidatePath("/notices");
+  revalidatePath("/notifications");
+  revalidatePath(`/courses/${courseId}`);
 
   if (studentCourses && studentCourses.length > 0) {
     const courseName = Array.isArray(studentCourses[0].courses)
@@ -141,7 +146,7 @@ export async function addCourseNotice(formData: FormData) {
       category: "system" as const,
       title: `[${courseName}] 새로운 공지사항이 등록되었습니다.`,
       body: title,
-      targetHref: `/courses/${courseId}`,
+      targetHref: "/notices",
     }));
 
     const notificationResult = await createUserNotificationsWithClient(admin, notifications);
@@ -205,12 +210,15 @@ export async function addCourseTextbook(formData: FormData) {
   // Store textbooks in the course notice feed so students see the course-scoped update.
   const { error: textbookError } = await admin.from("posts").insert({
     author_id: profile.id,
+    school_id: profile.school_id,
     course_id: courseId,
+    community_type: "student",
     board_key: "course_notice",
     category: "textbook",
     title: `[교과서] ${name}`,
     content: link || "링크 없음",
     display_mode: "public",
+    status: "active",
   });
 
   if (textbookError) {
@@ -228,6 +236,8 @@ export async function addCourseTextbook(formData: FormData) {
   revalidatePath("/professor");
   revalidatePath("/dashboard");
   revalidatePath("/notices");
+  revalidatePath("/notifications");
+  revalidatePath(`/courses/${courseId}`);
 
   if (studentCourses && studentCourses.length > 0) {
     const courseName = Array.isArray(studentCourses[0].courses)
@@ -240,7 +250,7 @@ export async function addCourseTextbook(formData: FormData) {
       category: "system" as const,
       title: `[${courseName}] 추천 교과서가 추가되었습니다.`,
       body: name,
-      targetHref: `/courses/${courseId}`,
+      targetHref: "/notices",
     }));
 
     const notificationResult = await createUserNotificationsWithClient(admin, notifications);

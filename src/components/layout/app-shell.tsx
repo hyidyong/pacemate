@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header-professor-safe";
@@ -86,10 +87,12 @@ export async function AppShell({
             href="/chatbot"
             className="flex items-center justify-center w-24 h-24 bg-transparent rounded-full hover:scale-110 transition-all duration-300 overflow-visible"
           >
-            <img
-              src="https://i.ibb.co/whB3QBtt/AIDrawing-260714-621f8e04-8036-47f2-b44a-a11ac360ee20-0-Miri-Canvas.png"
+            <Image
               alt="터디"
               className="h-full w-full object-contain scale-125 fab-bot-icon"
+              height={96}
+              src="https://i.ibb.co/whB3QBtt/AIDrawing-260714-621f8e04-8036-47f2-b44a-a11ac360ee20-0-Miri-Canvas.png"
+              width={96}
             />
           </Link>
         </div>

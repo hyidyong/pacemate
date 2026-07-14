@@ -8,6 +8,14 @@ const nextConfig = {
   // Each Git worktree runs with its own source and build output. Pin the tracing
   // root so Next does not infer the parent workspace when multiple lockfiles exist.
   outputFileTracingRoot: __dirname,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "i.ibb.co",
+      },
+    ],
+  },
   webpack(config) {
     config.resolveLoader = config.resolveLoader || {};
     config.resolveLoader.modules = [

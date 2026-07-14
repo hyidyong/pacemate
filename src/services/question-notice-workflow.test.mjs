@@ -41,9 +41,13 @@ test("course notices use the server admin client, validate ownership, and revali
   assert.match(noticeSource, /course_professors/);
   assert.match(noticeSource, /course_offerings/);
   assert.match(noticeSource, /admin\.from\("posts"\)\.insert/);
+  assert.match(noticeSource, /community_type:\s*"student"/);
+  assert.match(noticeSource, /status:\s*"active"/);
   assert.match(noticeSource, /revalidatePath\("\/dashboard"\)/);
   assert.match(noticeSource, /revalidatePath\("\/notices"\)/);
+  assert.match(noticeSource, /revalidatePath\("\/notifications"\)/);
   assert.match(noticeSource, /board_key: "course_notice"/g);
   assert.match(noticeSource, /category: "textbook"/);
+  assert.match(noticeSource, /targetHref:\s*"\/notices"/);
   assert.match(noticeSource, /Course textbook admin client is unavailable/);
 });
