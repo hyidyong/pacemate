@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header-professor-safe";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import {
@@ -68,16 +68,20 @@ export async function AppShell({
         <div className="hidden md:block fixed bottom-10 right-10 z-[100] group">
           <div className="absolute bottom-full right-0 mb-4 w-48 bg-white/95 backdrop-blur-sm text-gray-800 text-xs rounded-xl shadow-2xl p-3.5 border border-emerald-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
             <div className="font-bold text-emerald-600 mb-1 flex items-center gap-1">
-              <Sparkles size={14} /> AI 튜터 대기 중
+              <Sparkles size={14} /> 터디 대기 중!
             </div>
             어려운 문제가 있나요? 언제든지 편하게 물어보세요.
             <div className="absolute -bottom-2 right-4 w-4 h-4 bg-white border-b border-r border-emerald-100 transform rotate-45" />
           </div>
           <Link
             href="/chatbot"
-            className="flex items-center justify-center w-14 h-14 bg-gradient-to-tr from-emerald-600 to-teal-500 text-white rounded-full shadow-[0_8px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_12px_40px_rgba(16,185,129,0.6)] hover:scale-110 transition-all duration-300"
+            className="flex items-center justify-center w-24 h-24 bg-transparent rounded-full hover:scale-110 transition-all duration-300 overflow-visible"
           >
-            <Bot size={28} strokeWidth={2.5} className="fab-bot-icon" />
+            <img
+              src="https://i.ibb.co/whB3QBtt/AIDrawing-260714-621f8e04-8036-47f2-b44a-a11ac360ee20-0-Miri-Canvas.png"
+              alt="터디"
+              className="h-full w-full object-contain scale-125 fab-bot-icon"
+            />
           </Link>
         </div>
       )}
