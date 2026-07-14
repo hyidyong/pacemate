@@ -13,13 +13,23 @@ function keywords(value: string) {
   return [...new Set(value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean))].slice(0, 12);
 }
 
+function createRoadmapActionSupabaseClient() {
+  try {
+    return createSupabaseAdminClient();
+  } catch (error) {
+    console.error("Roadmap action Supabase admin client is unavailable", error);
+    return null;
+  }
+}
+
 export async function saveProfessorRoadmapPersonalization(formData: FormData) {
   const profile = await getDemoProfile();
   if (!profile || profile.role !== "professor") return { message: "교수 권한이 필요합니다." };
   const courseId = value(formData, "courseId", 100);
   if (!courseId) return { message: "과목을 선택해 주세요." };
 
-  const supabase = createSupabaseAdminClient();
+  const supabase = createRoadmapActionSupabaseClient();
+  if (!supabase) return { message: "로드맵 데이터베이스 설정을 확인해 주세요." };
   const { data: professor } = await supabase.from("professors").select("id").eq("profile_id", profile.id).maybeSingle();
   if (!professor) return { message: "교수 정보를 확인할 수 없습니다." };
   const { data: offering } = await supabase.from("course_offerings").select("id").eq("course_id", courseId).eq("professor_id", professor.id).order("created_at", { ascending: false }).limit(1).maybeSingle();

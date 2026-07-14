@@ -44,6 +44,7 @@ export default async function RoadmapPage({
 
       <StudentRoadmapWorkspace
         completedWeeks={roadmapWorkspace.completedWeeks}
+        hasPersonalizedRoadmap={roadmapWorkspace.hasPersonalizedRoadmap}
         initialWeeks={roadmapWorkspace.weeks}
         offerings={roadmapWorkspace.offerings}
         selectedOfferingId={roadmapWorkspace.selectedOfferingId}
