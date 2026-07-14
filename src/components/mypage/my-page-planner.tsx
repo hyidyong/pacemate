@@ -17,10 +17,15 @@ import {
   CheckCircle2
 } from "lucide-react";
 import {
-  addCourseToSchedule,
   removeCourseFromSchedule,
-  toggleFavoriteCourse,
 } from "@/services/student-community.actions";
+import {
+  createLocalTimetableCourse,
+  isLocalTimetableCourse,
+  removeTimetableCourse,
+  upsertTimetableCourse,
+  useStudentTimetable,
+} from "@/lib/student-timetable";
 import type {
   CommunityPostRecord,
   CourseRecord,
@@ -73,7 +78,7 @@ export function MyPagePlanner({
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:15");
   const [classroom, setClassroom] = useState("");
-  const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeCommunityTab, setActiveCommunityTab] = useState<"my" | "scrap" | "comment" | "like">("my");
   const [todoTitle, setTodoTitle] = useState("");
@@ -84,6 +89,7 @@ export function MyPagePlanner({
   const [doneIds, setDoneIds] = useState<string[]>([]);
   const [isTodoLoaded, setIsTodoLoaded] = useState(false);
   const [isDoneLoaded, setIsDoneLoaded] = useState(false);
+  const { timetableCourses, setTimetableCourses } = useStudentTimetable(myCourses);
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0];
 
@@ -97,36 +103,47 @@ export function MyPagePlanner({
     );
   }, [courses, query]);
 
-  const scheduledCourseIds = new Set(myCourses.map((item) => item.course.id));
-
-  function runAction(action: (formData: FormData) => Promise<{ ok: boolean; message: string }>, formData: FormData) {
-    setMessage("");
-    startTransition(async () => {
-      const result = await action(formData);
-      setMessage(result.message);
-      if (result.ok) {
-        router.refresh();
-      }
-    });
-  }
+  const scheduledCourseIds = new Set(timetableCourses.map((item) => item.course.id));
 
   function handleAddCourse() {
     if (!selectedCourse) return;
 
-    const formData = new FormData();
-    formData.set("courseId", selectedCourse.id);
-    formData.set("scheduleDay", day);
-    formData.set("startTime", startTime);
-    formData.set("endTime", endTime);
-    formData.set("classroom", classroom || "강의실 미정");
-    formData.set("isFavorite", "true");
-    runAction(addCourseToSchedule, formData);
+    if (scheduledCourseIds.has(selectedCourse.id)) {
+      setFeedback({ ok: true, message: "이미 시간표에 추가된 과목입니다." });
+      return;
+    }
+
+    const nextCourse = createLocalTimetableCourse({
+      course: selectedCourse,
+      scheduleDay: day,
+      startTime,
+      endTime,
+      classroom: classroom || "강의실 미정",
+    });
+
+    setTimetableCourses(upsertTimetableCourse(timetableCourses, nextCourse));
+    setFeedback({ ok: true, message: "시간표에 등록했습니다." });
   }
 
   function handleRemove(enrollmentId: string) {
+    setFeedback(null);
+
+    if (isLocalTimetableCourse(enrollmentId)) {
+      setTimetableCourses(removeTimetableCourse(timetableCourses, enrollmentId));
+      setFeedback({ ok: true, message: "시간표에서 제거했습니다." });
+      return;
+    }
+
     const formData = new FormData();
     formData.set("enrollmentId", enrollmentId);
-    runAction(removeCourseFromSchedule, formData);
+    startTransition(async () => {
+      const result = await removeCourseFromSchedule(formData);
+      setFeedback({ ok: result.ok, message: result.message });
+      if (result.ok) {
+        setTimetableCourses(removeTimetableCourse(timetableCourses, enrollmentId));
+        router.refresh();
+      }
+    });
   }
 
   // Position helper for grid
@@ -317,9 +334,21 @@ export function MyPagePlanner({
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-xl font-bold flex items-center gap-2">
             내 시간표
-            <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{myCourses.length}과목</span>
+            <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{timetableCourses.length}과목</span>
           </h2>
         </div>
+        {feedback ? (
+          <div
+            className={`mx-5 mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${
+              feedback.ok
+                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                : "border-red-100 bg-red-50 text-red-600"
+            }`}
+            role="status"
+          >
+            {feedback.message}
+          </div>
+        ) : null}
         
         <div className="p-5 overflow-x-auto">
           <div className="min-w-[600px] relative border border-gray-200 rounded-lg bg-gray-50/30">
@@ -348,7 +377,7 @@ export function MyPagePlanner({
               ))}
 
               {/* Course Blocks */}
-              {myCourses.map((item, index) => {
+              {timetableCourses.map((item, index) => {
                 if (!item.schedule_day || !item.start_time || !item.end_time) return null;
                 const dayIndex = days.indexOf(item.schedule_day);
                 if (dayIndex === -1) return null;
@@ -492,15 +521,13 @@ export function MyPagePlanner({
                 </div>
               </div>
 
-              {message && <p className="text-sm text-red-500 mt-2 mb-2 font-medium">{message}</p>}
-
               <button
                 onClick={handleAddCourse}
-                disabled={isPending || !selectedCourse}
-                className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2 shadow-sm"
+                disabled={isPending || !selectedCourse || (selectedCourse ? scheduledCourseIds.has(selectedCourse.id) : false)}
+                className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2 shadow-sm"
               >
                 <CalendarPlus size={16} />
-                <span>[+ 시간표에 추가]</span>
+                <span>{selectedCourse && scheduledCourseIds.has(selectedCourse.id) ? "이미 시간표에 등록됨" : "시간표에 추가하기"}</span>
               </button>
             </div>
           </div>
