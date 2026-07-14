@@ -20,6 +20,7 @@ import { getStudentLearningRecommendations } from "@/services/student-learning-r
 import { StudentLearningRecommendationsCard } from "@/components/dashboard/student-learning-recommendations-card";
 import { listStudentCourseNotices } from "@/services/course-notices.server";
 import type { StudentAnnouncement } from "@/components/dashboard/student-announcement-feed";
+import { StudentAnnouncementBanner } from "@/components/dashboard/student-announcement-banner";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
@@ -239,6 +240,8 @@ export default async function DashboardPage() {
       <ScrollReveal>
         <NotificationStrip notifications={notifications} showSummary={profile.role !== "student"} />
       </ScrollReveal>
+
+      {profile.role === "student" ? <StudentAnnouncementBanner announcement={announcements[0] ?? null} /> : null}
 
       {/* 학생 전용: 오늘 시간표 위젯 */}
       {profile.role === "student" && (
