@@ -2,6 +2,7 @@ import "server-only";
 
 import companyLawDraft from "@/data/weekly-plans/2026-2-company-law.draft.json";
 import administrativeProcedureDraft from "@/data/weekly-plans/2026-2-administrative-procedure-remedies.draft.json";
+import securedTransactionsDraft from "@/data/weekly-plans/2026-2-secured-transactions-law.draft.json";
 import type {
   WeeklyPlanActivityType,
   WeeklyPlanConfidence,
@@ -20,7 +21,11 @@ const allowedActivityTypes: readonly WeeklyPlanActivityType[] = [
   "assessment",
 ];
 
-const draftInputs: readonly unknown[] = [companyLawDraft, administrativeProcedureDraft];
+const draftInputs: readonly unknown[] = [
+  companyLawDraft,
+  administrativeProcedureDraft,
+  securedTransactionsDraft,
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -103,6 +108,23 @@ export function getWeeklyPlanDraftByOfferingId(offeringId: string): WeeklyPlanDr
 export function getWeeklyPlanDraftByCourseId(courseId: string): WeeklyPlanDraft | null {
   if (!isNonEmptyString(courseId)) return null;
   return loadDrafts().find((draft) => draft.courseId === courseId) ?? null;
+}
+
+export function getWeeklyPlanDraftByIdentity(input: {
+  courseId: string;
+  professorId: string;
+  termId: string;
+}): WeeklyPlanDraft | null {
+  if (!isNonEmptyString(input.courseId) || !isNonEmptyString(input.professorId) || !isNonEmptyString(input.termId)) {
+    return null;
+  }
+
+  return loadDrafts().find(
+    (draft) =>
+      draft.courseId === input.courseId &&
+      draft.professorId === input.professorId &&
+      draft.termId === input.termId,
+  ) ?? null;
 }
 
 export function listWeeklyPlanDrafts(): WeeklyPlanDraft[] {

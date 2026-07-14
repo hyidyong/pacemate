@@ -246,6 +246,7 @@ export async function createProfessorQuestionRecord(input: {
       courseId: input.courseId,
       professorProfileId: row.recipient_profile_id,
       isAutomaticallyAnswered: row.question_status === "answered",
+      questionId: row.question_id,
     });
     notificationDelivered = notificationResult.ok;
   }
@@ -263,10 +264,11 @@ async function createQuestionNotifications(input: {
   courseId: string;
   professorProfileId: string;
   isAutomaticallyAnswered: boolean;
+  questionId: string;
 }) {
   const base = {
     category: "question" as const,
-    targetHref: input.isAutomaticallyAnswered ? "/ask" : "/professor?tab=questions&sub=incoming-questions",
+    targetHref: `/professor?tab=questions&sub=incoming-questions&questionId=${encodeURIComponent(input.questionId)}`,
   };
   if (input.isAutomaticallyAnswered) {
     return createUserNotifications([{

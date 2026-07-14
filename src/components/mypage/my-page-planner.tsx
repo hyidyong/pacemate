@@ -58,6 +58,8 @@ type MyPagePlannerProps = {
 
 const days = ["월", "화", "수", "목", "금"];
 const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+const TIMETABLE_TIME_COLUMN = "clamp(1.85rem, 8vw, 2.75rem)";
+const TIMETABLE_GRID_COLUMNS = `${TIMETABLE_TIME_COLUMN} repeat(5, minmax(0, 1fr))`;
 
 // 5 Pastel colors for timetable blocks
 const blockColors = [
@@ -300,16 +302,15 @@ export function MyPagePlanner({
   }
 
   // Position helper for grid
-  const getBlockStyle = (startTimeStr: string, endTimeStr: string) => {
+  const getBlockMetrics = (startTimeStr: string, endTimeStr: string) => {
     const [startH, startM] = startTimeStr.split(":").map(Number);
     const [endH, endM] = endTimeStr.split(":").map(Number);
     const startMinutes = (startH - 9) * 60 + startM;
     const durationMinutes = (endH - startH) * 60 + (endM - startM);
-    
-    // 1 hour = 60px
+
     return {
-      top: `${startMinutes + 40}px`, // +40px for header row offset inside the relative container
-      height: `${durationMinutes}px`,
+      top: startMinutes,
+      height: durationMinutes,
     };
   };
 
@@ -505,12 +506,15 @@ export function MyPagePlanner({
         ) : null}
         
         <div className="w-full min-w-0 overflow-hidden p-2 sm:p-5">
-          <div className="relative w-full min-w-0 overflow-hidden rounded-lg bg-gray-50/30 shadow-inner" style={{ contain: "layout paint" }}>
+          <div
+            className="relative w-full min-w-0 overflow-hidden rounded-lg bg-gray-50/30 shadow-inner"
+            style={{ contain: "layout paint" }}
+          >
             {/* Header Row */}
-            <div className="grid h-10 border-b border-gray-100 bg-gray-50" style={{ gridTemplateColumns: "2.75rem repeat(5, minmax(0, 1fr))" }}>
+            <div className="grid h-10 border-b border-gray-100 bg-gray-50" style={{ gridTemplateColumns: TIMETABLE_GRID_COLUMNS }}>
               <div className="border-r border-gray-100" />
               {days.map((d) => (
-                <div key={d} className="flex min-w-0 items-center justify-center border-r border-gray-100 text-center text-xs font-semibold text-gray-600 last:border-r-0 sm:text-sm">
+                <div key={d} className="flex min-w-0 items-center justify-center border-r border-gray-100 px-0.5 text-center text-[11px] font-semibold text-gray-600 last:border-r-0 sm:px-1 sm:text-sm">
                   {d}
                 </div>
               ))}
@@ -520,9 +524,9 @@ export function MyPagePlanner({
             <div className="relative" style={{ height: `${HOURS.length * 60}px` }}>
               {/* Horizontal Lines & Time Labels */}
               {HOURS.map((hour, idx) => (
-                <div key={hour} className="absolute grid w-full" style={{ top: `${idx * 60}px`, height: "60px", gridTemplateColumns: "2.75rem repeat(5, minmax(0, 1fr))" }}>
+                <div key={hour} className="absolute grid w-full" style={{ top: `${idx * 60}px`, height: "60px", gridTemplateColumns: TIMETABLE_GRID_COLUMNS }}>
                   <div className="flex items-start justify-center border-r border-gray-100 pt-2">
-                    <span className="text-xs text-gray-400 font-medium">{hour}</span>
+                    <span className="text-[10px] font-medium text-gray-400 sm:text-xs">{hour}</span>
                   </div>
                   {days.map((d) => (
                     <div key={`${hour}-${d}`} className="min-w-0 border-b border-r border-dotted border-gray-100 last:border-r-0" />
@@ -537,36 +541,24 @@ export function MyPagePlanner({
                 if (dayIndex === -1) return null;
 
                 const colorClass = blockColors[index % blockColors.length];
-                const blockStyle = getBlockStyle(item.start_time, item.end_time);
+                const blockMetrics = getBlockMetrics(item.start_time, item.end_time);
 
                 return (
                   <div 
                     key={item.id}
                     className="absolute min-w-0"
                     style={{
-                      top: `${parseInt(blockStyle.top) - 40}px`, // adjust because we are inside a relative container that doesn't include header
-                      height: blockStyle.height,
-                      left: `calc(2.75rem + ${dayIndex} * ((100% - 2.75rem) / 5))`,
-                      width: `calc((100% - 2.75rem) / 5)`,
+                      top: `${blockMetrics.top}px`,
+                      height: `${blockMetrics.height}px`,
+                      left: `calc(${TIMETABLE_TIME_COLUMN} + ${dayIndex} * ((100% - ${TIMETABLE_TIME_COLUMN}) / 5))`,
+                      width: `calc((100% - ${TIMETABLE_TIME_COLUMN}) / 5)`,
                     }}
                   >
-                    <TimetableCourseCell item={item} colorClass={colorClass} onRemove={() => handleRemove(item.parentId)} />
-                    {/*
-                    <div className="text-xs font-bold leading-tight mb-1 break-words">{item.course.name}</div>
-                    <div className="text-[10px] opacity-80 flex flex-col gap-0.5">
-                      <span>{item.classroom ?? "강의실 미정"}</span>
-                    </div>
-                    
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-md">
-                      <button 
-                        onClick={() => handleRemove(item.id)}
-                        className="bg-white text-red-500 p-1.5 rounded-full shadow-md hover:bg-red-50"
-                        title="과목 삭제"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    */}
+                    <TimetableCourseCell
+                      item={item}
+                      colorClass={colorClass}
+                      onRemove={() => handleRemove(item.parentId)}
+                    />
                   </div>
                 );
               })}

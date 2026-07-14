@@ -2,6 +2,7 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { normalizeQuestionCategory } from "@/lib/professor-question-normalization";
+import { normalizeUuid } from "@/lib/uuid";
 import { getDemoProfile } from "@/services/session.service";
 import {
   sanitizeTutorCitations,
@@ -22,6 +23,23 @@ type TutorResult = {
   category: string;
   isEscalated: boolean;
   sources: TutorCitation[];
+  sessionId: string | null;
+};
+
+export type AiTutorSessionSummary = {
+  id: string;
+  title: string;
+  created_at: string;
+  last_message?: string;
+};
+
+export type AiTutorStoredMessage = {
+  id: string;
+  role: "user" | "ai";
+  content: string;
+  category?: string;
+  isEscalated?: boolean;
+  sources?: TutorCitation[];
 };
 
 const sourceTypeLabels: Record<TutorKnowledgeSourceType, string> = {
@@ -55,10 +73,11 @@ function unavailableResult(message: string): TutorResult {
     category: "수업 운영",
     isEscalated: true,
     sources: [],
+    sessionId: null,
   };
 }
 
-export async function askAiTutor(message: string, courseId: string): Promise<TutorResult> {
+export async function askAiTutor(message: string, courseId: string, sessionId?: string | null): Promise<TutorResult> {
   const profile = await getDemoProfile();
   const question = message.trim();
   const selectedCourseId = courseId.trim();
@@ -166,11 +185,23 @@ export async function askAiTutor(message: string, courseId: string): Promise<Tut
 
     if (!answer) return unavailableResult("AI 답변을 해석하지 못했습니다. 교수님께 질문을 전달해 주세요.");
 
+    const isEscalated = confidence < 0.7 || !usedSources.length;
+    const resolvedSessionId = await persistAiTutorConversation({
+      profileId: profile.id,
+      sessionId,
+      question,
+      answer,
+      category,
+      isEscalated,
+      sources: usedSources,
+    });
+
     return {
       response: answer,
       category,
-      isEscalated: confidence < 0.7 || !usedSources.length,
+      isEscalated,
       sources: usedSources,
+      sessionId: resolvedSessionId,
     };
   } catch {
     return unavailableResult("AI 응답 처리 중 오류가 발생했습니다. 교수님께 질문을 전달해 주세요.");
@@ -268,4 +299,179 @@ async function loadTutorKnowledgeSources(
   }));
 
   return sources;
+}
+
+async function persistAiTutorConversation(input: {
+  profileId: string;
+  sessionId?: string | null;
+  question: string;
+  answer: string;
+  category: string;
+  isEscalated: boolean;
+  sources: TutorCitation[];
+}) {
+  const admin = createSupabaseAdminClient();
+  const requestedSessionId = input.sessionId ? normalizeUuid(input.sessionId) : null;
+
+  let resolvedSessionId = requestedSessionId;
+  if (requestedSessionId) {
+    const { data: existingSession } = await admin
+      .from("chat_sessions")
+      .select("id")
+      .eq("id", requestedSessionId)
+      .eq("user_id", input.profileId)
+      .maybeSingle();
+    resolvedSessionId = existingSession?.id ?? null;
+  }
+
+  if (!resolvedSessionId) {
+    const { data: createdSession } = await admin
+      .from("chat_sessions")
+      .insert({
+        user_id: input.profileId,
+        title: input.question.slice(0, 80),
+      })
+      .select("id")
+      .single();
+    resolvedSessionId = createdSession?.id ?? null;
+  }
+
+  if (!resolvedSessionId) {
+    return null;
+  }
+
+  await admin.from("chat_messages").insert([
+    {
+      session_id: resolvedSessionId,
+      role: "user",
+      content: input.question,
+      source_json: null,
+      confidence: null,
+    },
+    {
+      session_id: resolvedSessionId,
+      role: "assistant",
+      content: input.answer,
+      source_json: {
+        category: input.category,
+        escalated: input.isEscalated,
+        sources: input.sources,
+      },
+      confidence: input.isEscalated ? 0.5 : 0.9,
+    },
+  ]);
+
+  return resolvedSessionId;
+}
+
+export async function getAiTutorSessions(): Promise<AiTutorSessionSummary[]> {
+  const profile = await getDemoProfile();
+  if (!profile || profile.role !== "student") {
+    return [];
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data: sessions } = await admin
+    .from("chat_sessions")
+    .select("id, title, created_at")
+    .eq("user_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (!sessions?.length) {
+    return [];
+  }
+
+  const sessionIds = sessions.map((session) => session.id);
+  const { data: messages } = await admin
+    .from("chat_messages")
+    .select("session_id, content, created_at")
+    .in("session_id", sessionIds)
+    .order("created_at", { ascending: false });
+
+  const lastMessageBySession = new Map<string, string>();
+  for (const message of messages ?? []) {
+    if (!lastMessageBySession.has(message.session_id) && typeof message.content === "string") {
+      lastMessageBySession.set(message.session_id, message.content);
+    }
+  }
+
+  return sessions.map((session) => ({
+    id: session.id,
+    title: session.title,
+    created_at: session.created_at,
+    last_message: lastMessageBySession.get(session.id),
+  }));
+}
+
+export async function getAiTutorSessionMessages(sessionId: string): Promise<AiTutorStoredMessage[]> {
+  const profile = await getDemoProfile();
+  const normalizedSessionId = normalizeUuid(sessionId);
+  if (!profile || profile.role !== "student" || !normalizedSessionId) {
+    return [];
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data: session } = await admin
+    .from("chat_sessions")
+    .select("id")
+    .eq("id", normalizedSessionId)
+    .eq("user_id", profile.id)
+    .maybeSingle();
+
+  if (!session) {
+    return [];
+  }
+
+  const { data: messages } = await admin
+    .from("chat_messages")
+    .select("id, role, content, source_json")
+    .eq("session_id", normalizedSessionId)
+    .order("created_at", { ascending: true });
+
+  return (messages ?? []).map((message) => {
+    const sourceJson = (message.source_json && typeof message.source_json === "object")
+      ? message.source_json as Record<string, unknown>
+      : null;
+    const rawSources = Array.isArray(sourceJson?.sources) ? sourceJson.sources : [];
+
+    return {
+      id: message.id,
+      role: message.role === "assistant" ? "ai" : "user",
+      content: message.content,
+      category: typeof sourceJson?.category === "string" ? sourceJson.category : undefined,
+      isEscalated: typeof sourceJson?.escalated === "boolean" ? sourceJson.escalated : undefined,
+      sources: rawSources.flatMap((source) => {
+        if (!source || typeof source !== "object") return [];
+        const value = source as Record<string, unknown>;
+        return (
+          typeof value.id === "string" &&
+          typeof value.label === "string" &&
+          typeof value.type === "string"
+        ) ? [{
+          id: value.id,
+          label: value.label,
+          type: value.type as TutorCitation["type"],
+          createdAt: typeof value.createdAt === "string" ? value.createdAt : null,
+        }] : [];
+      }),
+    };
+  });
+}
+
+export async function deleteAiTutorSession(sessionId: string) {
+  const profile = await getDemoProfile();
+  const normalizedSessionId = normalizeUuid(sessionId);
+  if (!profile || profile.role !== "student" || !normalizedSessionId) {
+    return { ok: false };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { error } = await admin
+    .from("chat_sessions")
+    .delete()
+    .eq("id", normalizedSessionId)
+    .eq("user_id", profile.id);
+
+  return { ok: !error };
 }

@@ -131,7 +131,7 @@ export default async function DashboardPage() {
       (event) => event.audience === "all" || event.audience === "student",
     );
 
-    const [{ data: studentCourseData }, { data: noticeRows }, { data: counselingRows }] = await Promise.all([
+    const [{ data: studentCourseData }, { data: counselingRows }] = await Promise.all([
       supabase
         .from("student_courses")
         .select(`
@@ -139,13 +139,6 @@ export default async function DashboardPage() {
           courses ( name )
         `)
         .eq("student_id", profile.id),
-      supabase
-        .from("posts")
-        .select("id, title, content, created_at, course_id, course:courses(id, name)")
-        .eq("status", "active")
-        .eq("board_key", "course_notice")
-        .order("created_at", { ascending: false })
-        .limit(20),
       supabase
         .from("counseling_requests")
         .select("id, topic, status, requested_start, suggested_start, professor_id, professor:professors(id, name)")
@@ -173,24 +166,21 @@ export default async function DashboardPage() {
       }
     }
 
-    const noticeTodoItems = (noticeRows ?? [])
-      .map((row: any) => {
-        const text = `${row.title ?? ""} ${row.content ?? ""}`;
+    const noticeTodoItems = announcements
+      .map((notice) => {
+        const text = `${notice.title ?? ""} ${notice.content ?? ""}`;
         const type = getTodoTypeFromText(text);
         if (!type) return null;
 
-        const courseName = row.course?.name ?? null;
-        const dateLabel = formatDateLabel(row.created_at);
-
         return {
-          id: `notice-${row.id}`,
-          title: row.title ?? "공지사항",
-          description: row.content?.replace(/\s+/g, " ").slice(0, 80) ?? "공지사항이 등록되었습니다.",
+          id: `notice-${notice.id}`,
+          title: notice.title ?? "공지사항",
+          description: notice.content?.replace(/\s+/g, " ").slice(0, 80) ?? "공지사항이 등록되었습니다.",
           type: type === "exam" ? "exam" : "assignment",
-          courseName,
-          metaLabel: dateLabel ? "공지일" : null,
-          metaValue: dateLabel,
-          linkHref: row.course_id ? `/courses/${row.course_id}` : "/courses",
+          courseName: notice.courseName ?? null,
+          metaLabel: notice.createdAt ? "공지일" : null,
+          metaValue: formatDateLabel(notice.createdAt),
+          linkHref: notice.href,
           linkLabel: "과목 공지 보기",
         } as StudentTodoItem;
       })

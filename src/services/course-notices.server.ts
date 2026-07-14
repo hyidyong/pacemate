@@ -1,14 +1,20 @@
 import "server-only";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { StudentAnnouncement } from "@/components/dashboard/student-announcement-feed";
 
 export async function listStudentCourseNotices(studentId: string): Promise<StudentAnnouncement[]> {
-  const supabase = await createSupabaseServerClient();
+  let supabase;
+  try {
+    supabase = createSupabaseAdminClient();
+  } catch (error) {
+    console.error("Student course notices admin client is unavailable:", error);
+    return [];
+  }
 
   const { data: enrollments, error: enrollmentError } = await supabase
     .from("student_courses")
-    .select("course_id")
+    .select("course_id, status")
     .eq("student_id", studentId);
 
   if (enrollmentError) {
@@ -32,6 +38,7 @@ export async function listStudentCourseNotices(studentId: string): Promise<Stude
     .select("id,title,content,created_at,course_id,course:courses(name)")
     .in("course_id", courseIds)
     .eq("board_key", "course_notice")
+    .eq("community_type", "student")
     .eq("status", "active")
     .order("created_at", { ascending: false });
 

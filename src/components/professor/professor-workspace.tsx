@@ -63,6 +63,7 @@ import {
   professorCourseManagementItems,
   professorWeeklyPlanPreviewLink,
 } from "@/lib/professor-navigation";
+import { markNotificationsReadByCategory } from "@/services/notifications.actions";
 import { saveProfessorRoadmapPersonalization } from "@/services/personalized-weekly-roadmap.actions";
 
 // ============== TYPES ==============
@@ -93,6 +94,8 @@ type ProfessorWorkspaceProps = {
     question: number;
   };
   initialSub?: string;
+  initialHighlightedCounselingRequestId?: string;
+  initialHighlightedQuestionId?: string;
 };
 
 type ProfessorTab = "schedule" | "roadmap" | "questions" | "counseling" | "report";
@@ -171,6 +174,8 @@ function courseValue(course?: ProfessorCourse) {
 export function ProfessorWorkspace({
   initialTab,
   initialSub,
+  initialHighlightedCounselingRequestId,
+  initialHighlightedQuestionId,
   notificationCounts,
   academicEvents,
   professor,
@@ -227,6 +232,22 @@ export function ProfessorWorkspace({
   useEffect(() => {
     setCurrentNotificationCounts(notificationCounts);
   }, [notificationCounts]);
+
+  useEffect(() => {
+    if (activeSub === "incoming-questions" && currentNotificationCounts.question > 0) {
+      setCurrentNotificationCounts((prev) => ({ ...prev, question: 0 }));
+      startTransition(async () => {
+        await markNotificationsReadByCategory("question");
+      });
+    }
+
+    if (activeSub === "pending-counseling" && currentNotificationCounts.counseling > 0) {
+      setCurrentNotificationCounts((prev) => ({ ...prev, counseling: 0 }));
+      startTransition(async () => {
+        await markNotificationsReadByCategory("counseling");
+      });
+    }
+  }, [activeSub, currentNotificationCounts.counseling, currentNotificationCounts.question, startTransition]);
 
   useEffect(() => {
     const toggleProfessorMenu = () => {
@@ -349,14 +370,13 @@ export function ProfessorWorkspace({
     return tasks;
 }, [faqs.length, roadmapRequests]);
 
-  const pendingCounselingRequestCount = currentCounselingRequests.filter((r) => r.status === "pending").length;
   const pendingQuestionCount = Object.values(professorQuestionInbox.categoryCounts).reduce(
     (total, count) => total + count,
     0,
   );
   const sidebarBadgeCounts = {
-    pendingCounseling: Math.max(currentNotificationCounts.counseling, pendingCounselingRequestCount),
-    incomingQuestions: Math.max(currentNotificationCounts.question, pendingQuestionCount),
+    pendingCounseling: currentNotificationCounts.counseling,
+    incomingQuestions: currentNotificationCounts.question,
   };
 
   // Current sidebar items for active tab
@@ -460,6 +480,10 @@ export function ProfessorWorkspace({
           <ProfessorQuestionInboxView
             inbox={professorQuestionInbox}
             courses={courses.map((course) => ({ id: course.id, code: course.code, name: course.name }))}
+            highlightedQuestionId={initialHighlightedQuestionId}
+            onQuestionsAnswered={() => {
+              setCurrentNotificationCounts((prev) => ({ ...prev, question: 0 }));
+            }}
           />
         );
       case "manual-faq":
@@ -477,12 +501,13 @@ export function ProfessorWorkspace({
         return (
           <PendingCounselingSub
             counselingRequests={currentCounselingRequests}
+            highlightedRequestId={initialHighlightedCounselingRequestId}
             isPending={isPending}
             runAction={runAction}
             showToast={showToast}
             onRequestStatusChange={(updated) => {
               setCurrentCounselingRequests((prev) => prev.map((request) => (request.id === updated.id ? updated : request)));
-              setCurrentNotificationCounts((prev) => ({ ...prev, counseling: Math.max(prev.counseling - 1, 0) }));
+              setCurrentNotificationCounts((prev) => ({ ...prev, counseling: 0 }));
             }}
           />
         );
@@ -507,7 +532,10 @@ export function ProfessorWorkspace({
   }
 
   return (
-    <div className="flex min-w-0 flex-col lg:flex-row min-h-screen bg-slate-50/50 font-sans" data-testid="professor-workspace">
+    <div
+      className="flex min-w-0 flex-col rounded-3xl border border-slate-200/70 bg-slate-50/70 shadow-sm lg:flex-row"
+      data-testid="professor-workspace"
+    >
       {/* Sidebar for PC / Mobile menu panel */}
       <aside className="hidden lg:flex lg:w-64 flex-shrink-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200/80 flex-col z-20 sticky top-0 lg:h-screen shadow-sm">
         <div className="p-5 lg:p-6">
@@ -570,7 +598,7 @@ export function ProfessorWorkspace({
       </aside>
 
       {/* Main Content Area */}
-      <main className="min-w-0 flex-1 overflow-y-auto w-full p-4 lg:p-8 max-w-7xl mx-auto">
+      <main className="min-w-0 flex-1 w-full p-4 lg:p-6 xl:p-8">
         {/* Content Header */}
         <header className="mb-5 lg:mb-8">
           <div>
@@ -727,27 +755,27 @@ function ScheduleCalendarSub({
         </div>
 
         <div className="professor-notification-summary-grid">
-          {Math.max(notificationCounts.counseling, counselingRequests.filter((r) => r.status === "pending").length) > 0 ? (
+          {notificationCounts.counseling > 0 ? (
             <Link
               href="/professor?tab=counseling&sub=pending-counseling"
               className="professor-notification-box professor-notification-box-urgent"
             >
               <div>
                 <p>상담 요청</p>
-                <strong>{Math.max(notificationCounts.counseling, counselingRequests.filter((r) => r.status === "pending").length)}건</strong>
+                <strong>{notificationCounts.counseling}건</strong>
               </div>
               <span>바로가기</span>
             </Link>
           ) : null}
 
-          {Math.max(notificationCounts.question, pendingQuestionCount) > 0 ? (
+          {notificationCounts.question > 0 ? (
             <Link
               href="/professor?tab=questions&sub=incoming-questions"
               className="professor-notification-box professor-notification-box-calm"
             >
               <div>
                 <p>질문 요청</p>
-                <strong>{Math.max(notificationCounts.question, pendingQuestionCount)}건</strong>
+                <strong>{notificationCounts.question}건</strong>
               </div>
               <span>바로가기</span>
             </Link>
@@ -1374,12 +1402,14 @@ function ManualFaqSub({
 // --- PendingCounselingSub ---
 function PendingCounselingSub({
   counselingRequests,
+  highlightedRequestId,
   isPending,
   runAction,
   showToast,
   onRequestStatusChange,
 }: {
   counselingRequests: ProfessorCounselingRequest[];
+  highlightedRequestId?: string;
   isPending: boolean;
   runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
   showToast: (msg: string) => void;
@@ -1395,6 +1425,19 @@ function PendingCounselingSub({
   useEffect(() => {
     setLocalPending(counselingRequests.filter((r) => r.status === "pending"));
   }, [counselingRequests]);
+
+  useEffect(() => {
+    if (!highlightedRequestId) {
+      return;
+    }
+
+    const element = document.getElementById(`professor-counseling-request-${highlightedRequestId}`);
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightedRequestId, localPending]);
 
   function handleApprove(request: ProfessorCounselingRequest) {
     const formData = new FormData();
@@ -1446,7 +1489,15 @@ function PendingCounselingSub({
       {localPending.length > 0 ? (
         <div className="flex flex-col gap-4 mt-4">
           {localPending.map((request) => (
-            <article key={request.id} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+            <article
+              id={`professor-counseling-request-${request.id}`}
+              key={request.id}
+              className={`relative overflow-hidden rounded-xl border p-5 shadow-sm transition-shadow hover:shadow-md ${
+                request.id === highlightedRequestId
+                  ? "border-emerald-300 ring-2 ring-emerald-200"
+                  : "border-gray-100 bg-white"
+              }`}
+            >
               <div className="absolute top-0 left-0 w-1 h-full bg-amber-400"></div>
               <div className="flex justify-between items-start mb-3">
                 <div className="flex flex-col gap-1">

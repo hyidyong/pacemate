@@ -6,6 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireDemoSession } from "@/lib/auth/demo-session";
 import {
   getWeeklyPlanDraftByOfferingId,
+  getWeeklyPlanDraftByIdentity,
   validateWeeklyPlanDraft,
 } from "@/services/weekly-plan-draft.server";
 import { deriveWeeklyPlanStatus } from "@/types/weekly-roadmap";
@@ -83,7 +84,11 @@ export async function approveWeeklyPlan(formData: FormData) {
 
   if (offeringError || !offering) redirectWithApprovalState("error");
 
-  const draft = getWeeklyPlanDraftByOfferingId(offeringId);
+  const draft = getWeeklyPlanDraftByOfferingId(offeringId) ?? getWeeklyPlanDraftByIdentity({
+    courseId: offering.course_id,
+    professorId: professor.id,
+    termId: offering.term_id,
+  });
   if (!draft || draft.status !== "draft" || draft.source.verifiedByProfessor) {
     redirectWithApprovalState("error");
   }
@@ -113,7 +118,7 @@ export async function approveWeeklyPlan(formData: FormData) {
   }
 
   const rows = editedWeeks.map((week) => ({
-    offering_id: draft.offeringId,
+    offering_id: offeringId,
     week_number: week.weekNumber,
     title: week.title,
     topic: week.topics.join(" · "),

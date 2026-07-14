@@ -287,12 +287,18 @@ export async function getWeeklyPlanDraftsForProfessorSession(
 
   const { data: offerings, error: offeringError } = await supabase
     .from("course_offerings")
-    .select("id")
+    .select("id, course_id, professor_id, term_id")
     .eq("professor_id", professors[0].id);
 
   if (offeringError) throwDatabaseError(offeringError);
 
   const offeringIds = new Set((offerings ?? []).map((offering) => offering.id));
+  const offeringByIdentity = new Map(
+    (offerings ?? []).map((offering) => [
+      `${offering.course_id}:${offering.professor_id}:${offering.term_id}`,
+      offering,
+    ]),
+  );
   if (!offeringIds.size) return [];
 
   const { data: persistedPlans, error: persistedPlanError } = await supabase
@@ -310,7 +316,22 @@ export async function getWeeklyPlanDraftsForProfessorSession(
   }
 
   return listWeeklyPlanDrafts()
-    .filter((draft) => offeringIds.has(draft.offeringId))
+    .flatMap((draft) => {
+      const resolvedOffering =
+        (offeringIds.has(draft.offeringId)
+          ? (offerings ?? []).find((offering) => offering.id === draft.offeringId)
+          : null) ??
+        offeringByIdentity.get(`${draft.courseId}:${draft.professorId}:${draft.termId}`);
+
+      if (!resolvedOffering) {
+        return [];
+      }
+
+      return [{
+        ...draft,
+        offeringId: resolvedOffering.id,
+      }];
+    })
     .map((draft) => {
       const persisted = persistedByOffering.get(draft.offeringId) ?? [];
       return {

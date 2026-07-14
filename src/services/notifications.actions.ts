@@ -62,6 +62,7 @@ export async function markNotificationReadAndGo(formData: FormData) {
   }
 
   revalidatePath("/notifications");
+  revalidatePath("/professor");
   redirect(safeNotificationTargetHref(notification.target_href));
 }
 
@@ -82,6 +83,7 @@ export async function markNotificationAsRead(notificationId: string) {
 
   revalidatePath("/notifications");
   revalidatePath("/dashboard");
+  revalidatePath("/professor");
 }
 
 export async function markAllNotificationsRead() {
@@ -103,5 +105,27 @@ export async function markAllNotificationsRead() {
 
   revalidatePath("/notifications");
   revalidatePath("/dashboard");
+  revalidatePath("/professor");
+}
+
+export async function markNotificationsReadByCategory(category: "question" | "counseling") {
+  const profile = await getDemoProfile();
+  if (!profile) {
+    return;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("user_notifications")
+    .update({ is_read: true })
+    .eq("is_read", false)
+    .eq("category", category)
+    .or(notificationOwnershipFilter(profile));
+
+  if (error) {
+    return;
+  }
+
+  revalidatePath("/notifications");
   revalidatePath("/professor");
 }

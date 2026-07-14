@@ -38,7 +38,7 @@ function normalizeProfessorTab(tab?: string) {
 export default async function ProfessorPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string; sub?: string }>;
+  searchParams?: Promise<{ tab?: string; sub?: string; requestId?: string; questionId?: string }>;
 }) {
   const profile = await getDemoProfile();
   requireRoles(profile, ["professor", "assistant"]);
@@ -75,8 +75,6 @@ export default async function ProfessorPage({
     ? null
     : anonymousWeeklyAggregateResult.error;
 
-  const pendingCounselingCount = data.counselingRequests.filter((request) => request.status === "pending").length;
-  const effectiveCounselingCount = Math.max(pendingCounselingCount, unreadCounselingCount);
   const academicEvents = getAcademicEvents().filter(
     (event) => event.audience === "all" || event.audience === "professor",
   );
@@ -84,38 +82,44 @@ export default async function ProfessorPage({
   return (
     <AppShell>
       <section className="screen-hero professor-hero">
-        <h1>교수 대시보드</h1>
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+          <h1>교수 대시보드</h1>
+        </div>
       </section>
 
-      {data.professor ? <ProfessorProfileSummary professor={data.professor} courses={data.courses} /> : null}
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 sm:px-6 lg:pb-10">
+        {data.professor ? <ProfessorProfileSummary professor={data.professor} courses={data.courses} /> : null}
 
-      {data.professor ? (
-        <ProfessorWorkspace
-          adminTasks={data.adminTasks}
-          academicEvents={academicEvents}
-          availability={data.availability}
-          counselingRequests={data.counselingRequests}
-          courses={data.courses}
-          faqs={data.faqs}
-          initialTab={initialTab}
-          initialSub={params?.sub}
-          notificationCounts={{ counseling: effectiveCounselingCount, question: questionCount }}
-          professor={data.professor}
-          professorCourseProgressReport={professorCourseProgressReport}
-          professorCourseProgressReportError={professorCourseProgressReportError}
-          professorAnonymousWeeklyAggregate={professorAnonymousWeeklyAggregate}
-          professorAnonymousWeeklyAggregateError={professorAnonymousWeeklyAggregateError}
-          professorQuestionInbox={professorQuestionInbox}
-          roadmapRequests={data.roadmapRequests}
-          teachingSlots={data.teachingSlots}
-        />
-      ) : (
-        <section className="section">
-          <div className="community-empty">
-            <p>연결된 교수 정보를 찾지 못했습니다. 교수 역할로 로그인해 주세요.</p>
-          </div>
-        </section>
-      )}
+        {data.professor ? (
+          <ProfessorWorkspace
+            adminTasks={data.adminTasks}
+            academicEvents={academicEvents}
+            availability={data.availability}
+            counselingRequests={data.counselingRequests}
+            courses={data.courses}
+            faqs={data.faqs}
+            initialTab={initialTab}
+            initialSub={params?.sub}
+            initialHighlightedCounselingRequestId={params?.requestId}
+            initialHighlightedQuestionId={params?.questionId}
+            notificationCounts={{ counseling: unreadCounselingCount, question: questionCount }}
+            professor={data.professor}
+            professorCourseProgressReport={professorCourseProgressReport}
+            professorCourseProgressReportError={professorCourseProgressReportError}
+            professorAnonymousWeeklyAggregate={professorAnonymousWeeklyAggregate}
+            professorAnonymousWeeklyAggregateError={professorAnonymousWeeklyAggregateError}
+            professorQuestionInbox={professorQuestionInbox}
+            roadmapRequests={data.roadmapRequests}
+            teachingSlots={data.teachingSlots}
+          />
+        ) : (
+          <section className="section">
+            <div className="community-empty">
+              <p>연결된 교수 정보를 찾지 못했습니다. 교수 역할로 로그인해 주세요.</p>
+            </div>
+          </section>
+        )}
+      </div>
 
       {profile ? (
         <form action={clearDemoSession} className="mypage-logout-form">

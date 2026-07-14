@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -186,10 +187,12 @@ export function AppHeader({
       <header className={DESKTOP_HEADER_CLASS}>
         <Link href={homeHref} className="brand" aria-label="Substudy home">
           <span>
-            <img
+            <Image
               alt="substudy"
               className="h-[56px] w-auto object-contain"
+              height={56}
               src="https://i.ibb.co/rKgLL4gX/AIDrawing-260714-730dfff9-7f89-42b7-97c8-5c46b35eafc1-0-Miri-Canvas.png"
+              width={168}
             />
           </span>
         </Link>
@@ -311,10 +314,12 @@ export function AppHeader({
       <header className={MOBILE_HEADER_CLASS}>
         <Link href={homeHref} className="brand" aria-label="Substudy home">
           <span>
-            <img
+            <Image
               alt="substudy"
               className="h-[42px] w-auto object-contain"
+              height={42}
               src="https://i.ibb.co/rKgLL4gX/AIDrawing-260714-730dfff9-7f89-42b7-97c8-5c46b35eafc1-0-Miri-Canvas.png"
+              width={126}
             />
           </span>
         </Link>

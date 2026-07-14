@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { Bot, CheckSquare, MessageSquareText, Trash2 } from "lucide-react";
 import {
   answerProfessorQuestions,
@@ -19,12 +19,22 @@ import {
 export function ProfessorQuestionInboxView({
   inbox,
   courses,
+  highlightedQuestionId,
+  onQuestionsAnswered,
 }: {
   inbox: ProfessorQuestionInbox;
   courses: ProfessorQuestionCourseOption[];
+  highlightedQuestionId?: string;
+  onQuestionsAnswered?: () => void;
 }) {
-  const [category, setCategory] = useState<ProfessorQuestionCategory>(professorQuestionCategories[0]);
+  const highlightedGroup = inbox.groups.find((group) =>
+    highlightedQuestionId ? group.questions.some((question) => question.id === highlightedQuestionId) : false,
+  );
+  const [category, setCategory] = useState<ProfessorQuestionCategory>(highlightedGroup?.category ?? professorQuestionCategories[0]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(
+    () => new Set(highlightedGroup ? [highlightedGroup.key] : []),
+  );
   const [answer, setAnswer] = useState("");
   const [message, setMessage] = useState("");
   const [draftSources, setDraftSources] = useState<Array<{ type: string; label: string }>>([]);
@@ -33,6 +43,28 @@ export function ProfessorQuestionInboxView({
     () => inbox.groups.filter((group) => group.category === category),
     [category, inbox.groups],
   );
+
+  useEffect(() => {
+    if (!highlightedGroup) {
+      return;
+    }
+
+    setCategory(highlightedGroup.category);
+    setExpandedGroupKeys(new Set([highlightedGroup.key]));
+  }, [highlightedGroup]);
+
+  useEffect(() => {
+    if (!highlightedQuestionId) {
+      return;
+    }
+
+    const element = document.getElementById(`professor-question-${highlightedQuestionId}`);
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [expandedGroupKeys, highlightedQuestionId]);
 
   function toggleQuestion(id: string) {
     setSelectedIds((current) => {
@@ -51,6 +83,15 @@ export function ProfessorQuestionInboxView({
     });
   }
 
+  function toggleGroup(key: string) {
+    setExpandedGroupKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   function submitBulkAnswer() {
     if (!selectedIds.size || !answer.trim()) return;
     const formData = new FormData();
@@ -62,6 +103,7 @@ export function ProfessorQuestionInboxView({
       if (result.ok) {
         setSelectedIds(new Set());
         setAnswer("");
+        onQuestionsAnswered?.();
       }
     });
   }
@@ -129,13 +171,29 @@ export function ProfessorQuestionInboxView({
                       </button>
                     ) : null}
                   </div>
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-sm font-medium text-emerald-800">개별 질문 열기</summary>
+                  <details className="mt-3" open={expandedGroupKeys.has(group.key)}>
+                    <summary
+                      className="cursor-pointer text-sm font-medium text-emerald-800"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        toggleGroup(group.key);
+                      }}
+                    >
+                      개별 질문 열기
+                    </summary>
                     <div className="mt-3 space-y-2">
                       {group.questions.map((question, index) => {
                         const isAnswerable = question.status === "pending" || question.status === "assigned";
                         return (
-                          <label key={question.id} className="flex gap-3 rounded-lg bg-gray-50 p-3 text-sm">
+                          <label
+                            id={`professor-question-${question.id}`}
+                            key={question.id}
+                            className={`flex gap-3 rounded-lg p-3 text-sm ${
+                              question.id === highlightedQuestionId
+                                ? "bg-emerald-50 ring-2 ring-emerald-200"
+                                : "bg-gray-50"
+                            }`}
+                          >
                             <input
                               type="checkbox"
                               checked={selectedIds.has(question.id)}
