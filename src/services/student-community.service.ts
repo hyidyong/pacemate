@@ -24,6 +24,20 @@ export type StudentCourseRecord = {
   classroom: string | null;
   semester_label: string;
   course: CourseRecord;
+  /** Normalized schedule rows are the source of truth for timetable rendering. */
+  schedule_slots?: ScheduleSlotRecord[];
+  /** Custom courses deliberately never create a student_courses record. */
+  is_custom?: boolean;
+  custom_course_id?: string;
+  timetable_color?: string | null;
+};
+
+export type ScheduleSlotRecord = {
+  id: string;
+  day_of_week: string;
+  start_time: string;
+  end_time: string;
+  classroom: string | null;
 };
 
 export type CommunityPostRecord = {
@@ -201,7 +215,7 @@ export async function getMyCourses(
   const { data, error } = await supabase
     .from("student_courses")
     .select(
-      "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text)",
+      "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text), schedule_slots:student_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)",
     )
     .eq("student_id", profileId)
     .order("updated_at", { ascending: false });
@@ -211,7 +225,51 @@ export async function getMyCourses(
     throw new Error(`Failed to load my courses: ${error.message}`);
   }
 
-  return (data ?? []) as unknown as StudentCourseRecord[];
+  const regularCourses = (data ?? []) as unknown as StudentCourseRecord[];
+  const { data: customRows, error: customError } = await supabase
+    .from("student_custom_courses")
+    .select(
+      "id, title, color, schedule_slots:student_custom_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)",
+    )
+    .eq("student_id", profileId)
+    .order("updated_at", { ascending: false });
+
+  // Keep the established student_courses data available if an older database
+  // has not yet applied the custom-course timetable migration.
+  if (customError) {
+    console.error("getMyCourses custom timetable lookup skipped:", customError.message);
+    return regularCourses;
+  }
+
+  const customCourses = (customRows ?? []).flatMap((row) => {
+    if (!row || typeof row.id !== "string" || typeof row.title !== "string") return [];
+    return [{
+      id: `custom:${row.id}`,
+      status: "interested" as const,
+      is_favorite: false,
+      schedule_day: null,
+      start_time: null,
+      end_time: null,
+      classroom: null,
+      semester_label: "2026-2",
+      is_custom: true,
+      custom_course_id: row.id,
+      timetable_color: typeof row.color === "string" ? row.color : null,
+      schedule_slots: (Array.isArray(row.schedule_slots) ? row.schedule_slots : []) as ScheduleSlotRecord[],
+      course: {
+        id: `custom:${row.id}`,
+        school_id: null,
+        code: "CUSTOM",
+        name: row.title,
+        credit: 0,
+        category: "custom",
+        description: null,
+        prerequisite_text: null,
+      },
+    } satisfies StudentCourseRecord];
+  });
+
+  return [...regularCourses, ...customCourses];
 }
 
 async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
