@@ -109,6 +109,7 @@ export default async function DashboardPage() {
   }
 
   const copy = roleCopy[profile.role];
+  const shouldShowPrimaryAction = profile.role !== "student";
   const notifications = await getNotificationsForProfile(profile, 4);
 
   // Fetch student courses if student
@@ -225,12 +226,14 @@ export default async function DashboardPage() {
           <h1>{copy.title}</h1>
           {copy.description ? <p>{copy.description}</p> : null}
           <div className="actions">
-            <Link href={copy.primaryHref} data-testid="dashboard-primary-action">
-              <ShimmerButton>
-                {copy.primaryLabel}
-                <ArrowRight size={16} aria-hidden="true" />
-              </ShimmerButton>
-            </Link>
+            {shouldShowPrimaryAction ? (
+              <Link href={copy.primaryHref} data-testid="dashboard-primary-action">
+                <ShimmerButton>
+                  {copy.primaryLabel}
+                  <ArrowRight size={16} aria-hidden="true" />
+                </ShimmerButton>
+              </Link>
+            ) : null}
             <form action={clearDemoSession}>
             </form>
           </div>
