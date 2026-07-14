@@ -26,7 +26,7 @@ export function SiteFooter({ hasMobileNav = false }: SiteFooterProps) {
         <div className="site-footer__grid">
           <section className="site-footer__brand">
             <p className="site-footer__eyebrow">PaceMate Beta</p>
-            <h2>8진수</h2>
+            <h2>substudy</h2>
             <p className="site-footer__lead">
               학습과 진로 탐색을 안정적으로 이어갈 수 있도록 돕는 PaceMate 베타 서비스를 운영하고 있습니다.
             </p>
@@ -108,7 +108,7 @@ export function SiteFooter({ hasMobileNav = false }: SiteFooterProps) {
             </div>
 
             <p className="site-footer__copyright">
-              © 2026 8진수. All rights reserved. All contents copyright reserved.
+              © 2026 substudy. All rights reserved. All contents copyright reserved.
             </p>
           </div>
         </div>

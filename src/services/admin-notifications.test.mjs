@@ -40,6 +40,8 @@ test("broadcast UI is in-app, recipient-scoped, and newest first", () => {
   assert.match(consoleComponent, /<textarea name="content"/);
   assert.match(consoleComponent, /shadow-md/);
   assert.match(menu, /filter: `recipient_id=eq\.\$\{profileId\}`/);
+  assert.match(menu, /useId/);
+  assert.match(menu, /channel\(`in-app-notifications:\$\{profileId\}:\$\{channelInstanceId\}`\)/);
   assert.match(menu, /function newestFirst/);
   assert.match(menu, /newestFirst\(\[next,/);
   assert.match(menu, /markNotificationAsRead\(id\)/);
