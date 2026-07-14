@@ -131,6 +131,49 @@ export async function saveStudentOnboarding(formData: FormData) {
   redirect(returnTo || "/roadmap");
 }
 
+export async function completeStudentOnboarding(formData: FormData) {
+  const profileId = await getProfileId();
+
+  if (!profileId) {
+    redirect("/login");
+  }
+
+  await ensureDefaultSchoolAndDepartment(profileId);
+
+  const { data: currentProfile } = await supabase
+    .from("student_profiles")
+    .select("user_types")
+    .eq("profile_id", profileId)
+    .maybeSingle();
+
+  const existingTypes = Array.isArray(currentProfile?.user_types)
+    ? currentProfile.user_types.filter((value): value is StudentType => {
+        return typeof value === "string" && allowedStudentTypes.has(value as StudentType);
+      })
+    : [];
+
+  const { error } = await supabase.from("student_profiles").upsert(
+    {
+      profile_id: profileId,
+      user_types: existingTypes.length ? existingTypes : ["current_student"],
+      is_onboarded: true,
+    },
+    { onConflict: "profile_id" },
+  );
+
+  const returnTo = text(formData.get("returnTo"));
+
+  if (error) {
+    redirect(`/onboarding?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/onboarding");
+  revalidatePath("/dashboard");
+  revalidatePath("/roadmap");
+  revalidatePath("/mypage");
+  redirect(returnTo || "/roadmap");
+}
+
 async function ensureDefaultSchoolAndDepartment(profileId: string) {
   const { data: profile } = await supabase
     .from("profiles")

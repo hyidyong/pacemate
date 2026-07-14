@@ -1256,6 +1256,7 @@ select {
 
 .onboarding-layout {
   display: grid;
+  gap: 14px;
 }
 
 .onboarding-form {
