@@ -18,6 +18,8 @@ import { resolveCompanyLaw2026OfferingForSession } from "@/services/company-law-
 import { getCourseTermCompletionEligibility } from "@/services/course-term-completion-eligibility.server";
 import { getStudentLearningRecommendations } from "@/services/student-learning-recommendations.server";
 import { StudentLearningRecommendationsCard } from "@/components/dashboard/student-learning-recommendations-card";
+import { listStudentCourseNotices } from "@/services/course-notices.server";
+import type { StudentAnnouncement } from "@/components/dashboard/student-announcement-feed";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
@@ -113,11 +115,13 @@ export default async function DashboardPage() {
   let myCourses: StudentCourseRecord[] = [];
   let todoItems: StudentTodoItem[] = [];
   let academicEvents: AcademicEvent[] = [];
+  let announcements: StudentAnnouncement[] = [];
   let eligibilityResult: Awaited<ReturnType<typeof getCourseTermCompletionEligibility>> | null = null;
   let recommendationResult: Awaited<ReturnType<typeof getStudentLearningRecommendations>> | null = null;
   let eligibilityCourseName: string | null = null;
   if (profile.role === "student") {
     myCourses = await getMyCourses(profile.id);
+    announcements = await listStudentCourseNotices(profile.id);
     academicEvents = getAcademicEvents().filter(
       (event) => event.audience === "all" || event.audience === "student",
     );
@@ -243,6 +247,7 @@ export default async function DashboardPage() {
             academicEvents={academicEvents}
             myCourses={myCourses}
             todoItems={todoItems}
+            announcements={announcements}
           />
         </ScrollReveal>
       )}
