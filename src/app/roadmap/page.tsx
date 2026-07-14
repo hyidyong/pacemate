@@ -10,6 +10,8 @@ import { getApprovedRoadmapCourses } from "@/services/roadmap-revisions.service"
 import { getDemoProfile } from "@/services/session.service";
 import { getStudentWeeklyProgressForStudent } from "@/services/student-weekly-progress.server";
 import { StudentWeeklyProgressPreview } from "@/components/roadmap/student-weekly-progress-preview";
+import { StudentRoadmapWorkspace } from "@/components/roadmap/student-roadmap-workspace";
+import { getSavedPersonalizedRoadmapForSession, getStudentRoadmapOfferingsForSession } from "@/services/personalized-weekly-roadmap.server";
 
 export const dynamic = "force-dynamic";
 
@@ -95,11 +97,13 @@ function getPersonalizedSummary(onboarding: StudentOnboardingProfile | null) {
 export default async function RoadmapPage() {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
-  const [baseCourses, onboarding, weeklyProgress] = await Promise.all([
+  const [baseCourses, onboarding, weeklyProgress, offerings] = await Promise.all([
     getApprovedRoadmapCourses(),
     getStudentOnboardingProfile(profile),
     profile?.role === "student" ? getStudentWeeklyProgressForStudent(profile.id) : Promise.resolve(null),
+    getStudentRoadmapOfferingsForSession(),
   ]);
+  const initialWeeks = offerings[0] ? await getSavedPersonalizedRoadmapForSession(offerings[0].offeringId) : [];
   const courses = personalizeCourses(baseCourses, onboarding);
   const personalized = getPersonalizedSummary(onboarding);
 
@@ -132,6 +136,12 @@ export default async function RoadmapPage() {
         studentType={personalized.studentType}
         personalizationNotes={personalized.notes}
         totalCredit={roadmapSemester.totalCredit}
+      />
+
+      <StudentRoadmapWorkspace
+        completedWeeks={(weeklyProgress?.weeks ?? []).filter((week) => week.progressStatus === "covered" || week.progressStatus === "in_progress").map((week) => week.weekNumber)}
+        initialWeeks={initialWeeks as any}
+        offerings={offerings}
       />
 
       {weeklyProgress ? <StudentWeeklyProgressPreview preview={weeklyProgress} /> : null}

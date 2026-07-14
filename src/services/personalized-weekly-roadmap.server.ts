@@ -98,3 +98,32 @@ export async function getPersonalizedWeeklyRoadmapForSession(offeringId: string)
   if (writeError) throw new Error("Personalized roadmap data could not be saved");
   return rows;
 }
+
+export async function getStudentRoadmapOfferingsForSession() {
+  const session = await requireDemoSession();
+  if (session.role !== "student") return [];
+  const supabase = createSupabaseAdminClient();
+  const { data: enrollments, error } = await supabase
+    .from("student_courses")
+    .select("offering_id, course_id, course:courses(name)")
+    .eq("student_id", session.profileId)
+    .not("offering_id", "is", null);
+  if (error) throw new Error("Student timetable courses could not be read");
+  return (enrollments ?? []).flatMap((row: any) => row.offering_id ? [{
+    offeringId: row.offering_id as string,
+    courseId: row.course_id as string,
+    courseName: Array.isArray(row.course) ? row.course[0]?.name ?? "과목" : row.course?.name ?? "과목",
+  }] : []);
+}
+
+export async function getSavedPersonalizedRoadmapForSession(offeringId: string) {
+  const session = await requireDemoSession();
+  if (session.role !== "student") return [];
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("student_personalized_weekly_roadmaps")
+    .select("week_number,baseline_title,baseline_topic,baseline_content,personalized_goal,learning_activities,review_guide,generation_status,generated_by_ai")
+    .eq("student_id", session.profileId).eq("offering_id", offeringId).order("week_number");
+  if (error) return [];
+  return data ?? [];
+}
