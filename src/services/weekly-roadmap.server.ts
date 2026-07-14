@@ -1,7 +1,6 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireDemoSession, type DemoSession } from "@/lib/auth/demo-session";
-import type { DemoProfile } from "@/services/session.service";
+import { getDemoProfile, type DemoProfile } from "@/services/session.service";
 import {
   getWeeklyPlanDraftByOfferingId,
   listWeeklyPlanDrafts,
@@ -33,8 +32,10 @@ export class WeeklyRoadmapServiceError extends Error {
   }
 }
 
-function requireStudent(session: DemoSession) {
-  if (session.role !== "student") {
+type SessionProfile = Pick<DemoProfile, "id" | "role">;
+
+function requireStudent(profile: SessionProfile) {
+  if (profile.role !== "student") {
     throw new WeeklyRoadmapServiceError(
       "wrong_role",
       "Weekly roadmap data is available to students only",
@@ -71,24 +72,20 @@ function getAdminClient() {
   }
 }
 
-async function getSessionOrThrow() {
+async function getProfileOrThrow(): Promise<SessionProfile> {
   try {
-    return await requireDemoSession();
+    const profile = await getDemoProfile();
+    if (profile) return profile;
+    throw new WeeklyRoadmapServiceError("unauthenticated", "A valid session is required");
   } catch (error) {
-    if (error instanceof Error && error.message.includes("PACEMATE_SESSION_SECRET")) {
-      throw new WeeklyRoadmapServiceError(
-        "database_configuration_missing",
-        "Signed session configuration is unavailable",
-      );
-    }
-
+    if (error instanceof WeeklyRoadmapServiceError) throw error;
     throw new WeeklyRoadmapServiceError("unauthenticated", "A valid session is required");
   }
 }
 
 export async function getActiveAcademicTermForSession(): Promise<AcademicTerm | null> {
-  const session = await getSessionOrThrow();
-  requireStudent(session);
+  const profile = await getProfileOrThrow();
+  requireStudent(profile);
   const supabase = getAdminClient();
   const { data, error } = await supabase
     .from("academic_terms")
@@ -116,13 +113,13 @@ export async function getActiveAcademicTermForSession(): Promise<AcademicTerm | 
 }
 
 export async function getStudentCourseOfferingsForSession(): Promise<CourseOffering[]> {
-  const session = await getSessionOrThrow();
-  requireStudent(session);
+  const profile = await getProfileOrThrow();
+  requireStudent(profile);
   const supabase = getAdminClient();
   const { data: enrollments, error: enrollmentError } = await supabase
     .from("student_courses")
     .select("offering_id")
-    .eq("student_id", session.profileId)
+    .eq("student_id", profile.id)
     .not("offering_id", "is", null);
 
   if (enrollmentError) throwDatabaseError(enrollmentError);
@@ -154,13 +151,13 @@ export async function getStudentCourseOfferingsForSession(): Promise<CourseOffer
   }));
 }
 
-async function requireAssignedOffering(session: DemoSession, offeringId: string) {
-  requireStudent(session);
+async function requireAssignedOffering(profile: SessionProfile, offeringId: string) {
+  requireStudent(profile);
   const supabase = getAdminClient();
   const { data, error } = await supabase
     .from("student_courses")
     .select("offering_id")
-    .eq("student_id", session.profileId)
+    .eq("student_id", profile.id)
     .eq("offering_id", offeringId)
     .maybeSingle();
 
@@ -179,8 +176,8 @@ export async function getCourseWeeklyPlanForSession(
   offeringId: string,
   weekNumber: number,
 ): Promise<CourseWeeklyPlan | null> {
-  const session = await getSessionOrThrow();
-  const supabase = await requireAssignedOffering(session, offeringId);
+  const profile = await getProfileOrThrow();
+  const supabase = await requireAssignedOffering(profile, offeringId);
   const { data, error } = await supabase
     .from("course_weekly_plans")
     .select("id, offering_id, week_number, title, topic, content, learning_objectives, preview_guide, review_guide, assignment_json, source_syllabus_id, source_reference, extraction_confidence, review_required, professor_confirmed, created_at, updated_at")
@@ -216,12 +213,12 @@ export async function getStudentWeeklyProgressForSession(
   offeringId: string,
   weekNumber: number,
 ): Promise<StudentWeeklyProgress | null> {
-  const session = await getSessionOrThrow();
-  const supabase = await requireAssignedOffering(session, offeringId);
+  const profile = await getProfileOrThrow();
+  const supabase = await requireAssignedOffering(profile, offeringId);
   const { data, error } = await supabase
     .from("student_weekly_progress")
     .select("id, student_id, offering_id, week_number, progress_status_override, difficulty_level, understanding_level, private_note, shared_feedback, share_feedback_with_professor, use_private_note_for_ai, guide_json, guide_version, input_hash, generated_at, created_at, updated_at")
-    .eq("student_id", session.profileId)
+    .eq("student_id", profile.id)
     .eq("offering_id", offeringId)
     .eq("week_number", weekNumber)
     .maybeSingle();
@@ -267,7 +264,10 @@ export async function getWeeklyPlanDraftsForProfessorSession(
 ): Promise<WeeklyPlanReview[]> {
   const session = profile
     ? { profileId: profile.id, role: profile.role }
-    : await getSessionOrThrow();
+    : await getProfileOrThrow().then((currentProfile) => ({
+        profileId: currentProfile.id,
+        role: currentProfile.role,
+      }));
   if (session.role !== "professor") {
     throw new WeeklyRoadmapServiceError(
       "wrong_role",

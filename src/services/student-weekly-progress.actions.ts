@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireDemoSession } from "@/lib/auth/demo-session";
+import { getDemoProfile } from "@/services/session.service";
 import {
   getApprovedCompanyLawContext,
 } from "@/services/student-weekly-progress.server";
@@ -45,14 +45,12 @@ function failure(message: string): StudentWeeklyProgressActionResult {
 export async function updateStudentWeeklyProgress(
   formData: FormData,
 ): Promise<StudentWeeklyProgressActionResult> {
-  let session;
-  try {
-    session = await requireDemoSession();
-  } catch {
+  const profile = await getDemoProfile();
+  if (!profile) {
     return failure("학생 로그인이 필요합니다.");
   }
 
-  if (session.role !== "student") {
+  if (profile.role !== "student") {
     return failure("학생만 학습 진행을 기록할 수 있습니다.");
   }
 
@@ -79,7 +77,7 @@ export async function updateStudentWeeklyProgress(
     .from("student_weekly_progress")
     .upsert(
       {
-        student_id: session.profileId,
+        student_id: profile.id,
         offering_id: context.offeringId,
         week_number: weekNumber,
         progress_status_override: status,
@@ -99,7 +97,7 @@ export async function updateStudentWeeklyProgress(
   const { data: allRows, error: rowsError } = await supabase
     .from("student_weekly_progress")
     .select("week_number, progress_status_override")
-    .eq("student_id", session.profileId)
+    .eq("student_id", profile.id)
     .eq("offering_id", context.offeringId);
 
   if (rowsError) {
@@ -116,7 +114,7 @@ export async function updateStudentWeeklyProgress(
     .from("student_course_progress")
     .upsert(
       {
-        student_id: session.profileId,
+        student_id: profile.id,
         offering_id: context.offeringId,
         last_completed_week: summary.lastCompletedWeek,
         status: summary.status,
