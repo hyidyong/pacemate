@@ -59,8 +59,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitMessage = async () => {
     if (!input.trim() || isLoading || !selectedCourseId) return;
 
     const userMessage = input.trim();
@@ -105,6 +104,11 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    void submitMessage();
   };
 
   const handleAskProfessor = async (message: Message) => {
@@ -358,10 +362,10 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
                 e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
-                  handleSubmit(e as unknown as React.FormEvent);
                   e.currentTarget.style.height = '48px';
+                  void submitMessage();
                 }
               }}
               placeholder="학습에 관해 무엇이든 물어보세요..."
