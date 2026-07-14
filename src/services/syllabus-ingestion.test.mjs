@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migration = new URL("../../supabase/migrations/20260714220000_syllabus_storage_and_study_data.sql", import.meta.url);
+const migration = new URL("../../supabase/migrations/20260714133228_syllabus_storage_and_study_data.sql", import.meta.url);
 const service = new URL("./syllabus-ingestion.service.ts", import.meta.url);
 
 test("stores syllabus files in Supabase-backed storage metadata without local file paths", async () => {
