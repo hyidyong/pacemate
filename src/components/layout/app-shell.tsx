@@ -18,7 +18,7 @@ type AppShellProps = {
 export async function AppShell({
   children,
   showAiTutorFab = true,
-  showSiteFooter = false,
+  showSiteFooter = true,
 }: AppShellProps) {
   const profile = await getDemoProfile();
   const [notifications, unreadCount] = await Promise.all([
