@@ -17,9 +17,16 @@ function asNotification(value: Record<string, unknown>): UserNotification | null
   return typeof value.id === "string" && typeof value.title === "string" && typeof value.body === "string"
     && typeof value.target_href === "string" && typeof value.created_at === "string"
     && typeof value.is_read === "boolean" && (value.recipient_role === null || typeof value.recipient_role === "string")
+    && (value.target_group === "ALL" || value.target_group === "STUDENT" || value.target_group === "PROFESSOR")
     && (value.category === "question" || value.category === "counseling" || value.category === "revision" || value.category === "system")
     ? value as UserNotification
     : null;
+}
+
+function newestFirst(items: UserNotification[]) {
+  return [...items].sort((left, right) =>
+    new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  );
 }
 
 export function NotificationMenu({ notifications, unreadCount, profileId }: NotificationMenuProps) {
@@ -27,16 +34,16 @@ export function NotificationMenu({ notifications, unreadCount, profileId }: Noti
   const [items, setItems] = useState(notifications);
   const [toast, setToast] = useState<UserNotification | null>(null);
   const [, startTransition] = useTransition();
-  const unread = items.filter((item) => !item.is_read).length || unreadCount;
+  const unread = items.filter((item) => !item.is_read).length;
 
-  useEffect(() => setItems(notifications), [notifications]);
+  useEffect(() => setItems(newestFirst(notifications)), [notifications]);
   useEffect(() => {
     const channel = supabase
       .channel(`in-app-notifications:${profileId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_notifications", filter: `recipient_id=eq.${profileId}` }, (payload) => {
         const next = asNotification(payload.new as Record<string, unknown>);
         if (!next) return;
-        setItems((current) => [next, ...current.filter((item) => item.id !== next.id)].slice(0, 20));
+        setItems((current) => newestFirst([next, ...current.filter((item) => item.id !== next.id)]).slice(0, 20));
         setToast(next);
       })
       .subscribe();

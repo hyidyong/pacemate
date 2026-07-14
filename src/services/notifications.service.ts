@@ -5,11 +5,16 @@ import type { DemoProfile } from "@/services/session.service";
 import {
   notificationCategoryLabels,
   type NotificationCategoryFilter,
+  type NotificationTargetGroup,
   type UserNotification,
 } from "@/types/notifications";
 
 export { notificationCategoryLabels } from "@/types/notifications";
-export type { NotificationCategoryFilter, UserNotification } from "@/types/notifications";
+export type {
+  NotificationCategoryFilter,
+  NotificationTargetGroup,
+  UserNotification,
+} from "@/types/notifications";
 
 const notificationCategories: readonly UserNotification["category"][] = [
   "question",
@@ -54,7 +59,7 @@ export async function getNotificationsForProfile(
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("user_notifications")
-    .select("id, recipient_role, category, title, body, target_href, is_read, created_at")
+    .select("id, recipient_role, target_group, category, title, body, target_href, is_read, created_at")
     .order("created_at", { ascending: false })
     .limit(normalizeNotificationLimit(limit));
 

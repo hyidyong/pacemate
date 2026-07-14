@@ -55,6 +55,7 @@ export async function sendAdminBroadcastNotification(
       title,
       body,
       target_href: "/notifications",
+      is_read: false,
     })),
   );
   if (insertError) {

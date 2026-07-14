@@ -10,7 +10,7 @@ export function AdminNotificationConsole() {
   const [state, formAction, pending] = useActionState(sendAdminBroadcastNotification, initialState);
 
   return (
-    <section className="mt-8 rounded-3xl bg-slate-50 p-6 shadow-sm sm:p-8">
+    <section className="mt-8 rounded-3xl bg-slate-50 p-6 shadow-md sm:p-8">
       <div className="mb-6 flex items-start gap-3">
         <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-100 text-rose-500">
           <BellRing size={21} aria-hidden="true" />
