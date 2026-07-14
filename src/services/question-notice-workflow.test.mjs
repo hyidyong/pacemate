@@ -25,6 +25,17 @@ test("assistant staff can read and answer pending professor questions", () => {
   assert.match(assistantMigration, /answered_by = v_staff_profile_id/);
 });
 
+test("tutor escalations support anonymous student delivery and a staff-answer notification", async () => {
+  const workflowMigration = await readFile(
+    new URL("../../supabase/migrations/20260714164021_tutor_question_rag_and_anonymity.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(workflowMigration, /is_anonymous boolean not null default false/);
+  assert.match(workflowMigration, /p_is_anonymous boolean/);
+  assert.match(questionSource, /isAnonymous/);
+  assert.match(questionSource, /revalidatePath\("\/dashboard"\)/);
+});
+
 test("course notices use the server admin client, validate ownership, and revalidate student feeds", () => {
   assert.match(noticeSource, /createSupabaseAdminClient/);
   assert.match(noticeSource, /course_professors/);

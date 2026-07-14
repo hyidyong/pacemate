@@ -144,6 +144,9 @@ export function ProfessorQuestionInboxView({
                             />
                             <span>
                               <strong>질문 {index + 1}</strong>
+                              <span className="ml-2 text-xs font-medium text-slate-500">
+                                {question.isAnonymous ? "익명의 학생" : "학생 질문"}
+                              </span>
                               <span className="mt-1 block whitespace-pre-wrap text-gray-700">{question.question}</span>
                               {question.answer ? (
                                 <span className="mt-2 block text-emerald-800">

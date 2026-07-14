@@ -41,6 +41,8 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
   const [escalationMessage, setEscalationMessage] = useState("");
   const [editingEscalationId, setEditingEscalationId] = useState<string | null>(null);
   const [escalationDraft, setEscalationDraft] = useState("");
+  const [isEscalationAnonymous, setIsEscalationAnonymous] = useState(false);
+  const [isEscalationSubmitting, setIsEscalationSubmitting] = useState(false);
   const [submittedEscalationIds, setSubmittedEscalationIds] = useState<Set<string>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
   const escalationSubmissionKeys = useRef(new Map<string, string>());
@@ -95,7 +97,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
           id: Date.now().toString(),
           role: "ai",
           content: "시스템 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
-          category: "수업 내용",
+          category: "수업 운영",
           isEscalated: true,
           originalQuestion: userMessage,
           canEscalate: true,
@@ -112,8 +114,8 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
   };
 
   const handleAskProfessor = async (message: Message) => {
-    if (!message.category || !selectedCourseId || !escalationDraft.trim() || isLoading) return;
-    setIsLoading(true);
+    if (!message.category || !selectedCourseId || !escalationDraft.trim() || isEscalationSubmitting) return;
+    setIsEscalationSubmitting(true);
     const formData = new FormData();
     const submissionKey = escalationSubmissionKeys.current.get(message.id) ?? crypto.randomUUID();
     escalationSubmissionKeys.current.set(message.id, submissionKey);
@@ -121,14 +123,19 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
     formData.set("category", message.category);
     formData.set("question", escalationDraft);
     formData.set("submissionKey", submissionKey);
-    const result = await submitQuestionToProfessor(formData);
-    setEscalationMessage(result.message);
-    if (result.ok) {
-      setSubmittedEscalationIds((current) => new Set(current).add(message.id));
-      setEditingEscalationId(null);
-      setEscalationDraft("");
+    formData.set("isAnonymous", String(isEscalationAnonymous));
+    try {
+      const result = await submitQuestionToProfessor(formData);
+      setEscalationMessage(result.message);
+      if (result.ok) {
+        setSubmittedEscalationIds((current) => new Set(current).add(message.id));
+        setEditingEscalationId(null);
+        setEscalationDraft("");
+        setIsEscalationAnonymous(false);
+      }
+    } finally {
+      setIsEscalationSubmitting(false);
     }
-    setIsLoading(false);
   };
 
   return (
@@ -261,7 +268,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
                       <div className="mt-1 w-full rounded-2xl bg-rose-50 p-3 shadow-sm">
                         {editingEscalationId === m.id ? (
                           <div className="flex flex-col gap-2">
-                            <p className="text-xs leading-5 text-rose-700">AI 답변이 충분하지 않다면 내용을 수정해 교수님 또는 조교님께 전달할 수 있습니다.</p>
+                            <p className="text-xs leading-5 text-rose-700">AI 답변이 충분하지 않다면 내용을 수정해 교수님과 조교님께 질문 요청을 통해 답변을 받을 수 있습니다.</p>
                             <select
                               aria-label="질문을 전달할 과목"
                               value={selectedCourseId}
@@ -278,18 +285,28 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
                               onChange={(event) => setEscalationDraft(event.target.value)}
                               className="min-h-24 resize-y rounded-xl bg-white px-3 py-2 text-sm leading-6 text-slate-800 shadow-sm outline-none"
                             />
+                            <label className="flex items-center gap-2 text-xs text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={isEscalationAnonymous}
+                                onChange={(event) => setIsEscalationAnonymous(event.target.checked)}
+                                disabled={isEscalationSubmitting}
+                              />
+                              익명으로 질문하기
+                            </label>
                             <div className="flex items-center gap-2">
                               <button
                                 className="rounded-xl bg-rose-500 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
-                                disabled={!selectedCourseId || !escalationDraft.trim() || isLoading}
+                                disabled={!selectedCourseId || !escalationDraft.trim() || isEscalationSubmitting}
                                 onClick={() => handleAskProfessor(m)}
                                 type="button"
                               >
-                                확인하고 전달하기
+                                {isEscalationSubmitting ? "전송 중…" : "확인하고 전달하기"}
                               </button>
                               <button
                                 className="px-2 py-2 text-xs text-slate-500"
-                                onClick={() => { setEditingEscalationId(null); setEscalationDraft(""); }}
+                                onClick={() => { setEditingEscalationId(null); setEscalationDraft(""); setIsEscalationAnonymous(false); }}
+                                disabled={isEscalationSubmitting}
                                 type="button"
                               >
                                 취소
@@ -299,7 +316,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
                         ) : (
                           <button
                             className="flex items-center gap-1.5 text-xs font-semibold text-rose-600"
-                            onClick={() => { setEditingEscalationId(m.id); setEscalationDraft(m.originalQuestion ?? ""); }}
+                            onClick={() => { setEditingEscalationId(m.id); setEscalationDraft(m.originalQuestion ?? ""); setIsEscalationAnonymous(false); }}
                             type="button"
                           >
                             <Hand size={14} />

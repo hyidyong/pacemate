@@ -38,6 +38,7 @@ export type ProfessorQuestion = {
   answeredAt: string | null;
   answerMode: ProfessorQuestionAnswerMode;
   sourceKind: ProfessorQuestionSourceKind;
+  isAnonymous: boolean;
   fingerprint: string;
 };
 

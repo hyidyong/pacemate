@@ -1,5 +1,6 @@
 export type TutorKnowledgeSourceType =
   | "syllabus"
+  | "weekly_plan"
   | "announcement"
   | "public_qa"
   | "bluebook";
@@ -17,6 +18,7 @@ export type RankedTutorKnowledgeSource = TutorKnowledgeSource & { score: number 
 
 const sourcePriority: Record<TutorKnowledgeSourceType, number> = {
   syllabus: 400,
+  weekly_plan: 350,
   announcement: 300,
   public_qa: 200,
   bluebook: 100,
