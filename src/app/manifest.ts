@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "학업 로드맵과 상담을 관리하는 PaceMate",
     start_url: "/dashboard",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#047857",
+    background_color: "#FAFDFC",
+    theme_color: "#6BCB77",
     lang: "ko",
   };
 }

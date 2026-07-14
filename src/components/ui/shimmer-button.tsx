@@ -16,7 +16,7 @@ export const ShimmerButton = React.forwardRef<HTMLButtonElement, ShimmerButtonPr
         whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
         className={cn(
-          "relative inline-flex h-12 items-center justify-center overflow-hidden rounded-xl bg-emerald-600 px-6 font-semibold text-white transition-all shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:bg-emerald-700 hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)]",
+          "relative inline-flex h-12 items-center justify-center overflow-hidden rounded-xl bg-emerald-600 px-6 font-semibold text-white transition-all shadow-[0_4px_14px_0_rgba(107,203,119,0.39)] hover:bg-emerald-700 hover:shadow-[0_6px_20px_rgba(107,203,119,0.23)]",
           className
         )}
         {...(props as any)}

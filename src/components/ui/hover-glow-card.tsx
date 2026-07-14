@@ -11,7 +11,7 @@ interface HoverGlowCardProps extends React.HTMLAttributes<HTMLDivElement> {
 export function HoverGlowCard({
   children,
   className,
-  glowColor = "rgba(16, 185, 129, 0.15)", // emerald-500 equivalent
+  glowColor = "rgba(107, 203, 119, 0.15)",
   ...props
 }: HoverGlowCardProps) {
   const divRef = useRef<HTMLDivElement>(null);

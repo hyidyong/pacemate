@@ -47,7 +47,7 @@ function AnimatePresence({ children }: { children: ReactNode }) {
 
 const DESKTOP_HEADER_CLASS = "hidden md:flex items-center justify-between gap-5 py-4 pb-7 relative z-50";
 const MOBILE_HEADER_CLASS =
-  "sticky top-0 flex md:hidden items-center justify-between gap-5 py-3 px-4 z-50 bg-[rgba(249,251,249,0.92)] backdrop-blur-xl shadow-[0_12px_30px_rgba(23,32,26,0.07)]";
+  "sticky top-0 flex md:hidden items-center justify-between gap-5 py-3 px-4 z-50 bg-[#FAFDFC]/90 backdrop-blur-xl shadow-[0_12px_30px_rgba(17,24,22,0.07)]";
 
 const professorDesktopMenuGroups = [
   {
