@@ -18,7 +18,16 @@ export default async function RoadmapPage({
   redirectNonStudent(profile);
 
   const { offering } = await searchParams;
-  const roadmapWorkspace = await getStudentRoadmapWorkspaceForSession(offering);
+  const roadmapWorkspace = await getStudentRoadmapWorkspaceForSession(offering).catch((error) => {
+    console.error("Roadmap page could not be loaded", error);
+    return {
+      offerings: [],
+      selectedOfferingId: "",
+      weeks: [],
+      completedWeeks: [] as number[],
+      hasPersonalizedRoadmap: false,
+    };
+  });
 
   return (
     <AppShell>
