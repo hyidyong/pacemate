@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, type PanInfo } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Send, Bot, User, AlertCircle, Sparkles, Hand, Menu, ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { askAiTutor } from "@/services/ai-tutor.actions";
-import { escalateTutorQuestion } from "@/services/ask.actions";
+import { askAiTutor, type TutorCitation } from "@/services/ai-tutor-rag.actions";
+import { submitQuestionToProfessor } from "@/services/ask.actions";
 import { useAppStore } from "@/store/app-store";
 import type { ProfessorQuestionCourseOption } from "@/types/professor-questions";
 // TODO: Supabase integration for loading/saving messages from db
@@ -18,7 +18,8 @@ type Message = {
   isEscalated?: boolean;
   category?: string;
   originalQuestion?: string;
-  sourceMessageId?: string | null;
+  sources?: TutorCitation[];
+  canEscalate?: boolean;
 };
 
 export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOption[] }) {
@@ -38,7 +39,11 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0]?.id ?? "");
   const [escalationMessage, setEscalationMessage] = useState("");
+  const [editingEscalationId, setEditingEscalationId] = useState<string | null>(null);
+  const [escalationDraft, setEscalationDraft] = useState("");
+  const [submittedEscalationIds, setSubmittedEscalationIds] = useState<Set<string>>(new Set());
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const escalationSubmissionKeys = useRef(new Map<string, string>());
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -56,7 +61,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !selectedCourseId) return;
 
     const userMessage = input.trim();
     setInput("");
@@ -69,7 +74,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
     setIsLoading(true);
 
     try {
-      const result = await askAiTutor(userMessage);
+      const result = await askAiTutor(userMessage, selectedCourseId);
       
       setMessages([
         ...newMessages,
@@ -80,7 +85,8 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
           category: result.category,
           isEscalated: result.isEscalated,
           originalQuestion: userMessage,
-          sourceMessageId: result.sourceMessageId,
+          sources: result.sources,
+          canEscalate: true,
         }
       ]);
     } catch (error) {
@@ -90,6 +96,10 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
           id: Date.now().toString(),
           role: "ai",
           content: "시스템 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+          category: "수업 내용",
+          isEscalated: true,
+          originalQuestion: userMessage,
+          canEscalate: true,
         }
       ]);
     } finally {
@@ -98,14 +108,22 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
   };
 
   const handleAskProfessor = async (message: Message) => {
-    if (!message.sourceMessageId || !message.category || !selectedCourseId || isLoading) return;
+    if (!message.category || !selectedCourseId || !escalationDraft.trim() || isLoading) return;
     setIsLoading(true);
     const formData = new FormData();
+    const submissionKey = escalationSubmissionKeys.current.get(message.id) ?? crypto.randomUUID();
+    escalationSubmissionKeys.current.set(message.id, submissionKey);
     formData.set("courseId", selectedCourseId);
     formData.set("category", message.category);
-    formData.set("sourceMessageId", message.sourceMessageId);
-    const result = await escalateTutorQuestion(formData);
+    formData.set("question", escalationDraft);
+    formData.set("submissionKey", submissionKey);
+    const result = await submitQuestionToProfessor(formData);
     setEscalationMessage(result.message);
+    if (result.ok) {
+      setSubmittedEscalationIds((current) => new Set(current).add(message.id));
+      setEditingEscalationId(null);
+      setEscalationDraft("");
+    }
     setIsLoading(false);
   };
 
@@ -225,33 +243,68 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
                         </div>
                       )}
                     </div>
-                    {m.isEscalated && m.originalQuestion ? (
-                      <div className="mt-1 flex flex-col gap-2 rounded-lg border border-rose-200 bg-white p-2">
-                        <select
-                          aria-label="질문을 전달할 과목"
-                          value={selectedCourseId}
-                          onChange={(event) => setSelectedCourseId(event.target.value)}
-                          className="rounded-md border px-2 py-1.5 text-xs text-gray-700"
-                        >
-                          {courses.map((course) => (
-                            <option key={course.id} value={course.id}>{course.name}</option>
-                          ))}
-                        </select>
-                        <button
-                          className="flex items-center gap-1.5 text-xs text-rose-600"
-                          disabled={!m.sourceMessageId || !selectedCourseId || isLoading}
-                          onClick={() => handleAskProfessor(m)}
-                          type="button"
-                        >
-                          <Hand size={14} />
-                          교수에게 이 질문 전달하기
-                        </button>
-                        {!m.sourceMessageId ? (
-                          <span className="text-xs text-gray-500">
-                            대화 원문을 안전하게 저장하지 못해 전달할 수 없습니다.
+                    {m.sources?.length ? (
+                      <div className="mt-1 flex flex-wrap gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-[11px] text-slate-500 shadow-sm">
+                        <span className="font-medium text-slate-600">출처:</span>
+                        {m.sources.map((source) => (
+                          <span key={source.id} className="rounded-full bg-white/80 px-2 py-0.5 text-slate-600">
+                            {source.type === "announcement" && source.createdAt ? `${source.label} (${source.createdAt.slice(0, 10)})` : source.label}
                           </span>
-                        ) : null}
+                        ))}
                       </div>
+                    ) : null}
+                    {m.canEscalate && m.originalQuestion && !submittedEscalationIds.has(m.id) ? (
+                      <div className="mt-1 w-full rounded-2xl bg-rose-50 p-3 shadow-sm">
+                        {editingEscalationId === m.id ? (
+                          <div className="flex flex-col gap-2">
+                            <p className="text-xs leading-5 text-rose-700">AI 답변이 충분하지 않다면 내용을 수정해 교수님 또는 조교님께 전달할 수 있습니다.</p>
+                            <select
+                              aria-label="질문을 전달할 과목"
+                              value={selectedCourseId}
+                              onChange={(event) => setSelectedCourseId(event.target.value)}
+                              className="rounded-xl bg-white px-3 py-2 text-xs text-slate-700 shadow-sm outline-none"
+                            >
+                              {courses.map((course) => (
+                                <option key={course.id} value={course.id}>{course.name}</option>
+                              ))}
+                            </select>
+                            <textarea
+                              aria-label="교수님께 전달할 질문"
+                              value={escalationDraft}
+                              onChange={(event) => setEscalationDraft(event.target.value)}
+                              className="min-h-24 resize-y rounded-xl bg-white px-3 py-2 text-sm leading-6 text-slate-800 shadow-sm outline-none"
+                            />
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="rounded-xl bg-rose-500 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={!selectedCourseId || !escalationDraft.trim() || isLoading}
+                                onClick={() => handleAskProfessor(m)}
+                                type="button"
+                              >
+                                확인하고 전달하기
+                              </button>
+                              <button
+                                className="px-2 py-2 text-xs text-slate-500"
+                                onClick={() => { setEditingEscalationId(null); setEscalationDraft(""); }}
+                                type="button"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            className="flex items-center gap-1.5 text-xs font-semibold text-rose-600"
+                            onClick={() => { setEditingEscalationId(m.id); setEscalationDraft(m.originalQuestion ?? ""); }}
+                            type="button"
+                          >
+                            <Hand size={14} />
+                            교수님께 질문 전달하기
+                          </button>
+                        )}
+                      </div>
+                    ) : submittedEscalationIds.has(m.id) ? (
+                      <p className="mt-1 text-xs font-medium text-emerald-600">교수님께 질문이 성공적으로 전달되었습니다.</p>
                     ) : null}
                   </div>
                 )}
@@ -281,6 +334,17 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
         {/* Input Area */}
         <div className="p-3 bg-white border-t border-gray-100 shrink-0 pb-safe">
           <form onSubmit={handleSubmit} className="relative max-w-3xl mx-auto flex items-end gap-2">
+            <select
+              aria-label="AI 튜터 참고 과목"
+              value={selectedCourseId}
+              onChange={(event) => setSelectedCourseId(event.target.value)}
+              className="hidden max-w-32 rounded-xl bg-slate-100 px-2 py-3 text-xs text-slate-600 shadow-sm outline-none md:block"
+            >
+              <option value="">과목 선택</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>{course.name}</option>
+              ))}
+            </select>
             <textarea
               value={input}
               onChange={(e) => {
@@ -308,7 +372,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
                   ? 'bg-emerald-600 text-white shadow-md hover:bg-emerald-700 hover:scale-105 active:scale-95' 
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`} 
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !input.trim() || !selectedCourseId}
             >
               <Send size={20} className={input.trim() && !isLoading ? "translate-x-[1px] -translate-y-[1px]" : ""} />
             </button>
