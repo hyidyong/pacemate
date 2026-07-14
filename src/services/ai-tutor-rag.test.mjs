@@ -22,6 +22,19 @@ test("ranks matching syllabus and announcement evidence before lower-priority so
   assert.deepEqual(sources.map((source) => source.id), ["syllabus", "notice"]);
 });
 
+test("keeps a matching syllabus ahead of a more keyword-dense weekly plan", () => {
+  const sources = selectTutorKnowledgeSources({
+    courseId,
+    question: "week thirteen security interest review doctrine process deadline notice assignment exam",
+    sources: [
+      { id: "weekly", courseId, type: "weekly_plan", title: "Week 13", content: "week thirteen security interest review doctrine process deadline notice assignment exam", createdAt: null },
+      { id: "syllabus", courseId, type: "syllabus", title: "Syllabus", content: "week thirteen security interest", createdAt: null },
+    ],
+  });
+
+  assert.deepEqual(sources.map((source) => source.id), ["syllabus", "weekly"]);
+});
+
 test("keeps only citations that belong to the retrieved evidence set", () => {
   const citations = sanitizeTutorCitations(["notice", "missing", "notice", "syllabus"], [
     { id: "syllabus", courseId, type: "syllabus", title: "Syllabus", content: "", createdAt: null },

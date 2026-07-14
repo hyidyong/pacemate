@@ -7,6 +7,7 @@ const source = await readFile(new URL("./ai-tutor-rag.actions.ts", import.meta.u
 test("course-grounded tutor reads only enrolled-course knowledge from Supabase", () => {
   assert.match(source, /from\("student_courses"\)/);
   assert.match(source, /from\("syllabi"\)/);
+  assert.match(source, /raw_extracted_text/);
   assert.match(source, /from\("course_weekly_plans"\)/);
   assert.match(source, /professor_confirmed", true/);
   assert.match(source, /review_required", false/);

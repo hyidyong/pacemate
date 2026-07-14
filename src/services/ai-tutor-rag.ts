@@ -49,7 +49,7 @@ export function selectTutorKnowledgeSources(input: {
       const sourceTokens = tokens(`${source.title} ${source.content}`);
       const overlap = [...questionTokens].filter((token) => sourceTokens.has(token)).length;
       if (!overlap) return [];
-      return [{ ...source, score: sourcePriority[source.type] + overlap * 10 }];
+      return [{ ...source, score: sourcePriority[source.type] * 1000 + overlap }];
     })
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
     .slice(0, input.limit ?? 6);

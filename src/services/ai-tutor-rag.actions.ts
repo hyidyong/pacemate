@@ -184,7 +184,7 @@ async function loadTutorKnowledgeSources(
   offeringIds: readonly string[],
 ): Promise<TutorKnowledgeSource[]> {
   const [{ data: syllabusRows }, { data: weeklyPlanRows }, { data: noticeRows }, { data: faqRows }, { data: profile }] = await Promise.all([
-    admin.from("syllabi").select("id, source_name, parsed_text, parsed_data, updated_at").eq("course_id", courseId).order("created_at", { ascending: false }).limit(1),
+    admin.from("syllabi").select("id, source_name, parsed_text, raw_extracted_text, parsed_data, updated_at").eq("course_id", courseId).order("created_at", { ascending: false }).limit(1),
     offeringIds.length
       ? admin
           .from("course_weekly_plans")
@@ -202,7 +202,10 @@ async function loadTutorKnowledgeSources(
 
   const sources: TutorKnowledgeSource[] = [
     ...(syllabusRows ?? []).flatMap((row: any) => {
-      const content = compactText(row.parsed_text) || compactText(row.parsed_data);
+      const content =
+        compactText(row.parsed_text) ||
+        compactText(row.raw_extracted_text) ||
+        compactText(row.parsed_data);
       return content ? [{ id: `syllabus:${row.id}`, courseId, type: "syllabus" as const, title: row.source_name || "강의계획서", content, createdAt: row.updated_at ?? null }] : [];
     }),
     ...(weeklyPlanRows ?? []).flatMap((row: any) => {
