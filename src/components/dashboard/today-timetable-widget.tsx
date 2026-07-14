@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Clock, MapPin, Calendar as CalendarIcon } from "lucide-react";
 import { useStudentTimetable } from "@/lib/student-timetable";
 import type { StudentCourseRecord } from "@/services/student-community.service";
@@ -9,9 +10,17 @@ const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
 
 export function TodayTimetableWidget({ myCourses }: { myCourses: StudentCourseRecord[] }) {
   const { timetableItems } = useStudentTimetable(myCourses);
-  const today = dayNames[new Date().getDay()];
+  // The server (Vercel) and the visitor can be in different time zones. Wait
+  // until hydration before deriving a local weekday so their first renders
+  // always match.
+  const [today, setToday] = useState<string | null>(null);
+
+  useEffect(() => {
+    setToday(dayNames[new Date().getDay()]);
+  }, []);
+
   const todayCourses = timetableItems
-    .filter((item) => item.schedule_day === today && item.start_time && item.end_time)
+    .filter((item) => today !== null && item.schedule_day === today && item.start_time && item.end_time)
     .sort((a, b) => a.start_time!.localeCompare(b.start_time!));
 
   return (

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, ChevronLeft, ChevronRight, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   notificationCategoryLabels,
   type UserNotification,
@@ -136,11 +135,10 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
             onScroll={updateScrollControls}
           >
             {visibleNotifications.map(notification => (
-              <motion.button
+              <button
                 key={notification.id}
                 type="button"
                 data-notification-card
-                whileTap={{ scale: 0.98 }}
                 onClick={() => handleNotificationClick(notification)}
                 aria-label={`${notification.title} 알림 열기`}
                 className="notification-card group"
@@ -156,7 +154,7 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
                   <span className="notification-card-body">{notification.body}</span>
                 </span>
                 <ChevronRight aria-hidden="true" className="notification-card-chevron" size={18} />
-              </motion.button>
+              </button>
             ))}
           </div>
 
@@ -183,20 +181,13 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
         </div>
       </section>
 
-      <AnimatePresence>
-        {selectedNotification && (
+      {selectedNotification && (
           <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.4 }}
-              exit={{ opacity: 0 }}
+            <div
               onClick={() => setSelectedNotification(null)}
               className="fixed inset-0 bg-black z-[110]"
             />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            <div
               className="fixed left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-[400px] bottom-10 md:bottom-auto md:top-1/2 md:-translate-y-1/2 bg-white rounded-3xl p-6 z-[120] shadow-2xl"
             >
               <div className="flex justify-between items-start mb-4">
@@ -230,10 +221,9 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
                   확인
                 </button>
               </div>
-            </motion.div>
+            </div>
           </>
-        )}
-      </AnimatePresence>
+      )}
     </>
   );
 }

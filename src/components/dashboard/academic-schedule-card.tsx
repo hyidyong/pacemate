@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AcademicEvent, AcademicEventCategory } from "@/types/academic-calendar";
 
 const categoryLabels: Record<AcademicEventCategory, string> = {
@@ -75,7 +75,9 @@ function formatEventDate(event: AcademicEvent) {
   return `${formatCalendarDate(event.startDate, showYear)} ~ ${formatCalendarDate(event.endDate, showYear)}`;
 }
 
-function getVisibleEvents(events: AcademicEvent[], today: string, limit: number) {
+function getVisibleEvents(events: AcademicEvent[], today: string | null, limit: number) {
+  if (!today) return [];
+
   const inProgress = events
     .filter((event) => event.startDate <= today && event.endDate >= today)
     .sort((left, right) => left.startDate.localeCompare(right.startDate));
@@ -97,7 +99,14 @@ export function AcademicScheduleCard({
   limit = 5,
   headingId = "academic-schedule-title",
 }: AcademicScheduleCardProps) {
-  const today = getLocalDateKey(new Date());
+  // Do not derive the visitor's calendar date during SSR. A timezone boundary
+  // would otherwise make the client render different markup while hydrating.
+  const [today, setToday] = useState<string | null>(null);
+
+  useEffect(() => {
+    setToday(getLocalDateKey(new Date()));
+  }, []);
+
   const visibleEvents = useMemo(
     () => getVisibleEvents(academicEvents, today, limit),
     [academicEvents, limit, today],

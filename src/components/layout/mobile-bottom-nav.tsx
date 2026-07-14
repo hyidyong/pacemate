@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
 import { Home, Map, MessageCircle, User } from "lucide-react";
 
 const tabs = [
@@ -32,11 +31,7 @@ export function MobileBottomNav() {
             >
               {/* Active indicator pill */}
               {isActive && (
-                <motion.span
-                  layoutId="mobile-tab-indicator"
-                  className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-emerald-500"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
+                <span className="absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-emerald-500" />
               )}
               <Icon
                 size={22}
