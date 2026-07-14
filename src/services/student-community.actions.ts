@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDemoProfile } from "@/services/session.service";
+import type { CourseRecord, StudentCourseRecord } from "@/services/student-community.service";
+
+const studentCourseSelectColumns =
+  "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text)";
 
 async function getProfileId() {
   const profile = await getDemoProfile();
@@ -12,6 +16,60 @@ async function getProfileId() {
 function requiredText(value: FormDataEntryValue | null, fallback = "") {
   const text = typeof value === "string" ? value.trim() : "";
   return text || fallback;
+}
+
+function normalizeJoinedStudentCourse(record: unknown): StudentCourseRecord | null {
+  if (!record || typeof record !== "object") return null;
+
+  const row = record as {
+    id?: unknown;
+    status?: unknown;
+    is_favorite?: unknown;
+    schedule_day?: unknown;
+    start_time?: unknown;
+    end_time?: unknown;
+    classroom?: unknown;
+    semester_label?: unknown;
+    course?: unknown;
+  };
+  const joinedCourse = Array.isArray(row.course) ? row.course[0] : row.course;
+
+  if (!joinedCourse || typeof joinedCourse !== "object") return null;
+
+  const course = joinedCourse as Partial<CourseRecord>;
+  if (
+    typeof row.id !== "string" ||
+    typeof row.status !== "string" ||
+    typeof row.is_favorite !== "boolean" ||
+    typeof course.id !== "string" ||
+    typeof course.code !== "string" ||
+    typeof course.name !== "string" ||
+    typeof course.credit !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    status: row.status as StudentCourseRecord["status"],
+    is_favorite: row.is_favorite,
+    schedule_day: typeof row.schedule_day === "string" ? row.schedule_day : null,
+    start_time: typeof row.start_time === "string" ? row.start_time : null,
+    end_time: typeof row.end_time === "string" ? row.end_time : null,
+    classroom: typeof row.classroom === "string" ? row.classroom : null,
+    semester_label: typeof row.semester_label === "string" ? row.semester_label : "2026-2",
+    course: {
+      id: course.id,
+      school_id: typeof course.school_id === "string" ? course.school_id : null,
+      code: course.code,
+      name: course.name,
+      credit: course.credit,
+      category: typeof course.category === "string" ? course.category : null,
+      description: typeof course.description === "string" ? course.description : null,
+      prerequisite_text:
+        typeof course.prerequisite_text === "string" ? course.prerequisite_text : null,
+    },
+  };
 }
 
 export async function addCourseToSchedule(formData: FormData) {
@@ -49,15 +107,19 @@ export async function addCourseToSchedule(formData: FormData) {
     return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
-  const { error } = existing?.id
+  const { data, error } = existing?.id
     ? await supabase
         .from("student_courses")
         .update(payload)
         .eq("id", existing.id)
         .eq("student_id", profileId)
+        .select(studentCourseSelectColumns)
+        .single()
     : await supabase
         .from("student_courses")
-        .insert(payload);
+        .insert(payload)
+        .select(studentCourseSelectColumns)
+        .single();
 
   if (error) {
     console.error("addCourseToSchedule failed:", error.message);
@@ -66,7 +128,11 @@ export async function addCourseToSchedule(formData: FormData) {
 
   revalidatePath("/mypage");
   revalidatePath("/dashboard");
-  return { ok: true, message: "시간표에 등록했습니다." };
+  return {
+    ok: true,
+    message: "시간표에 등록했습니다.",
+    course: normalizeJoinedStudentCourse(data),
+  };
 }
 
 export async function toggleFavoriteCourse(formData: FormData) {
@@ -133,7 +199,7 @@ export async function removeCourseFromSchedule(formData: FormData) {
 
   revalidatePath("/mypage");
   revalidatePath("/dashboard");
-  return { ok: true, message: "시간표에서 제거했습니다." };
+  return { ok: true, message: "시간표에서 제거했습니다.", enrollmentId: existing.id as string };
 }
 
 export async function createCommunityPost(formData: FormData) {

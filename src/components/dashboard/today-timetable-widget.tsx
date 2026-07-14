@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { Clock, MapPin, Calendar as CalendarIcon } from "lucide-react";
+import { useStudentTimetable } from "@/lib/student-timetable";
 import type { StudentCourseRecord } from "@/services/student-community.service";
 
 const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
 
 export function TodayTimetableWidget({ myCourses }: { myCourses: StudentCourseRecord[] }) {
+  const { timetableCourses } = useStudentTimetable(myCourses);
   const today = dayNames[new Date().getDay()];
-  const todayCourses = myCourses
+  const todayCourses = timetableCourses
     .filter((item) => item.schedule_day === today && item.start_time && item.end_time)
     .sort((a, b) => a.start_time!.localeCompare(b.start_time!));
 
@@ -31,7 +33,7 @@ export function TodayTimetableWidget({ myCourses }: { myCourses: StudentCourseRe
 
       {todayCourses.length === 0 ? (
         <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-          <p className="text-sm text-gray-500 font-medium">오늘 수업이 없습니다.</p>
+          <p className="text-sm text-gray-500 font-medium">오늘 등록된 수업이 없습니다.</p>
         </div>
       ) : (
         <div className="space-y-3">
