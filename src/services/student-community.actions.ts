@@ -250,22 +250,33 @@ export async function saveCustomCourseToSchedule(formData: FormData) {
     return { ok: false, message: "Unable to save the custom course." };
   }
 
-  const { error: clearSlotsError } = await supabase
-    .from("student_custom_course_schedule_slots")
-    .delete().eq("student_custom_course_id", customCourse.id);
-  if (clearSlotsError) return { ok: false, message: "Unable to update custom course times." };
-
-  const { data: savedSlots, error: slotError } = await supabase
-    .from("student_custom_course_schedule_slots")
-    .insert(slots.map((slot) => ({
-      student_custom_course_id: customCourse.id,
+  const { error: slotError } = await supabase.rpc("replace_student_custom_course_schedule_slots", {
+    p_student_custom_course_id: customCourse.id,
+    p_slots: slots.map((slot) => ({
       day_of_week: slot.dayOfWeek,
       start_time: slot.startTime,
       end_time: slot.endTime,
       classroom: slot.classroom,
-    })))
-    .select("id, day_of_week, start_time, end_time, classroom");
-  if (slotError) return { ok: false, message: "Unable to save custom course times." };
+    })),
+  });
+  if (slotError) {
+    // A newly-created parent has no value without its time slots.  Remove it
+    // on failure; existing parents retain their pre-existing slot set because
+    // the RPC rolls its delete and insert back together.
+    if (!customCourseId) {
+      await supabase.from("student_custom_courses").delete()
+        .eq("id", customCourse.id).eq("student_id", profileId);
+    }
+    return { ok: false, message: "Unable to save custom course times." };
+  }
+
+  const { data: savedSlots, error: savedSlotsError } = await supabase
+    .from("student_custom_course_schedule_slots")
+    .select("id, day_of_week, start_time, end_time, classroom")
+    .eq("student_custom_course_id", customCourse.id)
+    .order("day_of_week", { ascending: true })
+    .order("start_time", { ascending: true });
+  if (savedSlotsError) return { ok: false, message: "Unable to load custom course times." };
 
   const course: StudentCourseRecord = {
     id: `custom:${customCourse.id}`, status: "interested", is_favorite: false,

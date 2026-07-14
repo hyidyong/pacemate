@@ -129,3 +129,20 @@ test("secures every new timetable table for authenticated owners only", () => {
   assertOwnsThroughProfiles("student_course_schedule_slots", "student_courses", "student_id");
   assertOwnsThroughProfiles("student_custom_course_schedule_slots", "student_custom_courses", "student_id");
 });
+
+test("replaces regular and custom course slots atomically", () => {
+  for (const [functionName, parentId, tableName] of [
+    ["replace_student_course_schedule_slots", "p_student_course_id", "student_course_schedule_slots"],
+    ["replace_student_custom_course_schedule_slots", "p_student_custom_course_id", "student_custom_course_schedule_slots"],
+  ]) {
+    const functionPattern = new RegExp(
+      `create or replace function public\\.${functionName}\\([\\s\\S]*?\\$\\$;`,
+      "i",
+    );
+    const functionSql = sql.match(functionPattern)?.[0] ?? "";
+
+    assert.match(functionSql, new RegExp(`delete from public\\.${tableName}\\s+where [a-z_]+ = ${parentId}`, "i"));
+    assert.match(functionSql, new RegExp(`insert into public\\.${tableName}`, "i"));
+    assert.match(normalizedSql, new RegExp(`grant execute on function public\\.${functionName}\\(uuid, jsonb\\) to authenticated`));
+  }
+});
