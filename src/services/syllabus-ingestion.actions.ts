@@ -46,6 +46,34 @@ export async function parseProfessorSyllabus(formData: FormData) {
   if (!syllabusId) return { ok: false, message: "Syllabus id is required" };
 
   try {
+    const supabase = createSupabaseAdminClient();
+    const { data: syllabus } = await supabase
+      .from("syllabi")
+      .select("id,course_id,uploaded_by")
+      .eq("id", syllabusId)
+      .maybeSingle();
+    if (!syllabus || syllabus.uploaded_by !== profile.id) {
+      return { ok: false, message: "You can only parse your own syllabus" };
+    }
+
+    const { data: professor } = await supabase
+      .from("professors")
+      .select("id")
+      .eq("profile_id", profile.id)
+      .maybeSingle();
+    const { data: offering } = professor
+      ? await supabase
+          .from("course_offerings")
+          .select("id")
+          .eq("course_id", syllabus.course_id)
+          .eq("professor_id", professor.id)
+          .limit(1)
+          .maybeSingle()
+      : { data: null };
+    if (!offering) {
+      return { ok: false, message: "This syllabus is not assigned to your course offering" };
+    }
+
     const record = await parseStoredSyllabus(syllabusId);
     revalidatePath("/professor");
     return { ok: true, syllabusId: record.id, status: record.parsingStatus };

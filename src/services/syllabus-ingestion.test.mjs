@@ -43,3 +43,11 @@ test("parsing is server-only and persists extracted content through the ingestio
   assert.match(source, /course_assessments/);
   assert.doesNotMatch(source, /localStorage/);
 });
+
+test("professor parsing action verifies syllabus ownership and course offering", async () => {
+  const source = await readFile(new URL("./syllabus-ingestion.actions.ts", import.meta.url), "utf8");
+
+  assert.match(source, /uploaded_by.*profile\.id/);
+  assert.match(source, /\.eq\("course_id", syllabus\.course_id\)/);
+  assert.match(source, /\.eq\("professor_id", professor\.id\)/);
+});
