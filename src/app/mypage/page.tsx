@@ -13,7 +13,20 @@ export const dynamic = "force-dynamic";
 export default async function MyPage() {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
-  const data = await getMyPageData(profile);
+  const data = await getMyPageData(profile).catch((error) => {
+    console.error("My page data could not be loaded", error);
+    return {
+      schoolName: "계명대학교",
+      profile,
+      courses: [],
+      myCourses: [],
+      myPosts: [],
+      scrapedPosts: [],
+      commentedPosts: [],
+      likedPosts: [],
+      savedProfile: null,
+    };
+  });
 
   return (
     <AppShell>

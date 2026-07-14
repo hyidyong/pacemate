@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 export default async function ChatbotPage() {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
-  const courses = await getStudentAiTutorCourses();
+  const courses = await getStudentAiTutorCourses().catch((error) => {
+    console.error("AI tutor courses could not be loaded", error);
+    return [];
+  });
 
   return (
     <div className="h-[100dvh] w-full bg-white flex flex-col overflow-hidden">
