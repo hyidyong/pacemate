@@ -37,7 +37,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
   }]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedCourseId, setSelectedCourseId] = useState(courses[0]?.id ?? "");
+  const [selectedCourseId, setSelectedCourseId] = useState("");
   const [escalationMessage, setEscalationMessage] = useState("");
   const [editingEscalationId, setEditingEscalationId] = useState<string | null>(null);
   const [escalationDraft, setEscalationDraft] = useState("");
@@ -333,6 +333,11 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
 
         {/* Input Area */}
         <div className="p-3 bg-white border-t border-gray-100 shrink-0 pb-safe">
+          {!courses.length ? (
+            <p className="mx-auto mb-2 max-w-3xl rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700 shadow-sm">
+              시간표에 등록된 과목이 없어 질문할 과목을 선택할 수 없습니다. 먼저 시간표에 과목을 추가해 주세요.
+            </p>
+          ) : null}
           <form onSubmit={handleSubmit} className="relative max-w-3xl mx-auto flex items-end gap-2">
             <select
               aria-label="AI 튜터 참고 과목"

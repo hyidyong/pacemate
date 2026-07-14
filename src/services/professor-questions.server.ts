@@ -331,6 +331,37 @@ async function getAuthProfile(
   return { id, role: data.role as AuthProfile["role"] };
 }
 
+export async function getStudentAiTutorCourses(): Promise<ProfessorQuestionCourseOption[]> {
+  const supabase = await createSupabaseServerClient();
+  const profile = await getAuthProfile(supabase, "student");
+  if (!profile) return [];
+
+  const { data: studentCourseData, error: studentCourseError } = await supabase
+    .from("student_courses")
+    .select("course_id")
+    .eq("student_id", profile.id);
+  if (studentCourseError || !studentCourseData?.length) return [];
+
+  const courseIds = Array.from(
+    new Set(studentCourseData.map((row) => normalizeUuid(row.course_id)).filter(Boolean)),
+  ) as string[];
+  if (!courseIds.length) return [];
+
+  const { data: courseData, error: courseError } = await supabase
+    .from("courses")
+    .select("id, code, name")
+    .in("id", courseIds)
+    .order("name", { ascending: true });
+  if (courseError) return [];
+
+  return (courseData ?? []).flatMap((row) => {
+    const id = normalizeUuid(row.id);
+    return id && typeof row.code === "string" && typeof row.name === "string"
+      ? [{ id, code: row.code, name: row.name }]
+      : [];
+  });
+}
+
 async function getStudentQuestionCourses(
   supabase: ServerClient,
   profileId: string,
