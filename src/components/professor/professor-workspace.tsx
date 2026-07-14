@@ -59,7 +59,10 @@ import {
 } from "./professor-home-section-tabs";
 import { ProfessorPortalShortcutCard } from "./professor-portal-shortcut-card";
 import { getCourseRoadmap, addCourseNotice, addCourseTextbook, removeCourseAssignment } from "@/services/course-settings.actions";
-import { professorCourseManagementItems } from "@/lib/professor-navigation";
+import {
+  professorCourseManagementItems,
+  professorWeeklyPlanPreviewLink,
+} from "@/lib/professor-navigation";
 import { saveProfessorRoadmapPersonalization } from "@/services/personalized-weekly-roadmap.actions";
 
 // ============== TYPES ==============

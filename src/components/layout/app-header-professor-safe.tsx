@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   CalendarDays,
   CircleHelp,
@@ -99,6 +100,10 @@ type HeaderRoute = {
   label: string;
 };
 
+type MobileHeaderRoute = HeaderRoute & {
+  icon?: ComponentType<{ size?: number }>;
+};
+
 const desktopRoutes: HeaderRoute[] = [
   { href: "/dashboard", label: "대시보드" },
   { href: "/roadmap", label: "로드맵" },
@@ -133,6 +138,7 @@ export function AppHeader({
   notifications,
   unreadCount,
 }: AppHeaderProps) {
+  const pathname = usePathname();
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfessorMenuOpen, setIsProfessorMenuOpen] = useState(false);
@@ -159,6 +165,19 @@ export function AppHeader({
   };
 
   const isMobileMenuVisible = isProfessor ? isProfessorMenuOpen : isMobileMenuOpen;
+  const isStudentRoadmap = isAuthenticated && !isProfessor && !isOperator && pathname.startsWith("/roadmap");
+  const roadmapMenuLinks: MobileHeaderRoute[] = [
+    { href: "/roadmap", label: "내 로드맵", icon: Route },
+    { href: "/roadmap#course-roadmap", label: "과목별 로드맵", icon: LibraryBig },
+    { href: "/roadmap#learning-progress", label: "학습 기록", icon: CalendarDays },
+    { href: "/notices", label: "공지사항", icon: MessageSquareText },
+  ];
+  const mobileMenuRoutes: MobileHeaderRoute[] = isStudentRoadmap
+    ? roadmapMenuLinks
+    : mobileRoutes.map((route) => ({
+        ...route,
+        icon: mobileRouteIcons[route.href as keyof typeof mobileRouteIcons],
+      }));
 
   return (
     <>
@@ -354,8 +373,8 @@ export function AppHeader({
           >
             <div className="flex flex-col gap-4">
               <h2 className="text-xl font-bold text-gray-900 border-b pb-2">메뉴</h2>
-              {mobileRoutes.map((route) => {
-                const Icon = mobileRouteIcons[route.href as keyof typeof mobileRouteIcons];
+              {mobileMenuRoutes.map((route) => {
+                const Icon = route.icon;
                 return (
                   <Link
                     href={route.href}

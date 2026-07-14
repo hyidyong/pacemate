@@ -127,3 +127,41 @@ export async function getSavedPersonalizedRoadmapForSession(offeringId: string) 
   if (error) return [];
   return data ?? [];
 }
+
+export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?: string) {
+  const session = await requireDemoSession();
+  if (session.role !== "student") {
+    return { offerings: [], selectedOfferingId: "", weeks: [], completedWeeks: [] as number[] };
+  }
+
+  const offerings = await getStudentRoadmapOfferingsForSession();
+  const selectedOfferingId = offerings.some((offering) => offering.offeringId === requestedOfferingId)
+    ? requestedOfferingId!
+    : offerings[0]?.offeringId ?? "";
+
+  if (!selectedOfferingId) {
+    return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[] };
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const [weeks, progressResult] = await Promise.all([
+    getSavedPersonalizedRoadmapForSession(selectedOfferingId),
+    supabase
+      .from("student_weekly_progress")
+      .select("week_number,progress_status_override")
+      .eq("student_id", session.profileId)
+      .eq("offering_id", selectedOfferingId)
+      .eq("progress_status_override", "covered"),
+  ]);
+
+  if (progressResult.error) {
+    throw new Error("Student roadmap progress could not be read");
+  }
+
+  return {
+    offerings,
+    selectedOfferingId,
+    weeks,
+    completedWeeks: (progressResult.data ?? []).map((row) => row.week_number),
+  };
+}
