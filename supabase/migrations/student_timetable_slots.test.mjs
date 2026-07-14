@@ -88,7 +88,7 @@ test("creates normalized student-course timetable slots with constraints and leg
       < sql.toLowerCase().indexOf("insert into public.student_course_schedule_slots"),
     "legacy student_courses columns must be declared before the backfill",
   );
-  assert.match(normalizedSql, /insert into public\.student_course_schedule_slots \(student_course_id, day_of_week, start_time, end_time, classroom, source\) select sc\.id, sc\.schedule_day, sc\.start_time, sc\.end_time, sc\.classroom, 'legacy' from public\.student_courses sc where sc\.schedule_day in \(/);
+  assert.match(normalizedSql, /insert into public\.student_course_schedule_slots\s*\(\s*student_course_id, day_of_week, start_time, end_time, classroom, source\s*\)\s*select sc\.id, sc\.schedule_day, sc\.start_time, sc\.end_time, sc\.classroom, 'legacy' from public\.student_courses sc where sc\.schedule_day in\s*\(/);
   assert.match(normalizedSql, koreanWeekdayList);
   assert.match(normalizedSql, /and sc\.start_time is not null and sc\.end_time is not null and sc\.start_time < sc\.end_time on conflict \(student_course_id, day_of_week, start_time, end_time\) do nothing/);
 });
