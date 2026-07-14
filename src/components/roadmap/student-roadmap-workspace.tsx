@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Check, Sparkles } from "lucide-react";
+import { Check, LoaderCircle, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   generateStudentPersonalizedRoadmap,
@@ -46,6 +46,7 @@ export function StudentRoadmapWorkspace({
     () => initialWeeks.find((item) => item.week_number === activeWeek),
     [activeWeek, initialWeeks],
   );
+  const hasRoadmap = initialWeeks.length > 0;
 
   if (!offerings.length) {
     return (
@@ -153,6 +154,21 @@ export function StudentRoadmapWorkspace({
           로드맵 생성 버튼을 눌러 이 과목의 개인화 계획을 생성하세요.
         </div>
       )}
+
+      {hasRoadmap ? (
+        <div className="mt-8 flex flex-col items-center gap-3 rounded-2xl bg-gray-50 px-5 py-6 text-center shadow-sm">
+          <p className="text-xs text-gray-400">시간표나 온보딩 정보가 바뀌었나요?</p>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-2.5 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-100 disabled:opacity-60"
+            disabled={isPending}
+            onClick={generateRoadmap}
+            type="button"
+          >
+            {isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
+            {isPending ? "로드맵 다시 생성 중" : "로드맵 다시 생성하기"}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

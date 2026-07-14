@@ -19,3 +19,13 @@ test("shows completed week controls with the completed style before the active s
   assert.ok(activeIndex >= 0, "active state style is missing");
   assert.ok(completedIndex < activeIndex, "completed state must take priority over active state");
 });
+
+test("renders a bottom regeneration control only after a roadmap exists", async () => {
+  const source = await readFile(new URL("./student-roadmap-workspace.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /const hasRoadmap = initialWeeks\.length > 0/);
+  assert.match(source, /hasRoadmap \? \(/);
+  assert.match(source, /시간표나 온보딩 정보가 바뀌었나요\?/);
+  assert.match(source, /로드맵 다시 생성하기/);
+  assert.match(source, /onClick=\{generateRoadmap\}/);
+});
