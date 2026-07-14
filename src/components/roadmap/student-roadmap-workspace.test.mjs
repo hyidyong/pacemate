@@ -98,6 +98,9 @@ test("renders syllabus guidance and editable weekly learning feedback", async ()
 
   assert.match(source, /학습 방법/);
   assert.match(source, /필요한 선수 지식/);
+  assert.match(source, /주차별 예습\/복습 가이드/);
+  assert.match(source, /개인 맞춤 적용/);
+  assert.match(source, /courseGuide\.personalized_content\.additional_tips/);
   assert.match(source, /DIFFICULTY_OPTIONS/);
   assert.match(source, /난이도 \$\{option\.label\}/);
   assert.match(source, /개인 메모/);

@@ -36,8 +36,8 @@ export function normalizeWeeklyBaseline(rows: Array<Partial<WeeklyBaseline>>): W
     return {
       weekNumber,
       title: textOrFallback(row?.title, `${weekNumber}주차 학습`),
-      topic: textOrFallback(row?.topic, "학습 계획 확인"),
-      content: textOrFallback(row?.content, "교수 승인 계획을 확인하고 학습을 준비하세요."),
+      topic: textOrFallback(row?.topic, textOrFallback(row?.title, `${weekNumber}주차 핵심 개념`)),
+      content: textOrFallback(row?.content, `${weekNumber}주차 핵심 개념을 예습하고 수업 노트로 복습하세요.`),
     };
   });
 }
