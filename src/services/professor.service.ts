@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { RoadmapRevisionRequest } from "@/services/roadmap-revisions.service";
 import type { DemoProfile } from "@/services/session.service";
 import { normalizeProfessorCounselingRows } from "@/services/professor-counseling-data";
@@ -230,7 +231,8 @@ async function getAvailability(
 async function getAdminTasks(
   professorId: string,
 ): Promise<ProfessorAdminTaskRecord[]> {
-  const { data, error } = await supabase
+  const serverSupabase = await createSupabaseServerClient();
+  const { data, error } = await serverSupabase
     .from("professor_admin_tasks")
     .select("id, title, day_of_week, start_time, end_time")
     .eq("professor_id", professorId)

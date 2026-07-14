@@ -38,10 +38,45 @@ function toDemoProfile(profile: AuthMappedProfile): DemoProfile {
 }
 
 export async function getDemoProfile(): Promise<DemoProfile | null> {
-  const session = await readDemoSession();
-  const supabase = await createSupabaseServerClient();
+  try {
+    const session = await readDemoSession();
+    const supabase = await createSupabaseServerClient();
 
-  if (session) {
+    if (session) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, identifier, name, role, school_id, department_id, auth_user_id")
+        .eq("id", session.profileId)
+        .maybeSingle();
+
+      if (error || !data || session.role !== data.role) return null;
+      return toDemoProfile(data as AuthMappedProfile);
+    }
+
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) return null;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, identifier, name, role, school_id, department_id, auth_user_id")
+      .eq("auth_user_id", authData.user.id)
+      .maybeSingle();
+
+    if (error || !data || data.auth_user_id !== authData.user.id) return null;
+
+    return toDemoProfile(data as AuthMappedProfile);
+  } catch (error) {
+    console.error("Failed to resolve the current session profile", error);
+    return null;
+  }
+}
+
+export async function getSignedDemoProfile(): Promise<DemoProfile | null> {
+  try {
+    const session = await readDemoSession();
+    if (!session) return null;
+
+    const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase
       .from("profiles")
       .select("id, identifier, name, role, school_id, department_id, auth_user_id")
@@ -50,33 +85,8 @@ export async function getDemoProfile(): Promise<DemoProfile | null> {
 
     if (error || !data || session.role !== data.role) return null;
     return toDemoProfile(data as AuthMappedProfile);
+  } catch (error) {
+    console.error("Failed to resolve the signed demo profile", error);
+    return null;
   }
-
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return null;
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, identifier, name, role, school_id, department_id, auth_user_id")
-    .eq("auth_user_id", authData.user.id)
-    .maybeSingle();
-
-  if (error || !data || data.auth_user_id !== authData.user.id) return null;
-
-  return toDemoProfile(data as AuthMappedProfile);
-}
-
-export async function getSignedDemoProfile(): Promise<DemoProfile | null> {
-  const session = await readDemoSession();
-  if (!session) return null;
-
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, identifier, name, role, school_id, department_id, auth_user_id")
-    .eq("id", session.profileId)
-    .maybeSingle();
-
-  if (error || !data || session.role !== data.role) return null;
-  return toDemoProfile(data as AuthMappedProfile);
 }

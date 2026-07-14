@@ -125,7 +125,7 @@ export default async function DashboardPage() {
     // This page runs on the server, so keep the signed-in user's cookies on
     // every query and let Supabase RLS enforce the same access as the API.
     const supabase = await createSupabaseServerClient();
-    myCourses = await getMyCourses(profile.id);
+    myCourses = await getMyCourses(profile);
     announcements = await listStudentCourseNotices(profile.id);
     academicEvents = getAcademicEvents().filter(
       (event) => event.audience === "all" || event.audience === "student",

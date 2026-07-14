@@ -71,13 +71,13 @@ export function createDemoSessionToken(claims: SessionClaims, now = Date.now()) 
 }
 
 export function verifyDemoSessionToken(token: string, now = Date.now()): DemoSession | null {
-  const [payloadSegment, signature, ...extraSegments] = token.split(".");
-
-  if (!payloadSegment || !signature || extraSegments.length > 0) {
-    return null;
-  }
-
   try {
+    const [payloadSegment, signature, ...extraSegments] = token.split(".");
+
+    if (!payloadSegment || !signature || extraSegments.length > 0) {
+      return null;
+    }
+
     if (!hasValidSignature(payloadSegment, signature)) {
       return null;
     }
