@@ -56,12 +56,41 @@ const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 
 // 5 Pastel colors for timetable blocks
 const blockColors = [
-  "bg-emerald-100 text-emerald-800 border-emerald-200",
-  "bg-teal-100 text-teal-800 border-teal-200",
-  "bg-cyan-100 text-cyan-800 border-cyan-200",
-  "bg-sky-100 text-sky-800 border-sky-200",
-  "bg-green-100 text-green-800 border-green-200",
+  "bg-violet-50 text-violet-900",
+  "bg-blue-50 text-blue-900",
+  "bg-emerald-50 text-emerald-900",
+  "bg-amber-50 text-amber-900",
+  "bg-rose-50 text-rose-900",
 ];
+
+function TimetableCourseCell({
+  item,
+  colorClass,
+  onRemove,
+}: {
+  item: StudentCourseRecord;
+  colorClass: string;
+  onRemove: (enrollmentId: string) => void;
+}) {
+  return (
+    <div className={`group absolute flex h-full w-full min-w-0 flex-col items-start justify-start overflow-hidden rounded-sm p-1 shadow-sm transition-transform hover:z-10 hover:scale-[1.02] sm:p-1.5 ${colorClass}`}>
+      <span className="line-clamp-2 w-full break-all text-[11px] font-bold leading-tight">{item.course.name}</span>
+      <span className="mt-0.5 flex w-full min-w-0 flex-col gap-0.5 truncate text-[9px] font-medium leading-none opacity-70">
+        <span className="w-full truncate">{item.classroom ?? "강의실 미정"}</span>
+      </span>
+      <div className="absolute inset-0 flex items-center justify-center rounded-sm bg-slate-950/35 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          onClick={() => onRemove(item.id)}
+          className="rounded-full bg-white p-1.5 text-red-500 shadow-md transition-colors hover:bg-red-50"
+          title="과목 삭제"
+          type="button"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function MyPagePlanner({
   courses,
@@ -350,13 +379,13 @@ export function MyPagePlanner({
           </div>
         ) : null}
         
-        <div className="p-5 overflow-x-auto">
-          <div className="min-w-[600px] relative border border-gray-200 rounded-lg bg-gray-50/30">
+        <div className="w-full min-w-0 overflow-hidden p-2 sm:p-5">
+          <div className="relative w-full min-w-0 overflow-hidden rounded-lg bg-gray-50/30 shadow-inner" style={{ contain: "layout paint" }}>
             {/* Header Row */}
-            <div className="flex h-10 border-b border-gray-200 bg-gray-50">
-              <div className="w-14 border-r border-gray-200 flex-shrink-0" />
+            <div className="grid h-10 border-b border-gray-100 bg-gray-50" style={{ gridTemplateColumns: "2.75rem repeat(5, minmax(0, 1fr))" }}>
+              <div className="border-r border-gray-100" />
               {days.map((d) => (
-                <div key={d} className="flex-1 border-r border-gray-200 text-center flex items-center justify-center font-medium text-gray-600 text-sm last:border-r-0">
+                <div key={d} className="flex min-w-0 items-center justify-center border-r border-gray-100 text-center text-xs font-semibold text-gray-600 last:border-r-0 sm:text-sm">
                   {d}
                 </div>
               ))}
@@ -366,12 +395,12 @@ export function MyPagePlanner({
             <div className="relative" style={{ height: `${HOURS.length * 60}px` }}>
               {/* Horizontal Lines & Time Labels */}
               {HOURS.map((hour, idx) => (
-                <div key={hour} className="absolute w-full flex" style={{ top: `${idx * 60}px`, height: '60px' }}>
-                  <div className="w-14 border-r border-gray-200 flex-shrink-0 flex items-start justify-center pt-2">
+                <div key={hour} className="absolute grid w-full" style={{ top: `${idx * 60}px`, height: "60px", gridTemplateColumns: "2.75rem repeat(5, minmax(0, 1fr))" }}>
+                  <div className="flex items-start justify-center border-r border-gray-100 pt-2">
                     <span className="text-xs text-gray-400 font-medium">{hour}</span>
                   </div>
                   {days.map((d) => (
-                    <div key={`${hour}-${d}`} className="flex-1 border-r border-b border-gray-200 border-dotted last:border-r-0" />
+                    <div key={`${hour}-${d}`} className="min-w-0 border-b border-r border-dotted border-gray-100 last:border-r-0" />
                   ))}
                 </div>
               ))}
@@ -388,20 +417,21 @@ export function MyPagePlanner({
                 return (
                   <div 
                     key={item.id}
-                    className={`absolute p-2 border rounded-md shadow-sm overflow-hidden group transition-transform hover:scale-[1.02] hover:z-10 ${colorClass}`}
+                    className="absolute min-w-0"
                     style={{
                       top: `${parseInt(blockStyle.top) - 40}px`, // adjust because we are inside a relative container that doesn't include header
                       height: blockStyle.height,
-                      left: `calc(3.5rem + ${dayIndex} * ((100% - 3.5rem) / 5))`,
-                      width: `calc((100% - 3.5rem) / 5)`
+                      left: `calc(2.75rem + ${dayIndex} * ((100% - 2.75rem) / 5))`,
+                      width: `calc((100% - 2.75rem) / 5)`,
                     }}
                   >
+                    <TimetableCourseCell item={item} colorClass={colorClass} onRemove={handleRemove} />
+                    {/*
                     <div className="text-xs font-bold leading-tight mb-1 break-words">{item.course.name}</div>
                     <div className="text-[10px] opacity-80 flex flex-col gap-0.5">
                       <span>{item.classroom ?? "강의실 미정"}</span>
                     </div>
                     
-                    {/* Delete overlay */}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-md">
                       <button 
                         onClick={() => handleRemove(item.id)}
@@ -411,6 +441,7 @@ export function MyPagePlanner({
                         <Trash2 size={14} />
                       </button>
                     </div>
+                    */}
                   </div>
                 );
               })}

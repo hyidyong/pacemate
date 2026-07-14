@@ -1,6 +1,7 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireDemoSession, type DemoSession } from "@/lib/auth/demo-session";
+import type { DemoProfile } from "@/services/session.service";
 import {
   getWeeklyPlanDraftByOfferingId,
   listWeeklyPlanDrafts,
@@ -261,8 +262,12 @@ export function getWeeklyRoadmapDraftPreviewForOffering(
  * The profile-to-professor-to-offering relationship is resolved server-side;
  * no professor or offering identifier is accepted from the client.
  */
-export async function getWeeklyPlanDraftsForProfessorSession(): Promise<WeeklyPlanReview[]> {
-  const session = await getSessionOrThrow();
+export async function getWeeklyPlanDraftsForProfessorSession(
+  profile?: Pick<DemoProfile, "id" | "role">,
+): Promise<WeeklyPlanReview[]> {
+  const session = profile
+    ? { profileId: profile.id, role: profile.role }
+    : await getSessionOrThrow();
   if (session.role !== "professor") {
     throw new WeeklyRoadmapServiceError(
       "wrong_role",

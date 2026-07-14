@@ -9,10 +9,39 @@ import {
   validateWeeklyPlanDraft,
 } from "@/services/weekly-plan-draft.server";
 import { deriveWeeklyPlanStatus } from "@/types/weekly-roadmap";
+import type { WeeklyPlanDraft } from "@/types/weekly-roadmap";
 
 function readOfferingId(formData: FormData) {
   const offeringId = formData.get("offeringId");
   return typeof offeringId === "string" && offeringId.trim() ? offeringId : null;
+}
+
+function readEditedWeeks(formData: FormData, draft: WeeklyPlanDraft) {
+  const raw = formData.get("editedWeeks");
+  if (typeof raw !== "string" || !raw.trim()) return draft.weeks;
+
+  try {
+    const edited = JSON.parse(raw) as unknown;
+    if (!Array.isArray(edited) || edited.length !== draft.weeks.length) return null;
+
+    const editedByWeek = new Map<number, { title: string; content: string }>();
+    for (const item of edited) {
+      if (!item || typeof item !== "object") return null;
+      const weekNumber = "weekNumber" in item && typeof item.weekNumber === "number" ? item.weekNumber : null;
+      const title = "title" in item && typeof item.title === "string" ? item.title.trim() : "";
+      const content = "content" in item && typeof item.content === "string" ? item.content.trim() : "";
+      if (weekNumber === null || !title || !content || title.length > 200 || content.length > 4000) return null;
+      editedByWeek.set(weekNumber, { title, content });
+    }
+
+    if (editedByWeek.size !== draft.weeks.length || draft.weeks.some((week) => !editedByWeek.has(week.weekNumber))) return null;
+    return draft.weeks.map((week) => {
+      const editedWeek = editedByWeek.get(week.weekNumber);
+      return editedWeek ? { ...week, title: editedWeek.title, topics: [editedWeek.content] } : week;
+    });
+  } catch {
+    return null;
+  }
 }
 
 function redirectWithApprovalState(state: "approved" | "already-approved" | "error"): never {
@@ -69,6 +98,9 @@ export async function approveWeeklyPlan(formData: FormData) {
     redirectWithApprovalState("error");
   }
 
+  const editedWeeks = readEditedWeeks(formData, draft);
+  if (!editedWeeks) redirectWithApprovalState("error");
+
   const { data: persistedPlans, error: persistedPlanError } = await supabase
     .from("course_weekly_plans")
     .select("offering_id, week_number, review_required, professor_confirmed")
@@ -80,7 +112,7 @@ export async function approveWeeklyPlan(formData: FormData) {
     redirectWithApprovalState("already-approved");
   }
 
-  const rows = draft.weeks.map((week) => ({
+  const rows = editedWeeks.map((week) => ({
     offering_id: draft.offeringId,
     week_number: week.weekNumber,
     title: week.title,

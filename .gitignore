@@ -1,5 +1,6 @@
 .env*.local
 .next/
+.worktrees/
 node_modules/
 tsconfig.tsbuildinfo
 .DS_Store

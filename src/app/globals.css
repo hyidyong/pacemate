@@ -94,6 +94,197 @@ select {
   padding: 24px 0 56px;
 }
 
+.site-footer {
+  width: 100%;
+  margin-top: 36px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(18, 24, 22, 0.96), rgba(11, 15, 14, 0.98)),
+    #0d1110;
+  color: rgba(230, 235, 231, 0.92);
+}
+
+.site-footer--with-mobile-nav {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+
+.site-footer__inner {
+  width: min(1240px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 40px 0 28px;
+}
+
+.site-footer__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 0.9fr);
+  gap: 28px;
+}
+
+.site-footer__brand,
+.site-footer__block {
+  min-width: 0;
+}
+
+.site-footer__eyebrow {
+  margin: 0 0 10px;
+  color: rgba(140, 160, 150, 0.9);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.site-footer__brand h2,
+.site-footer__block h3 {
+  margin: 0;
+  color: #f5f7f5;
+}
+
+.site-footer__brand h2 {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.site-footer__lead {
+  margin: 14px 0 0;
+  color: rgba(198, 207, 201, 0.9);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.site-footer__block h3 {
+  margin-bottom: 16px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.site-footer__list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.site-footer__list div {
+  display: grid;
+  gap: 4px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.site-footer__list div:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.site-footer__list dt {
+  color: rgba(140, 160, 150, 0.92);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.site-footer__list dd {
+  margin: 0;
+  color: rgba(239, 243, 240, 0.92);
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: keep-all;
+}
+
+.site-footer__list a {
+  color: inherit;
+}
+
+.site-footer__divider {
+  height: 1px;
+  margin: 28px 0 22px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.site-footer__bottom {
+  display: flex;
+  gap: 18px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.site-footer__policies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.site-footer__policy-link {
+  color: rgba(199, 208, 202, 0.86);
+  font-size: 13px;
+  line-height: 1.5;
+  transition: color 160ms ease;
+}
+
+.site-footer__policy-link:hover,
+.site-footer__policy-link:focus-visible {
+  color: #ffffff;
+}
+
+.site-footer__policy-link.is-emphasized {
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.site-footer__meta {
+  display: grid;
+  justify-items: end;
+  gap: 14px;
+}
+
+.site-footer__socials {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.site-footer__social-button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(239, 243, 240, 0.88);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.site-footer__social-button:hover,
+.site-footer__social-button:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(120, 225, 173, 0.35);
+  background: rgba(39, 57, 49, 0.8);
+  color: #ffffff;
+}
+
+.site-footer__copyright {
+  margin: 0;
+  color: rgba(140, 160, 150, 0.9);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: right;
+}
+
+@media (max-width: 767px) {
+  .site-footer {
+    display: none !important;
+  }
+}
+
 .app-shell-main {
   min-width: 0;
 }
@@ -598,10 +789,6 @@ select {
   color: var(--primary-foreground);
   border-color: var(--primary);
   background: var(--primary);
-}
-
-.mobile-tab-bar {
-  display: none;
 }
 
 .hero {
@@ -4798,46 +4985,6 @@ select {
     line-height: 1.65;
   }
 
-  .mobile-tab-bar {
-    position: fixed;
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
-    z-index: 50;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 4px;
-    padding: 8px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
-    border: 1px solid rgba(220, 231, 221, 0.9);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: 0 18px 42px rgba(23, 32, 26, 0.18);
-    backdrop-filter: blur(16px);
-  }
-
-  .mobile-tab-bar a {
-    display: grid;
-    min-height: 52px;
-    place-items: center;
-    gap: 3px;
-    border-radius: 12px;
-    color: var(--muted-foreground);
-    font-size: 11px;
-    font-weight: 800;
-    line-height: 1.1;
-  }
-
-  .mobile-tab-bar a:hover {
-    color: var(--accent-foreground);
-    background: var(--accent);
-  }
-
-  .mobile-tab-bar svg {
-    width: 20px;
-    height: 20px;
-  }
-
   .route-grid,
   .card-grid,
   .metric-grid,
@@ -5500,6 +5647,33 @@ select {
   .header-action-professor {
     display: none;
   }
+
+  .site-footer__inner {
+    padding: 34px 0 24px;
+  }
+
+  .site-footer__grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .site-footer__bottom {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .site-footer__meta {
+    justify-items: start;
+    align-items: flex-start;
+  }
+
+  .site-footer__socials {
+    justify-content: flex-start;
+  }
+
+  .site-footer__copyright {
+    text-align: left;
+  }
 }
 
 @media (max-width: 380px) {
@@ -5526,306 +5700,6 @@ select {
     white-space: normal;
   }
 }
-
-/* ========================================
-   Professor Dashboard Sidebar & New UI
-   ======================================== */
-
-.professor-sidebar-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--card);
-  color: var(--foreground);
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-.professor-sidebar-toggle:hover {
-  background: var(--muted);
-}
-
-.professor-sidebar-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.3);
-  z-index: 90;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-}
-.professor-sidebar-overlay.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.professor-sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 280px;
-  background: var(--card);
-  border-right: 1px solid var(--border);
-  z-index: 100;
-  transform: translateX(-100%);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
-  padding: 1.5rem 0;
-  box-shadow: 4px 0 24px rgba(0,0,0,0.08);
-}
-.professor-sidebar.professor-sidebar-open {
-  transform: translateX(0);
-}
-
-.professor-sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 1.25rem 1rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 0.75rem;
-}
-.professor-sidebar-header h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0;
-}
-.professor-sidebar-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: none;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  border-radius: 0.375rem;
-}
-.professor-sidebar-close:hover {
-  background: var(--muted);
-  color: var(--foreground);
-}
-
-.professor-sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.75rem 1.25rem;
-  border: none;
-  background: none;
-  color: var(--muted-foreground);
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.15s;
-  text-align: left;
-}
-.professor-sidebar-item:hover {
-  background: var(--muted);
-  color: var(--foreground);
-}
-.professor-sidebar-item.professor-sidebar-item-active {
-  background: var(--accent);
-  color: var(--foreground);
-  font-weight: 600;
-  border-left: 3px solid var(--primary);
-}
-
-.professor-content-area {
-  flex: 1;
-  min-width: 0;
-}
-
-.professor-content-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.25rem;
-}
-
-/* Toast */
-.professor-toast {
-  position: fixed;
-  top: 1.5rem;
-  left: 50%;
-  transform: translateX(-50%) translateY(-120%);
-  background: var(--primary);
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border-radius: 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-  z-index: 200;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
-}
-.professor-toast.professor-toast-show {
-  transform: translateX(-50%) translateY(0);
-}
-
-/* Course settings form consistency */
-.professor-settings-block {
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: var(--card);
-  margin-bottom: 1rem;
-}
-.professor-settings-block h3 {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  margin: 0 0 0.75rem;
-}
-.professor-settings-block .settings-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.professor-settings-block .settings-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 0.75rem;
-}
-
-/* ========================================
-   Responsive Navigation (Web vs Mobile)
-   ======================================== */
-
-/* Desktop Top Navigation (min-width: 768px) */
-@media (min-width: 768px) {
-  /* Hide mobile sidebar toggle */
-  .professor-sidebar-toggle {
-    display: none !important;
-  }
-  
-  /* Desktop Navbar Container */
-  .professor-desktop-nav {
-    display: flex;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 0.5rem;
-  }
-  
-  /* Nav Tab Item */
-  .professor-desktop-nav-item {
-    position: relative;
-    padding: 0.5rem 1rem;
-    font-weight: 600;
-    color: var(--muted-foreground);
-    cursor: pointer;
-    border-radius: 0.5rem;
-    transition: color 0.2s, background-color 0.2s;
-  }
-  .professor-desktop-nav-item[data-active="true"],
-  .professor-desktop-nav-item:hover {
-    color: var(--primary);
-    background-color: var(--accent);
-  }
-  
-  /* Dropdown Menu (Hover) */
-  .professor-desktop-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    min-width: 200px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.2s ease;
-    z-index: 100;
-    padding: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-  
-  /* Reveal Dropdown on Hover */
-  .professor-desktop-nav-item:hover .professor-desktop-dropdown {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-  }
-  
-  .professor-desktop-dropdown-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    color: var(--foreground);
-    font-size: 0.875rem;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    background: none;
-    border: none;
-    text-align: left;
-    width: 100%;
-  }
-  .professor-desktop-dropdown-item:hover,
-  .professor-desktop-dropdown-item[data-active="true"] {
-    background: var(--muted);
-    color: var(--primary);
-    font-weight: 600;
-  }
-
-  /* Hide old sidebar in desktop entirely */
-  .professor-sidebar, .professor-sidebar-overlay {
-    display: none !important;
-  }
-}
-
-/* Mobile Drawer & Accordion (max-width: 767px) */
-@media (max-width: 767px) {
-  /* Hide desktop nav */
-  .professor-desktop-nav {
-    display: none !important;
-  }
-
-  /* Keep sidebar overlay and drawer styles as they were, but add accordion */
-  .professor-sidebar-category {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 1rem 1.25rem;
-    border: none;
-    background: none;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--foreground);
-    cursor: pointer;
-    border-bottom: 1px solid var(--border);
-  }
-  .professor-sidebar-category:hover {
-    background: var(--muted);
-  }
-  .professor-sidebar-submenu {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-    background: var(--muted);
-  }
-  .professor-sidebar-submenu[data-open="true"] {
-    max-height: 500px; /* arbitrary large value for accordion */
-  }
-  
-  .professor-sidebar-item {
-    padding-left: 2rem !important; /* Indent sub items */
-  }
-}
-
 
 /* ========================================
    AI Chatbot UI (Support Form Replacement)
