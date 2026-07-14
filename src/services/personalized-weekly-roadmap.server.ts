@@ -270,6 +270,9 @@ export async function getPersonalizedWeeklyRoadmapForSession(offeringId: string)
   }
 
   const baseline: WeeklyBaseline[] = normalizeWeeklyBaseline((plansResult.data ?? []).map((row: any) => ({ weekNumber: row.week_number, title: row.title, topic: row.topic, content: row.content })));
+  if (!(plansResult.data ?? []).length) {
+    throw new Error("Approved weekly syllabus is unavailable");
+  }
   const source = (sourceResult.data ?? { source_version: 1, foundation_knowledge: "", focus_keywords: [], professor_notes: "" }) as Source;
   const onboarding = profileResult.data ?? {};
   const onboardingHash = hash(onboarding);
@@ -380,7 +383,7 @@ export async function getSavedPersonalizedRoadmapForSession(offeringId: string) 
 export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?: string) {
   const profile = await getStudentProfile();
   if (!profile) {
-    return { offerings: [], selectedOfferingId: "", weeks: [], completedWeeks: [] as number[] };
+    return { offerings: [], selectedOfferingId: "", weeks: [], completedWeeks: [] as number[], hasPersonalizedRoadmap: false };
   }
 
   const offerings = await getStudentRoadmapOfferingsForSession().catch((error) => {
@@ -389,17 +392,17 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
   });
   const selectedOfferingId = offerings.some((offering) => offering.offeringId === requestedOfferingId)
     ? requestedOfferingId!
-    : offerings[0]?.offeringId ?? "";
+    : "";
 
   if (!selectedOfferingId) {
-    return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[] };
+    return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[], hasPersonalizedRoadmap: false };
   }
 
   const supabase = createRoadmapSupabaseClient();
   if (!supabase) {
-    return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[] };
+    return { offerings, selectedOfferingId, weeks: [], completedWeeks: [] as number[], hasPersonalizedRoadmap: false };
   }
-  const [weeks, progressResult] = await Promise.all([
+  const [savedWeeks, progressResult, plansResult] = await Promise.all([
     getSavedPersonalizedRoadmapForSession(selectedOfferingId).catch((error) => {
       console.error("Saved personalized roadmap could not be loaded", error);
       return [];
@@ -410,16 +413,38 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
       .eq("student_id", profile.id)
       .eq("offering_id", selectedOfferingId)
       .eq("progress_status_override", "covered"),
+    supabase
+      .from("course_weekly_plans")
+      .select("week_number,title,topic,content")
+      .eq("offering_id", selectedOfferingId)
+      .eq("professor_confirmed", true)
+      .eq("review_required", false)
+      .order("week_number"),
   ]);
 
   if (progressResult.error) {
     console.error("Student roadmap progress could not be read", progressResult.error);
   }
 
+  if (plansResult.error) {
+    console.error("Student roadmap syllabus could not be read", plansResult.error);
+  }
+
+  const baselineWeeks = (plansResult.data ?? []).map((row) => ({
+    week_number: row.week_number,
+    baseline_title: row.title,
+    baseline_topic: row.topic,
+    baseline_content: row.content,
+    personalized_goal: row.topic,
+    learning_activities: [],
+    review_guide: row.content,
+  }));
+
   return {
     offerings,
     selectedOfferingId,
-    weeks,
+    weeks: savedWeeks.length ? savedWeeks : baselineWeeks,
+    hasPersonalizedRoadmap: savedWeeks.length > 0,
     completedWeeks: progressResult.error
       ? []
       : (progressResult.data ?? []).map((row) => row.week_number),

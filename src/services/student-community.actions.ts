@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDemoProfile } from "@/services/session.service";
 import type { CourseRecord, StudentCourseRecord } from "@/services/student-community.service";
@@ -11,6 +12,15 @@ const studentCourseSelectColumns =
 async function getProfileId() {
   const profile = await getDemoProfile();
   return profile?.role === "student" ? profile.id : null;
+}
+
+function createStudentCommunitySupabaseClient() {
+  try {
+    return createSupabaseAdminClient();
+  } catch (error) {
+    console.error("Student timetable Supabase admin client is unavailable", error);
+    return null;
+  }
 }
 
 function requiredText(value: FormDataEntryValue | null, fallback = "") {
@@ -79,7 +89,10 @@ export async function addCourseToSchedule(formData: FormData) {
   if (!profileId || !courseId) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
-  const supabase = await createSupabaseServerClient();
+  const supabase = createStudentCommunitySupabaseClient();
+  if (!supabase) {
+    return { ok: false, message: "시간표 데이터베이스 설정을 확인해 주세요." };
+  }
 
   const payload = {
     student_id: profileId,
@@ -144,7 +157,10 @@ export async function toggleFavoriteCourse(formData: FormData) {
   if (!profileId || !enrollmentId) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
-  const supabase = await createSupabaseServerClient();
+  const supabase = createStudentCommunitySupabaseClient();
+  if (!supabase) {
+    return { ok: false, message: "시간표 데이터베이스 설정을 확인해 주세요." };
+  }
 
   const { error } = await supabase
     .from("student_courses")
@@ -169,7 +185,10 @@ export async function removeCourseFromSchedule(formData: FormData) {
   if (!profileId || !enrollmentId) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
-  const supabase = await createSupabaseServerClient();
+  const supabase = createStudentCommunitySupabaseClient();
+  if (!supabase) {
+    return { ok: false, message: "시간표 데이터베이스 설정을 확인해 주세요." };
+  }
 
   const { data: existing, error: lookupError } = await supabase
     .from("student_courses")
@@ -200,6 +219,7 @@ export async function removeCourseFromSchedule(formData: FormData) {
 
   revalidatePath("/mypage");
   revalidatePath("/dashboard");
+  revalidatePath("/roadmap");
   return { ok: true, message: "시간표에서 제거했습니다.", enrollmentId: existing.id as string };
 }
 
