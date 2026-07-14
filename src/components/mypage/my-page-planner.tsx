@@ -121,7 +121,7 @@ export function MyPagePlanner({
   const [activeCommunityTab, setActiveCommunityTab] = useState<"my" | "scrap" | "comment" | "like">("my");
   const [activeTab, setActiveTab] = useState<MyPageSection>("all");
   const [todoTitle, setTodoTitle] = useState("");
-  const [todoDueDate, setTodoDueDate] = useState(getLocalDateKey(new Date()));
+  const [todoDueDate, setTodoDueDate] = useState("");
   const [todoCategory, setTodoCategory] = useState<StudentTodoCategory>("과제");
   const [todoEditId, setTodoEditId] = useState<string | null>(null);
   const [todos, setTodos] = useState<StudentTodoItem[]>([]);
@@ -132,6 +132,12 @@ export function MyPagePlanner({
   const [syncedLocalCourseIds, setSyncedLocalCourseIds] = useState<string[]>([]);
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0];
+
+  // Keep the server's first render deterministic, then set the browser-local
+  // default date after hydration.
+  useEffect(() => {
+    setTodoDueDate((value) => value || getLocalDateKey(new Date()));
+  }, []);
 
   const filteredCourses = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

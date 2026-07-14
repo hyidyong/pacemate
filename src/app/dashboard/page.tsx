@@ -7,7 +7,7 @@ import { clearDemoSession } from "@/services/demo-auth.service";
 import { getNotificationsForProfile } from "@/services/notifications.service";
 import { getDemoProfile } from "@/services/session.service";
 import { WeeklyMissions } from "@/components/roadmap/weekly-missions";
-import { supabase } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getMyCourses, type StudentCourseRecord } from "@/services/student-community.service";
 import { StudentTodoCard, type StudentTodoItem } from "@/components/dashboard/student-todo-card";
 import { StudentDashboardContent } from "@/components/dashboard/student-dashboard-content";
@@ -121,6 +121,9 @@ export default async function DashboardPage() {
   let recommendationResult: Awaited<ReturnType<typeof getStudentLearningRecommendations>> | null = null;
   let eligibilityCourseName: string | null = null;
   if (profile.role === "student") {
+    // This page runs on the server, so keep the signed-in user's cookies on
+    // every query and let Supabase RLS enforce the same access as the API.
+    const supabase = await createSupabaseServerClient();
     myCourses = await getMyCourses(profile.id);
     announcements = await listStudentCourseNotices(profile.id);
     academicEvents = getAcademicEvents().filter(

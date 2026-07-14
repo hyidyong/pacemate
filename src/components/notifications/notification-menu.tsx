@@ -11,6 +11,8 @@ type NotificationMenuProps = {
   notifications: UserNotification[];
   unreadCount: number;
   profileId: string;
+  /** Only one responsive header instance owns the shared Realtime channel. */
+  enableRealtime?: boolean;
 };
 
 function asNotification(value: Record<string, unknown>): UserNotification | null {
@@ -29,7 +31,12 @@ function newestFirst(items: UserNotification[]) {
   );
 }
 
-export function NotificationMenu({ notifications, unreadCount, profileId }: NotificationMenuProps) {
+export function NotificationMenu({
+  notifications,
+  unreadCount,
+  profileId,
+  enableRealtime = false,
+}: NotificationMenuProps) {
   const channelInstanceId = useId().replaceAll(":", "");
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(notifications);
@@ -39,7 +46,9 @@ export function NotificationMenu({ notifications, unreadCount, profileId }: Noti
 
   useEffect(() => setItems(newestFirst(notifications)), [notifications]);
   useEffect(() => {
-    if (!profileId) return;
+    // Both desktop and mobile headers stay mounted for responsive CSS, so only
+    // the desktop instance should subscribe and surface live toasts.
+    if (!enableRealtime || !profileId) return;
 
     const channel = supabase
       .channel(`in-app-notifications:${profileId}:${channelInstanceId}`)
@@ -51,7 +60,7 @@ export function NotificationMenu({ notifications, unreadCount, profileId }: Noti
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [channelInstanceId, profileId]);
+  }, [channelInstanceId, enableRealtime, profileId]);
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(null), 5000);

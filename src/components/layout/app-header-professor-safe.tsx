@@ -275,7 +275,12 @@ export function AppHeader({
             </Link>
           ) : null}
           {isAuthenticated ? (
-            <NotificationMenu notifications={notifications} unreadCount={unreadCount} profileId={profileId} />
+            <NotificationMenu
+              notifications={notifications}
+              unreadCount={unreadCount}
+              profileId={profileId}
+              enableRealtime
+            />
           ) : null}
           {isAuthenticated && !isProfessor && !isOperator ? (
             <>
