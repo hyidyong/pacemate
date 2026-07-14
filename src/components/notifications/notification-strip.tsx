@@ -14,9 +14,10 @@ import { useAppStore } from "@/store/app-store";
 
 type NotificationStripProps = {
   notifications: UserNotification[];
+  showSummary?: boolean;
 };
 
-export function NotificationStrip({ notifications: initialNotifications }: NotificationStripProps) {
+export function NotificationStrip({ notifications: initialNotifications, showSummary = true }: NotificationStripProps) {
   const router = useRouter();
   const { addTimetableItem } = useAppStore();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -120,7 +121,7 @@ export function NotificationStrip({ notifications: initialNotifications }: Notif
           </span>
           <div className="notification-strip-copy">
             <h2>확인할 알림</h2>
-            <p>최근 알림 {notifications.length}개가 있습니다.</p>
+            {showSummary ? <p>최근 알림 {notifications.length}개가 있습니다.</p> : null}
           </div>
           <Link className="notification-strip-link" href="/notifications">
             전체 보기

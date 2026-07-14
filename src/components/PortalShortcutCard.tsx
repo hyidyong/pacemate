@@ -63,9 +63,11 @@ export default function PortalShortcutCard({
           <h2 id={headingId} className="portal-shortcut-title">
             {title}
           </h2>
-          <p className="portal-shortcut-subtitle">
-            {description}
-          </p>
+          {description ? (
+            <p className="portal-shortcut-subtitle">
+              {description}
+            </p>
+          ) : null}
         </div>
       </div>
 

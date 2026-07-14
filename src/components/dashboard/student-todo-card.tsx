@@ -233,7 +233,6 @@ export function StudentTodoCard({ items }: { items: StudentTodoItem[] }) {
           </div>
           <div>
             <h3 className="font-bold text-gray-800 text-[15px]">오늘의 To-do</h3>
-            <p className="text-[11px] text-gray-400">공지·상담 데이터와 직접 등록한 할 일이 함께 표시됩니다.</p>
           </div>
         </div>
         <Link href="/mypage#todo" className="shrink-0 text-right text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
@@ -244,7 +243,6 @@ export function StudentTodoCard({ items }: { items: StudentTodoItem[] }) {
       {combinedItems.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center">
           <p className="text-sm font-medium text-gray-600">표시할 To-do 항목이 없습니다.</p>
-          <p className="mt-1 text-[11px] text-gray-400">교수 공지나 상담 신청, 또는 오늘 등록한 할 일을 확인해 보세요.</p>
         </div>
       ) : (
         <>

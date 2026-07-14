@@ -4,11 +4,10 @@ export function StudentLearningRecommendationsCard({ result }: { result: Student
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-labelledby="student-recommendations-title">
       <h2 id="student-recommendations-title" className="text-lg font-bold text-slate-900">다음 학습 추천</h2>
-      <p className="mt-1 text-sm text-slate-500">승인된 주차계획과 본인의 학습 상태만 사용합니다.</p>
       {!result.ok ? (
         <p className="mt-4 text-sm text-slate-600">추천 근거를 불러오지 못했습니다.</p>
       ) : result.recommendations.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-600">현재 표시할 근거 기반 추천이 없습니다.</p>
+        <p className="mt-4 text-sm text-slate-600">표시할 추천이 없습니다.</p>
       ) : (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {result.recommendations.map((item) => (
@@ -20,7 +19,6 @@ export function StudentLearningRecommendationsCard({ result }: { result: Student
           ))}
         </div>
       )}
-      <p className="mt-4 text-xs leading-5 text-slate-500">추천은 성적·학점·졸업 가능 여부를 판단하지 않습니다.</p>
     </section>
   );
 }
