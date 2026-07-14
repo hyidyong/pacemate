@@ -46,7 +46,7 @@ test("community migration separates posts and all linked interaction policies", 
   assert.equal(matches.length, 1);
   const sql = await readFile(new URL(`../../supabase/migrations/${matches[0]}`, import.meta.url), "utf8");
 
-  assert.match(sql, /add column community_type text/i);
+  assert.match(sql, /add column(?: if not exists)? community_type text/i);
   assert.match(sql, /check \(community_type in \('student', 'professor'\)\)/i);
   assert.match(sql, /update public\.posts[\s\S]*p\.role = 'student'/i);
   assert.match(sql, /update public\.posts[\s\S]*p\.role = 'professor'/i);

@@ -3,8 +3,8 @@ begin;
 alter table public.escalations
   add column if not exists is_anonymous boolean not null default false;
 
--- Keep the original six-argument RPC callable for existing forms.  The new
--- overload adds the only new persisted field and delegates all course,
+-- Keep the original six-argument RPC callable for existing forms. The new
+-- overload adds only the persisted anonymity flag, while delegating course,
 -- enrollment, idempotency, and professor-route checks to the reviewed RPC.
 create or replace function public.create_professor_question(
   p_course_id uuid,

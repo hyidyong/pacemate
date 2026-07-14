@@ -4,13 +4,6 @@ do $$
 declare
   item record;
 begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'posts' and column_name = 'community_type'
-  ) then
-    raise exception 'posts.community_type already exists';
-  end if;
-
   for item in select unnest(array['posts', 'comments', 'post_reactions', 'reports']) as table_name
   loop
     if not exists (
@@ -31,9 +24,24 @@ begin
 end
 $$;
 
-alter table public.posts add column community_type text;
-alter table public.posts add constraint posts_community_type_check
-  check (community_type in ('student', 'professor'));
+-- Some production snapshots already received the additive column through an
+-- earlier hotfix. Reuse it and still apply the authoritative backfill and RLS
+-- policy replacement below.
+alter table public.posts add column if not exists community_type text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'posts_community_type_check'
+      and conrelid = 'public.posts'::regclass
+  ) then
+    alter table public.posts add constraint posts_community_type_check
+      check (community_type in ('student', 'professor'));
+  end if;
+end
+$$;
 
 update public.posts posts
 set community_type = 'student'

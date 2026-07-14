@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle2, ClipboardCheck, XCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { NotificationStrip } from "@/components/notifications/notification-strip";
+import { AdminNotificationConsole } from "@/components/admin/admin-notification-console";
 import { Button } from "@/components/ui/button";
 import { updateRoadmapRevisionStatus } from "@/services/admin-approval.actions";
 import { getAdminApprovalData } from "@/services/admin-approval.service";
@@ -49,6 +50,8 @@ export default async function AdminPage({
       </section>
 
       <NotificationStrip notifications={notifications} />
+
+      {profile?.role === "admin" ? <AdminNotificationConsole /> : null}
 
       <section className="section admin-support-panel">
         <div className="community-section-heading">

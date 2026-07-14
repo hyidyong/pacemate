@@ -4,9 +4,12 @@ export type NotificationRecipientRole =
   | "assistant"
   | "admin";
 
+export type NotificationTargetGroup = "ALL" | "STUDENT" | "PROFESSOR";
+
 export type UserNotification = {
   id: string;
   recipient_role: NotificationRecipientRole | null;
+  target_group: NotificationTargetGroup;
   category: "question" | "counseling" | "revision" | "system";
   title: string;
   body: string;

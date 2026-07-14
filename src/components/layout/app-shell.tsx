@@ -43,6 +43,7 @@ export async function AppShell({
           homeHref={homeHref}
           notifications={notifications}
           unreadCount={unreadCount}
+          profileId={profile?.id ?? ""}
         />
 
         <main

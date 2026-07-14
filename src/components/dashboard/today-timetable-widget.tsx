@@ -8,9 +8,9 @@ import type { StudentCourseRecord } from "@/services/student-community.service";
 const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
 
 export function TodayTimetableWidget({ myCourses }: { myCourses: StudentCourseRecord[] }) {
-  const { timetableCourses } = useStudentTimetable(myCourses);
+  const { timetableItems } = useStudentTimetable(myCourses);
   const today = dayNames[new Date().getDay()];
-  const todayCourses = timetableCourses
+  const todayCourses = timetableItems
     .filter((item) => item.schedule_day === today && item.start_time && item.end_time)
     .sort((a, b) => a.start_time!.localeCompare(b.start_time!));
 

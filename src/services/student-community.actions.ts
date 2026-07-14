@@ -5,9 +5,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDemoProfile } from "@/services/session.service";
 import type { CourseRecord, StudentCourseRecord } from "@/services/student-community.service";
+import { syncStudentCourseSchedule } from "@/services/student-timetable.service";
+import { validateScheduleSlots, type ScheduleSlot, type ScheduleSlotInput } from "@/services/student-timetable.rules";
 
 const studentCourseSelectColumns =
-  "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text)";
+  "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text), schedule_slots:student_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)";
 
 async function getProfileId() {
   const profile = await getDemoProfile();
@@ -28,6 +30,29 @@ function requiredText(value: FormDataEntryValue | null, fallback = "") {
   return text || fallback;
 }
 
+function readScheduleSlots(formData: FormData): ScheduleSlot[] {
+  const raw = formData.get("scheduleSlots");
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) return validateScheduleSlots(parsed as ScheduleSlotInput[]);
+    } catch {
+      return [];
+    }
+  }
+  return validateScheduleSlots([{
+    dayOfWeek: requiredText(formData.get("scheduleDay")),
+    startTime: requiredText(formData.get("startTime"), "09:00"),
+    endTime: requiredText(formData.get("endTime"), "10:15"),
+    classroom: requiredText(formData.get("classroom")),
+  }]);
+}
+
+function revalidateTimetablePaths() {
+  revalidatePath("/mypage");
+  revalidatePath("/dashboard");
+}
+
 function normalizeJoinedStudentCourse(record: unknown): StudentCourseRecord | null {
   if (!record || typeof record !== "object") return null;
 
@@ -40,6 +65,7 @@ function normalizeJoinedStudentCourse(record: unknown): StudentCourseRecord | nu
     end_time?: unknown;
     classroom?: unknown;
     semester_label?: unknown;
+    schedule_slots?: unknown;
     course?: unknown;
   };
   const joinedCourse = Array.isArray(row.course) ? row.course[0] : row.course;
@@ -68,6 +94,25 @@ function normalizeJoinedStudentCourse(record: unknown): StudentCourseRecord | nu
     end_time: typeof row.end_time === "string" ? row.end_time : null,
     classroom: typeof row.classroom === "string" ? row.classroom : null,
     semester_label: typeof row.semester_label === "string" ? row.semester_label : "2026-2",
+    schedule_slots: Array.isArray(row.schedule_slots)
+      ? row.schedule_slots.flatMap((slot) => {
+          if (!slot || typeof slot !== "object") return [];
+          const value = slot as Record<string, unknown>;
+          if (
+            typeof value.id !== "string" ||
+            typeof value.day_of_week !== "string" ||
+            typeof value.start_time !== "string" ||
+            typeof value.end_time !== "string"
+          ) return [];
+          return [{
+            id: value.id,
+            day_of_week: value.day_of_week,
+            start_time: value.start_time,
+            end_time: value.end_time,
+            classroom: typeof value.classroom === "string" ? value.classroom : null,
+          }];
+        })
+      : [],
     course: {
       id: course.id,
       school_id: typeof course.school_id === "string" ? course.school_id : null,
@@ -94,6 +139,10 @@ export async function addCourseToSchedule(formData: FormData) {
     return { ok: false, message: "시간표 데이터베이스 설정을 확인해 주세요." };
   }
 
+  const manualSlots = readScheduleSlots(formData);
+  if (!manualSlots.length) {
+    return { ok: false, message: "At least one valid day and time is required." };
+  }
   const payload = {
     student_id: profileId,
     course_id: courseId,
@@ -106,6 +155,12 @@ export async function addCourseToSchedule(formData: FormData) {
     semester_label: requiredText(formData.get("semesterLabel"), "2026-2"),
     source_text: "mypage",
   };
+
+  // The legacy columns remain a compatibility snapshot of the first slot.
+  payload.schedule_day = manualSlots[0].dayOfWeek;
+  payload.start_time = manualSlots[0].startTime;
+  payload.end_time = manualSlots[0].endTime;
+  payload.classroom = manualSlots[0].classroom ?? "";
 
   const { data: existing, error: lookupError } = await supabase
     .from("student_courses")
@@ -139,14 +194,116 @@ export async function addCourseToSchedule(formData: FormData) {
     return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
+  const studentCourseId = typeof (data as { id?: unknown })?.id === "string"
+    ? (data as { id: string }).id
+    : null;
+  if (!studentCourseId) {
+    return { ok: false, message: "시간표 수강 정보를 확인하지 못했습니다." };
+  }
+
+  try {
+    await syncStudentCourseSchedule({
+      supabase,
+      studentCourseId,
+      courseId,
+      semesterLabel: payload.semester_label,
+      manualSlots,
+    });
+  } catch (syncError) {
+    console.error("addCourseToSchedule schedule sync failed", syncError);
+    if (!existing?.id) {
+      await supabase.from("student_courses").delete().eq("id", studentCourseId).eq("student_id", profileId);
+    }
+    return { ok: false, message: "시간표를 안전하게 동기화하지 못했습니다. 기존 시간표는 유지됩니다." };
+  }
+
   revalidatePath("/mypage");
   revalidatePath("/dashboard");
   revalidatePath("/roadmap");
+  revalidatePath("/notices");
   return {
     ok: true,
     message: "시간표에 등록했습니다.",
     course: normalizeJoinedStudentCourse(data),
   };
+}
+
+export async function saveCustomCourseToSchedule(formData: FormData) {
+  const profileId = await getProfileId();
+  const title = requiredText(formData.get("title"));
+  const customCourseId = requiredText(formData.get("customCourseId"));
+  const slots = readScheduleSlots(formData);
+  if (!profileId || !title || !slots.length) {
+    return { ok: false, message: "A title and at least one valid day and time are required." };
+  }
+  const supabase = createStudentCommunitySupabaseClient();
+  if (!supabase) return { ok: false, message: "Timetable storage is unavailable." };
+
+  const color = requiredText(formData.get("color")) || null;
+  const { data: customCourse, error: courseError } = customCourseId
+    ? await supabase.from("student_custom_courses").update({ title, color })
+        .eq("id", customCourseId).eq("student_id", profileId).select("id, title, color").single()
+    : await supabase.from("student_custom_courses").insert({ student_id: profileId, title, color })
+        .select("id, title, color").single();
+  if (courseError || !customCourse?.id) {
+    console.error("saveCustomCourseToSchedule failed:", courseError?.message);
+    return { ok: false, message: "Unable to save the custom course." };
+  }
+
+  const { error: slotError } = await supabase.rpc("replace_student_custom_course_schedule_slots", {
+    p_student_custom_course_id: customCourse.id,
+    p_slots: slots.map((slot) => ({
+      day_of_week: slot.dayOfWeek,
+      start_time: slot.startTime,
+      end_time: slot.endTime,
+      classroom: slot.classroom,
+    })),
+  });
+  if (slotError) {
+    // A newly-created parent has no value without its time slots.  Remove it
+    // on failure; existing parents retain their pre-existing slot set because
+    // the RPC rolls its delete and insert back together.
+    if (!customCourseId) {
+      await supabase.from("student_custom_courses").delete()
+        .eq("id", customCourse.id).eq("student_id", profileId);
+    }
+    return { ok: false, message: "Unable to save custom course times." };
+  }
+
+  const { data: savedSlots, error: savedSlotsError } = await supabase
+    .from("student_custom_course_schedule_slots")
+    .select("id, day_of_week, start_time, end_time, classroom")
+    .eq("student_custom_course_id", customCourse.id)
+    .order("day_of_week", { ascending: true })
+    .order("start_time", { ascending: true });
+  if (savedSlotsError) return { ok: false, message: "Unable to load custom course times." };
+
+  const course: StudentCourseRecord = {
+    id: `custom:${customCourse.id}`, status: "interested", is_favorite: false,
+    schedule_day: null, start_time: null, end_time: null, classroom: null, semester_label: "2026-2",
+    is_custom: true, custom_course_id: customCourse.id, timetable_color: customCourse.color ?? null,
+    schedule_slots: savedSlots ?? [],
+    course: { id: `custom:${customCourse.id}`, school_id: null, code: "CUSTOM", name: customCourse.title,
+      credit: 0, category: "custom", description: null, prerequisite_text: null },
+  };
+  revalidateTimetablePaths();
+  return { ok: true, message: "Custom course saved.", course };
+}
+
+export async function removeCustomCourseFromSchedule(formData: FormData) {
+  const profileId = await getProfileId();
+  const customCourseId = requiredText(formData.get("customCourseId"));
+  if (!profileId || !customCourseId) return { ok: false, message: "Custom course not found." };
+  const supabase = createStudentCommunitySupabaseClient();
+  if (!supabase) return { ok: false, message: "Timetable storage is unavailable." };
+
+  // Database FK cascade deletes this course's slots, without touching the
+  // authoritative student_courses row used by roadmap and notices.
+  const { error } = await supabase.from("student_custom_courses").delete()
+    .eq("id", customCourseId).eq("student_id", profileId);
+  if (error) return { ok: false, message: "Unable to remove the custom course." };
+  revalidateTimetablePaths();
+  return { ok: true, message: "Custom course removed." };
 }
 
 export async function toggleFavoriteCourse(formData: FormData) {

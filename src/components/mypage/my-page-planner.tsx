@@ -18,12 +18,15 @@ import {
 } from "lucide-react";
 import {
   addCourseToSchedule,
+  removeCustomCourseFromSchedule,
   removeCourseFromSchedule,
+  saveCustomCourseToSchedule,
 } from "@/services/student-community.actions";
 import {
   createLocalTimetableCourse,
   isLocalTimetableCourse,
   removeTimetableCourse,
+  type TimetableDisplayItem,
   upsertTimetableCourse,
   useStudentTimetable,
 } from "@/lib/student-timetable";
@@ -70,7 +73,7 @@ function TimetableCourseCell({
   colorClass,
   onRemove,
 }: {
-  item: StudentCourseRecord;
+  item: TimetableDisplayItem;
   colorClass: string;
   onRemove: (enrollmentId: string) => void;
 }) {
@@ -109,6 +112,10 @@ export function MyPagePlanner({
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:15");
   const [classroom, setClassroom] = useState("");
+  const [regularSlotsJson, setRegularSlotsJson] = useState("");
+  const [customTitle, setCustomTitle] = useState("");
+  const [customSlots, setCustomSlots] = useState([{ day: "월", startTime: "09:00", endTime: "10:15", classroom: "" }]);
+  const [editingCustomId, setEditingCustomId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeCommunityTab, setActiveCommunityTab] = useState<"my" | "scrap" | "comment" | "like">("my");
@@ -121,7 +128,7 @@ export function MyPagePlanner({
   const [doneIds, setDoneIds] = useState<string[]>([]);
   const [isTodoLoaded, setIsTodoLoaded] = useState(false);
   const [isDoneLoaded, setIsDoneLoaded] = useState(false);
-  const { timetableCourses, setTimetableCourses } = useStudentTimetable(myCourses);
+  const { timetableCourses, timetableItems, setTimetableCourses } = useStudentTimetable(myCourses);
   const [syncedLocalCourseIds, setSyncedLocalCourseIds] = useState<string[]>([]);
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0];
@@ -202,6 +209,7 @@ export function MyPagePlanner({
     formData.set("endTime", endTime);
     formData.set("classroom", classroom || nextCourse.classroom || "");
     formData.set("semesterLabel", "2026-2");
+    if (regularSlotsJson.trim()) formData.set("scheduleSlots", regularSlotsJson);
 
     startTransition(async () => {
       const result = await addCourseToSchedule(formData);
@@ -213,8 +221,59 @@ export function MyPagePlanner({
     });
   }
 
+  function handleSaveCustomCourse() {
+    const formData = new FormData();
+    formData.set("title", customTitle);
+    if (editingCustomId) formData.set("customCourseId", editingCustomId);
+    formData.set("scheduleSlots", JSON.stringify(customSlots.map((slot) => ({
+      dayOfWeek: slot.day,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      classroom: slot.classroom,
+    }))));
+    startTransition(async () => {
+      const result = await saveCustomCourseToSchedule(formData);
+      setFeedback({ ok: result.ok, message: result.message });
+      if (result.ok && result.course) {
+        setTimetableCourses(upsertTimetableCourse(timetableCourses, result.course));
+        setCustomTitle("");
+        setEditingCustomId(null);
+        setCustomSlots([{ day: days[0], startTime: "09:00", endTime: "10:15", classroom: "" }]);
+        router.refresh();
+      }
+    });
+  }
+
+  function beginCustomCourseEdit(course: StudentCourseRecord) {
+    if (!course.is_custom || !course.custom_course_id) return;
+    setEditingCustomId(course.custom_course_id);
+    setCustomTitle(course.course.name);
+    const slots = (course.schedule_slots ?? []).map((slot) => ({
+      day: slot.day_of_week,
+      startTime: slot.start_time.slice(0, 5),
+      endTime: slot.end_time.slice(0, 5),
+      classroom: slot.classroom ?? "",
+    }));
+    setCustomSlots(slots.length ? slots : [{ day: days[0], startTime: "09:00", endTime: "10:15", classroom: "" }]);
+  }
+
   function handleRemove(enrollmentId: string) {
     setFeedback(null);
+
+    const record = timetableCourses.find((item) => item.id === enrollmentId);
+    if (record?.is_custom && record.custom_course_id) {
+      const formData = new FormData();
+      formData.set("customCourseId", record.custom_course_id);
+      startTransition(async () => {
+        const result = await removeCustomCourseFromSchedule(formData);
+        setFeedback({ ok: result.ok, message: result.message });
+        if (result.ok) {
+          setTimetableCourses(removeTimetableCourse(timetableCourses, enrollmentId));
+          router.refresh();
+        }
+      });
+      return;
+    }
 
     if (isLocalTimetableCourse(enrollmentId)) {
       setTimetableCourses(removeTimetableCourse(timetableCourses, enrollmentId));
@@ -466,7 +525,7 @@ export function MyPagePlanner({
               ))}
 
               {/* Course Blocks */}
-              {timetableCourses.map((item, index) => {
+              {timetableItems.map((item, index) => {
                 if (!item.schedule_day || !item.start_time || !item.end_time) return null;
                 const dayIndex = days.indexOf(item.schedule_day);
                 if (dayIndex === -1) return null;
@@ -485,7 +544,7 @@ export function MyPagePlanner({
                       width: `calc((100% - 2.75rem) / 5)`,
                     }}
                   >
-                    <TimetableCourseCell item={item} colorClass={colorClass} onRemove={handleRemove} />
+                    <TimetableCourseCell item={item} colorClass={colorClass} onRemove={() => handleRemove(item.parentId)} />
                     {/*
                     <div className="text-xs font-bold leading-tight mb-1 break-words">{item.course.name}</div>
                     <div className="text-[10px] opacity-80 flex flex-col gap-0.5">
@@ -612,6 +671,17 @@ export function MyPagePlanner({
                 </div>
               </div>
 
+              <details className="mt-3 rounded-xl bg-emerald-50/70 p-3 text-xs text-emerald-900">
+                <summary className="cursor-pointer font-semibold">여러 수업 시간 입력</summary>
+                <p className="mt-2 text-emerald-700">강의계획서 시간이 없을 때 JSON 배열로 요일·시간·강의실을 추가할 수 있습니다.</p>
+                <textarea
+                  value={regularSlotsJson}
+                  onChange={(event) => setRegularSlotsJson(event.target.value)}
+                  placeholder={'[{"dayOfWeek":"월","startTime":"09:00","endTime":"10:15","classroom":"A101"},{"dayOfWeek":"수","startTime":"09:00","endTime":"10:15","classroom":"A101"}]'}
+                  className="mt-2 min-h-20 w-full rounded-lg border border-emerald-100 bg-white p-2 font-mono text-[11px] text-slate-700 outline-none focus:border-emerald-400"
+                />
+              </details>
+
               <button
                 onClick={handleAddCourse}
                 disabled={isPending || !selectedCourse || (selectedCourse ? scheduledCourseIds.has(selectedCourse.id) : false)}
@@ -622,6 +692,46 @@ export function MyPagePlanner({
               </button>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className={`rounded-2xl bg-sky-50/70 p-5 shadow-sm ${activeTab === "all" || activeTab === "timetable" ? "" : "hidden"}`}>
+        <div className="mb-4 flex items-center gap-3">
+          <CalendarPlus className="text-sky-600" size={20} />
+          <div>
+            <h2 className="text-lg font-bold text-slate-800">직접 입력 수업</h2>
+            <p className="text-xs text-slate-500">시간표에만 표시되며 수강·로드맵 데이터에는 추가되지 않습니다.</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <input
+            value={customTitle}
+            onChange={(event) => setCustomTitle(event.target.value)}
+            placeholder="수업 이름"
+            className="w-full rounded-xl border border-sky-100 bg-white px-3 py-2.5 text-sm outline-none focus:border-sky-400"
+          />
+          {customSlots.map((slot, index) => (
+            <div key={index} className="grid gap-2 rounded-xl bg-white/90 p-3 shadow-sm sm:grid-cols-[0.8fr_1fr_1fr_1.2fr_auto]">
+              <select value={slot.day} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, day: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm">
+                {days.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+              <input type="time" value={slot.startTime} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, startTime: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
+              <input type="time" value={slot.endTime} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, endTime: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
+              <input value={slot.classroom} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, classroom: event.target.value } : item))} placeholder="강의실" className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
+              <button type="button" disabled={customSlots.length === 1} onClick={() => setCustomSlots((slots) => slots.filter((_, slotIndex) => slotIndex !== index))} className="rounded-lg px-2 text-sm text-rose-600 disabled:text-slate-300">삭제</button>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setCustomSlots((slots) => [...slots, { day: days[0], startTime: "09:00", endTime: "10:15", classroom: "" }])} className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-sky-700 shadow-sm hover:bg-sky-100">시간 추가</button>
+            <button type="button" disabled={isPending || !customTitle.trim()} onClick={handleSaveCustomCourse} className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:bg-slate-300">{editingCustomId ? "직접 수업 수정" : "직접 수업 저장"}</button>
+            {editingCustomId ? <button type="button" onClick={() => { setEditingCustomId(null); setCustomTitle(""); setCustomSlots([{ day: days[0], startTime: "09:00", endTime: "10:15", classroom: "" }]); }} className="rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-white">취소</button> : null}
+          </div>
+          {timetableCourses.filter((course) => course.is_custom).map((course) => (
+            <div key={course.id} className="flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 shadow-sm">
+              <span className="text-sm font-medium text-slate-700">{course.course.name}</span>
+              <button type="button" onClick={() => beginCustomCourseEdit(course)} className="text-sm font-medium text-sky-700">수정</button>
+            </div>
+          ))}
         </div>
       </section>
 
