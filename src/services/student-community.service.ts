@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
 
@@ -135,7 +136,7 @@ export async function getMyPageData(
   const [schoolName, courses, myCourses] = await Promise.all([
     getSchoolName(profile),
     getCourses(),
-    getMyCourses(profile?.id),
+    getMyCourses(profile),
   ]);
   const [myPosts, scrapedPosts, commentedPosts, likedPosts] = await Promise.all([
     getMyPosts(profile?.id),
@@ -164,7 +165,7 @@ export async function getCommunityData(
   const [schoolName, courses, myCourses, posts] = await Promise.all([
     getSchoolName(profile),
     getCourses(),
-    getMyCourses(profile?.id),
+    getMyCourses(profile),
     getPosts(profile?.id),
   ]);
 
@@ -205,20 +206,35 @@ async function getCourses(): Promise<CourseRecord[]> {
 }
 
 export async function getMyCourses(
-  profileId?: string,
+  profile: DemoProfile | null,
 ): Promise<StudentCourseRecord[]> {
-  if (!profileId) {
+  if (!profile || profile.role !== "student") {
     return [];
   }
-  const supabase = await createSupabaseServerClient();
+  const profileId = profile.id;
 
-  const { data, error } = await supabase
-    .from("student_courses")
-    .select(
-      "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text), schedule_slots:student_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)",
-    )
-    .eq("student_id", profileId)
-    .order("updated_at", { ascending: false });
+  const selectCourses = (supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) =>
+    supabase
+      .from("student_courses")
+      .select(
+        "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text), schedule_slots:student_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)",
+      )
+      .eq("student_id", profileId)
+      .order("updated_at", { ascending: false });
+
+  let supabase = await createSupabaseServerClient();
+  let { data, error } = await selectCourses(supabase);
+
+  // Demo sessions are HMAC-signed by this server, but an older browser can
+  // retain that session after its Supabase Auth refresh cookie expires. Keep
+  // the student-facing read available in that case without granting table
+  // access to the anonymous database role. The id comes from getDemoProfile,
+  // which verifies the signed session before this server-only function runs.
+  if (error?.code === "42501") {
+    console.warn("Falling back to verified server-side timetable read", error.message);
+    supabase = createSupabaseAdminClient();
+    ({ data, error } = await selectCourses(supabase));
+  }
 
   if (error) {
     console.error("getMyCourses failed:", error.message);

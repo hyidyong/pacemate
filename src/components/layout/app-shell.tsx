@@ -24,8 +24,14 @@ export async function AppShell({
 }: AppShellProps) {
   const profile = await getDemoProfile();
   const [notifications, unreadCount] = await Promise.all([
-    getNotificationsForProfile(profile, 5),
-    getUnreadNotificationCount(profile),
+    getNotificationsForProfile(profile, 5).catch((error) => {
+      console.error("App shell notifications could not be loaded", error);
+      return [];
+    }),
+    getUnreadNotificationCount(profile).catch((error) => {
+      console.error("App shell notification count could not be loaded", error);
+      return 0;
+    }),
   ]);
 
   const isAuthenticated = Boolean(profile);

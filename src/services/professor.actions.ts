@@ -436,6 +436,11 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
 
 export async function addProfessorAdminTask(formData: FormData) {
   try {
+    const profile = await getDemoProfile();
+    if (profile?.role !== "professor") {
+      return { ok: false, message: "교수 계정만 행정 일정을 관리할 수 있습니다." };
+    }
+
     const professorId = text(formData.get("professorId"));
     const title = text(formData.get("title"));
     const day = integer(formData.get("dayOfWeek"), 1);
@@ -444,6 +449,18 @@ export async function addProfessorAdminTask(formData: FormData) {
 
     if (!professorId) {
       return { ok: false, message: "교수 정보를 찾을 수 없습니다." };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const { data: professor } = await supabase
+      .from("professors")
+      .select("id")
+      .eq("id", professorId)
+      .eq("profile_id", profile.id)
+      .maybeSingle();
+
+    if (!professor) {
+      return { ok: false, message: "본인의 일정만 관리할 수 있습니다." };
     }
 
     const { timeRangeEndsByStudentCutoff } = await import("@/lib/scheduling-policy");
@@ -473,9 +490,15 @@ export async function addProfessorAdminTask(formData: FormData) {
 
 export async function deleteProfessorAdminTask(formData: FormData) {
   try {
+    const profile = await getDemoProfile();
+    if (profile?.role !== "professor") {
+      return { ok: false, message: "교수 계정만 행정 일정을 관리할 수 있습니다." };
+    }
+
     const id = text(formData.get("id"));
     if (!id) return { ok: false, message: "ID 누락" };
 
+    const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("professor_admin_tasks").delete().eq("id", id);
     if (error) return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
 

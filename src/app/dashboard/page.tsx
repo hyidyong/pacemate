@@ -27,6 +27,8 @@ import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/u
 import { HoverGlowCard } from "@/components/ui/hover-glow-card";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 
+export const dynamic = "force-dynamic";
+
 function getTodoTypeFromText(text: string): StudentTodoItem["type"] | null {
   const normalized = text.toLowerCase();
   if (/(과제|레포트|보고서|제출|마감)/.test(normalized)) {
@@ -125,7 +127,7 @@ export default async function DashboardPage() {
     // This page runs on the server, so keep the signed-in user's cookies on
     // every query and let Supabase RLS enforce the same access as the API.
     const supabase = await createSupabaseServerClient();
-    myCourses = await getMyCourses(profile.id);
+    myCourses = await getMyCourses(profile);
     announcements = await listStudentCourseNotices(profile.id);
     academicEvents = getAcademicEvents().filter(
       (event) => event.audience === "all" || event.audience === "student",
