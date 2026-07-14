@@ -40,7 +40,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const error = params?.error ? errorMessages[params.error] : null;
 
   return (
-    <AppShell>
+    <AppShell showSiteFooter={false}>
       <section className="screen-hero">
         <span className="status-line">
           <LogIn size={15} aria-hidden="true" />
