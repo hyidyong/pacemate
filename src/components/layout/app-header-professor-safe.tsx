@@ -196,14 +196,14 @@ export function AppHeader({
         {isAuthenticated && isProfessor ? (
           <nav
             aria-label="교수 상단 메뉴"
-            className="flex min-w-0 flex-1 items-center justify-center gap-1 xl:gap-2"
+            className="flex min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 lg:justify-center xl:gap-2"
             data-testid="professor-desktop-dropdown-nav"
           >
             {professorDesktopMenuGroups.map((group) => (
-              <div className="group relative" key={group.label}>
+              <div className="group relative shrink-0" key={group.label}>
                 <button
                   aria-haspopup="menu"
-                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:bg-emerald-50 focus-visible:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 xl:px-4"
+                  className="inline-flex whitespace-nowrap items-center gap-1.5 rounded-full px-2.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:bg-emerald-50 focus-visible:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 xl:px-4"
                   type="button"
                 >
                   <span>{group.label}</span>
@@ -237,9 +237,11 @@ export function AppHeader({
           </nav>
         ) : null}
 
-        {/* Mega Menu Trigger */}
+        {/* Student-only global navigation. Keep it out of the professor header DOM so
+            shared nav CSS cannot make student links reappear in the professor GNB. */}
+        {!isProfessor ? (
         <nav
-          className={`nav-links ${isProfessor ? "hidden" : "flex"} items-center h-full relative`}
+          className="nav-links flex items-center h-full relative"
           onMouseEnter={() => setIsMegaMenuOpen(true)}
           onMouseLeave={() => setIsMegaMenuOpen(false)}
         >
@@ -294,6 +296,7 @@ export function AppHeader({
             )}
           </AnimatePresence>
         </nav>
+        ) : null}
 
         <div className="header-actions" aria-label="Quick navigation">
           {isAuthenticated && isProfessor ? (
