@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import {
   CalendarDays,
   CircleHelp,
@@ -15,20 +14,85 @@ import {
   UserRound,
   Menu,
   X,
-  ChevronDown
+  ChevronDown,
 } from "lucide-react";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
+import { professorWeeklyPlanPreviewLink } from "@/lib/professor-navigation";
 import type { UserNotification } from "@/types/notifications";
 
-// ✅ Lazy load framer-motion — 헤더에서 초기 번들 ~160KB 절감
-const MotionDiv = dynamic(
-  () => import("framer-motion").then((m) => ({ default: m.motion.div })),
-  { ssr: false }
-);
-const AnimatePresence = dynamic(
-  () => import("framer-motion").then((m) => ({ default: m.AnimatePresence })),
-  { ssr: false }
-);
+function MotionDiv({
+  children,
+  initial,
+  animate,
+  exit,
+  transition,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
+  animate?: unknown;
+  exit?: unknown;
+  initial?: unknown;
+  transition?: unknown;
+}) {
+  void initial;
+  void animate;
+  void exit;
+  void transition;
+
+  return <div {...props}>{children}</div>;
+}
+
+function AnimatePresence({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
+
+const DESKTOP_HEADER_CLASS = "hidden md:flex items-center justify-between gap-5 py-4 pb-7 relative z-50";
+const MOBILE_HEADER_CLASS =
+  "sticky top-0 flex md:hidden items-center justify-between gap-5 py-3 px-4 z-50 bg-[rgba(249,251,249,0.92)] backdrop-blur-xl shadow-[0_12px_30px_rgba(23,32,26,0.07)]";
+
+const professorDesktopMenuGroups = [
+  {
+    label: "일정 관리",
+    items: [
+      { label: "강의 일정", href: "/professor?tab=schedule&sub=calendar" },
+      { label: "학사 일정", href: "/professor?tab=schedule&sub=calendar" },
+      { label: "개인 메모", href: "/professor?tab=schedule&sub=manual-schedule" },
+    ],
+  },
+  {
+    label: "과목 관리",
+    items: [
+      { label: "강의 목록", href: "/professor?tab=roadmap&sub=roadmap-edit" },
+      { label: "출석 관리", href: "/professor?tab=roadmap&sub=course-settings" },
+      { label: "과제 및 평가", href: "/professor?tab=roadmap&sub=sensitive-request" },
+      { label: "성적 입력", href: "/professor?tab=roadmap&sub=course-settings" },
+      professorWeeklyPlanPreviewLink,
+    ],
+  },
+  {
+    label: "질문 관리",
+    items: [
+      { label: "미답변 질문", href: "/professor?tab=questions&sub=incoming-questions" },
+      { label: "전체 질문 답변", href: "/professor?tab=questions&sub=incoming-questions" },
+      { label: "FAQ 관리", href: "/professor?tab=questions&sub=manual-faq" },
+    ],
+  },
+  {
+    label: "상담 관리",
+    items: [
+      { label: "상담 신청 목록", href: "/professor?tab=counseling&sub=pending-counseling" },
+      { label: "상담 일지 작성", href: "/professor?tab=counseling&sub=counseling-log" },
+      { label: "예약 관리", href: "/professor?tab=counseling&sub=pending-counseling" },
+    ],
+  },
+  {
+    label: "학습 리포트",
+    items: [
+      { label: "학생 성취도 분석", href: "/professor?tab=report&sub=course-progress-report" },
+      { label: "주차별 진도율", href: "/professor?tab=report&sub=course-progress-report" },
+      { label: "학업 이탈 예측", href: "/professor?tab=report&sub=course-progress-report" },
+    ],
+  },
+] as const;
 
 type HeaderRoute = {
   href: string;
@@ -99,16 +163,60 @@ export function AppHeader({
   return (
     <>
       {/* --- DESKTOP HEADER --- */}
-      <header className="hidden md:flex items-center justify-between gap-5 py-4 pb-7 relative z-50">
+      <header className={DESKTOP_HEADER_CLASS}>
         <Link href={homeHref} className="brand" aria-label="PaceMate home">
           <span>
             <strong>PaceMate</strong>
           </span>
         </Link>
 
+        {isAuthenticated && isProfessor ? (
+          <nav
+            aria-label="교수 상단 메뉴"
+            className="flex min-w-0 flex-1 items-center justify-center gap-1 xl:gap-2"
+            data-testid="professor-desktop-dropdown-nav"
+          >
+            {professorDesktopMenuGroups.map((group) => (
+              <div className="group relative" key={group.label}>
+                <button
+                  aria-haspopup="menu"
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:bg-emerald-50 focus-visible:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 xl:px-4"
+                  type="button"
+                >
+                  <span>{group.label}</span>
+                  <ChevronDown
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 transition-transform duration-200 group-hover:rotate-180 group-focus-within:rotate-180"
+                  />
+                </button>
+                <div
+                  className="pointer-events-none absolute left-1/2 top-full z-[120] mt-3 w-56 -translate-x-1/2 translate-y-2 rounded-2xl border border-slate-200 bg-white/95 p-2 opacity-0 shadow-[0_22px_55px_rgba(15,23,42,0.14)] backdrop-blur-xl transition-all duration-200 ease-out group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100"
+                  role="menu"
+                >
+                  <div className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                    {group.label}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {group.items.map((item) => (
+                      <Link
+                        className="rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:bg-emerald-50 focus-visible:text-emerald-700 focus-visible:outline-none"
+                        href={item.href}
+                        key={item.label}
+                        role="menuitem"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </nav>
+        ) : null}
+
         {/* Mega Menu Trigger */}
         <nav
-          className="nav-links flex items-center h-full relative"
+          className={`nav-links ${isProfessor ? "hidden" : "flex"} items-center h-full relative`}
           onMouseEnter={() => setIsMegaMenuOpen(true)}
           onMouseLeave={() => setIsMegaMenuOpen(false)}
         >
@@ -149,8 +257,8 @@ export function AppHeader({
                   <p className="text-xs text-emerald-600 mb-2 leading-relaxed">
                     다른 학생들과 함께 공부 팁을 나누고 질문해 보세요!
                   </p>
-                  <Link 
-                    href="/community" 
+                  <Link
+                    href="/community"
                     onClick={() => setIsMegaMenuOpen(false)}
                     className="mt-auto bg-emerald-600 text-white text-xs font-bold py-2 px-4 rounded-xl text-center hover:bg-emerald-700 transition-colors block w-full relative z-10"
                   >
@@ -208,7 +316,7 @@ export function AppHeader({
       </header>
 
       {/* --- MOBILE HEADER --- */}
-      <header className="sticky top-0 flex md:hidden items-center justify-between gap-5 py-3 px-4 z-50 bg-[rgba(249,251,249,0.92)] backdrop-blur-xl shadow-[0_12px_30px_rgba(23,32,26,0.07)]">
+      <header className={MOBILE_HEADER_CLASS}>
         <Link href={homeHref} className="brand" aria-label="PaceMate home">
           <span>
             <strong>PaceMate</strong>
@@ -218,7 +326,7 @@ export function AppHeader({
           {isAuthenticated ? (
             <NotificationMenu notifications={notifications} unreadCount={unreadCount} />
           ) : null}
-          
+
           <button
             aria-expanded={isMobileMenuVisible}
             aria-label={isMobileMenuVisible ? "메뉴 닫기" : "메뉴 열기"}

@@ -1,5 +1,4 @@
 import dynamicImport from "next/dynamic";
-import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { getAcademicEvents } from "@/services/academic-calendar.service";
 import { getUnreadNotificationCountByCategory } from "@/services/notifications.service";
@@ -89,17 +88,6 @@ export default async function ProfessorPage({
       </section>
 
       {data.professor ? <ProfessorProfileSummary professor={data.professor} courses={data.courses} /> : null}
-
-      {profile?.role === "professor" ? (
-        <section className="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6">
-          <Link
-            href="/professor/weekly-plan-preview"
-            className="inline-flex rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
-          >
-            주간 계획 초안 검토
-          </Link>
-        </section>
-      ) : null}
 
       {data.professor ? (
         <ProfessorWorkspace

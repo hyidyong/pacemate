@@ -59,6 +59,7 @@ import {
 } from "./professor-home-section-tabs";
 import { ProfessorPortalShortcutCard } from "./professor-portal-shortcut-card";
 import { getCourseRoadmap, addCourseNotice, addCourseTextbook, removeCourseAssignment } from "@/services/course-settings.actions";
+import { professorWeeklyPlanPreviewLink } from "@/lib/professor-navigation";
 
 // ============== TYPES ==============
 type ProfessorWorkspaceProps = {
@@ -543,8 +544,13 @@ export function ProfessorWorkspace({
         </header>
 
         {sidebarOpen ? (
-          <aside aria-label="교수 메뉴" className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-white px-5 pb-8 pt-24 lg:hidden">
-            <div className="mx-auto w-full max-w-lg space-y-5">
+          <aside
+            aria-label="교수 메뉴"
+            className="fixed inset-0 z-40 flex h-[100dvh] max-h-[100dvh] flex-col overflow-y-auto overscroll-contain bg-white px-5 pb-24 pt-24 lg:hidden"
+            data-testid="professor-mobile-drawer"
+            style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}
+          >
+            <div className="mx-auto w-full max-w-lg space-y-5 pb-8">
               <p className="border-b border-slate-200 pb-3 text-sm font-semibold text-slate-700">교수 메뉴</p>
               {professorTabs.map((tab) => (
                 <div key={tab.id}>
@@ -583,6 +589,16 @@ export function ProfessorWorkspace({
                       );
                     })}
                   </div>
+                  {tab.id === "roadmap" ? (
+                    <Link
+                      href={professorWeeklyPlanPreviewLink.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className="mt-1 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition-all hover:bg-emerald-50 hover:text-emerald-700"
+                    >
+                      <FileText size={16} className="text-slate-400" />
+                      <span>{professorWeeklyPlanPreviewLink.label}</span>
+                    </Link>
+                  ) : null}
                 </div>
               ))}
             </div>
