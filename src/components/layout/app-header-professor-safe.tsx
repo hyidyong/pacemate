@@ -128,6 +128,7 @@ interface AppHeaderProps {
   homeHref: string;
   notifications: UserNotification[];
   unreadCount: number;
+  profileId: string;
 }
 
 export function AppHeader({
@@ -137,6 +138,7 @@ export function AppHeader({
   homeHref,
   notifications,
   unreadCount,
+  profileId,
 }: AppHeaderProps) {
   const pathname = usePathname();
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
@@ -316,7 +318,7 @@ export function AppHeader({
             </Link>
           ) : null}
           {isAuthenticated ? (
-            <NotificationMenu notifications={notifications} unreadCount={unreadCount} />
+            <NotificationMenu notifications={notifications} unreadCount={unreadCount} profileId={profileId} />
           ) : null}
           {isAuthenticated && !isProfessor && !isOperator ? (
             <>
@@ -356,7 +358,7 @@ export function AppHeader({
         </Link>
         <div className="flex items-center gap-3">
           {isAuthenticated ? (
-            <NotificationMenu notifications={notifications} unreadCount={unreadCount} />
+            <NotificationMenu notifications={notifications} unreadCount={unreadCount} profileId={profileId} />
           ) : null}
 
           <button

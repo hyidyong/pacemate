@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDemoProfile } from "@/services/session.service";
 import type { CourseRecord, StudentCourseRecord } from "@/services/student-community.service";
+import { syncStudentCourseSchedule } from "@/services/student-timetable.service";
 
 const studentCourseSelectColumns =
   "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text)";
@@ -139,9 +140,38 @@ export async function addCourseToSchedule(formData: FormData) {
     return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
+  const studentCourseId = typeof (data as { id?: unknown })?.id === "string"
+    ? (data as { id: string }).id
+    : null;
+  if (!studentCourseId) {
+    return { ok: false, message: "시간표 수강 정보를 확인하지 못했습니다." };
+  }
+
+  try {
+    await syncStudentCourseSchedule({
+      supabase,
+      studentCourseId,
+      courseId,
+      semesterLabel: payload.semester_label,
+      manualSlots: [{
+        dayOfWeek: payload.schedule_day,
+        startTime: payload.start_time,
+        endTime: payload.end_time,
+        classroom: payload.classroom,
+      }],
+    });
+  } catch (syncError) {
+    console.error("addCourseToSchedule schedule sync failed", syncError);
+    if (!existing?.id) {
+      await supabase.from("student_courses").delete().eq("id", studentCourseId).eq("student_id", profileId);
+    }
+    return { ok: false, message: "시간표를 안전하게 동기화하지 못했습니다. 기존 시간표는 유지됩니다." };
+  }
+
   revalidatePath("/mypage");
   revalidatePath("/dashboard");
   revalidatePath("/roadmap");
+  revalidatePath("/notices");
   return {
     ok: true,
     message: "시간표에 등록했습니다.",

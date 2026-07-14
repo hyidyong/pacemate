@@ -157,4 +157,51 @@ create policy "students manage own custom course schedule slots"
       and p.auth_user_id = (select auth.uid())
   ));
 
+-- A PostgreSQL function executes as one transaction. Callers never observe a
+-- course with its old slots deleted but replacement slots missing.
+create or replace function public.replace_student_course_schedule_slots(
+  p_student_course_id uuid,
+  p_slots jsonb
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if jsonb_typeof(p_slots) <> 'array' then
+    raise exception 'schedule slots must be a JSON array';
+  end if;
+
+  perform 1 from public.student_courses where id = p_student_course_id;
+  if not found then
+    raise exception 'student course not found';
+  end if;
+
+  delete from public.student_course_schedule_slots
+  where student_course_id = p_student_course_id;
+
+  insert into public.student_course_schedule_slots (
+    student_course_id, day_of_week, start_time, end_time, classroom, source
+  )
+  select
+    p_student_course_id,
+    slot.day_of_week,
+    slot.start_time,
+    slot.end_time,
+    nullif(btrim(slot.classroom), ''),
+    slot.source
+  from jsonb_to_recordset(p_slots) as slot(
+    day_of_week text,
+    start_time time,
+    end_time time,
+    classroom text,
+    source text
+  );
+end;
+$$;
+
+revoke all on function public.replace_student_course_schedule_slots(uuid, jsonb) from public;
+grant execute on function public.replace_student_course_schedule_slots(uuid, jsonb) to authenticated;
+
 commit;
