@@ -7,7 +7,6 @@ import { clearDemoSession } from "@/services/demo-auth.service";
 import { redirectNonStudent } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 import { getMyPageData } from "@/services/student-community.service";
-import { StudentOnboardingForm } from "@/components/onboarding/student-onboarding-form";
 
 export const dynamic = "force-dynamic";
 
@@ -54,23 +53,6 @@ export default async function MyPage() {
         commentedPosts={data.commentedPosts}
         likedPosts={data.likedPosts}
       />
-
-      {profile && data.savedProfile && (
-        <section className="section" style={{ marginTop: "32px", padding: "0 1rem" }}>
-          <details className="mypage-settings-details" style={{ backgroundColor: "var(--color-surface)", padding: "1.5rem", borderRadius: "12px", border: "1px solid var(--color-border)", cursor: "pointer" }}>
-            <summary style={{ fontWeight: "bold", fontSize: "1.1rem", display: "flex", alignItems: "center", gap: "8px" }}>
-              내 진로/설정 수정
-            </summary>
-            <div style={{ marginTop: "1rem", cursor: "default" }}>
-              <StudentOnboardingForm 
-                error={null}
-                savedProfile={data.savedProfile}
-                returnTo="/mypage"
-              />
-            </div>
-          </details>
-        </section>
-      )}
 
       <div className="mypage-support-link">
         <Link href="/support">
