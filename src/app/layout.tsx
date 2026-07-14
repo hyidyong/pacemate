@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import PwaRegistration from "@/components/notifications/pwa-registration";
 import "./globals.css";
 
 // ✅ [Opt 5] next/font으로 Google Font 최적화 — FOUT 제거, 별도 HTTP 요청 없음
@@ -25,7 +26,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className={inter.variable}>
-      <body>{children}</body>
+      <body>
+        <PwaRegistration />
+        {children}
+      </body>
     </html>
   );
 }
