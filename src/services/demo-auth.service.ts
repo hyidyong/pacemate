@@ -86,7 +86,11 @@ export async function createDemoSession(formData: FormData) {
   }
 
   const role = profile.role;
-  await createSignedDemoSession({ profileId: profile.id, role });
+  try {
+    await createSignedDemoSession({ profileId: profile.id, role });
+  } catch (error) {
+    console.warn("Signed demo session cookie was skipped:", error);
+  }
 
   await applyPendingOnboarding(
     supabase,
