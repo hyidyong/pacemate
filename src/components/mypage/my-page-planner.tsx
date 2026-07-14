@@ -17,6 +17,7 @@ import {
   CheckCircle2
 } from "lucide-react";
 import {
+  addCourseToSchedule,
   removeCourseFromSchedule,
 } from "@/services/student-community.actions";
 import {
@@ -121,6 +122,7 @@ export function MyPagePlanner({
   const [isTodoLoaded, setIsTodoLoaded] = useState(false);
   const [isDoneLoaded, setIsDoneLoaded] = useState(false);
   const { timetableCourses, setTimetableCourses } = useStudentTimetable(myCourses);
+  const [syncedLocalCourseIds, setSyncedLocalCourseIds] = useState<string[]>([]);
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0];
 
@@ -135,6 +137,43 @@ export function MyPagePlanner({
   }, [courses, query]);
 
   const scheduledCourseIds = new Set(timetableCourses.map((item) => item.course.id));
+
+  useEffect(() => {
+    const unsyncedLocalCourses = timetableCourses.filter(
+      (item) => isLocalTimetableCourse(item.id) && !syncedLocalCourseIds.includes(item.id),
+    );
+    if (!unsyncedLocalCourses.length) return;
+
+    let cancelled = false;
+    async function syncLocalCourses() {
+      let nextCourses = timetableCourses;
+      for (const item of unsyncedLocalCourses) {
+        const formData = new FormData();
+        formData.set("courseId", item.course.id);
+        formData.set("isFavorite", "true");
+        formData.set("scheduleDay", item.schedule_day ?? day);
+        formData.set("startTime", item.start_time ?? "09:00");
+        formData.set("endTime", item.end_time ?? "10:15");
+        formData.set("classroom", item.classroom ?? "");
+        formData.set("semesterLabel", item.semester_label ?? "2026-2");
+
+        const result = await addCourseToSchedule(formData);
+        if (cancelled) return;
+        if (result.ok && result.course) {
+          nextCourses = upsertTimetableCourse(removeTimetableCourse(nextCourses, item.id), result.course);
+          setTimetableCourses(nextCourses);
+        }
+        setSyncedLocalCourseIds((ids) => [...new Set([...ids, item.id])]);
+      }
+      router.refresh();
+    }
+
+    void syncLocalCourses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [day, router, setTimetableCourses, syncedLocalCourseIds, timetableCourses]);
 
   function handleAddCourse() {
     if (!selectedCourse) return;
@@ -153,7 +192,25 @@ export function MyPagePlanner({
     });
 
     setTimetableCourses(upsertTimetableCourse(timetableCourses, nextCourse));
-    setFeedback({ ok: true, message: "시간표에 등록했습니다." });
+    setFeedback({ ok: true, message: "시간표에 등록 중입니다." });
+
+    const formData = new FormData();
+    formData.set("courseId", selectedCourse.id);
+    formData.set("isFavorite", "true");
+    formData.set("scheduleDay", day);
+    formData.set("startTime", startTime);
+    formData.set("endTime", endTime);
+    formData.set("classroom", classroom || nextCourse.classroom || "");
+    formData.set("semesterLabel", "2026-2");
+
+    startTransition(async () => {
+      const result = await addCourseToSchedule(formData);
+      setFeedback({ ok: result.ok, message: result.message });
+      if (result.ok && result.course) {
+        setTimetableCourses(upsertTimetableCourse(removeTimetableCourse(timetableCourses, nextCourse.id), result.course));
+        router.refresh();
+      }
+    });
   }
 
   function handleRemove(enrollmentId: string) {

@@ -128,6 +128,7 @@ export async function addCourseToSchedule(formData: FormData) {
 
   revalidatePath("/mypage");
   revalidatePath("/dashboard");
+  revalidatePath("/roadmap");
   return {
     ok: true,
     message: "시간표에 등록했습니다.",

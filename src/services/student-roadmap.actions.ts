@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getPersonalizedWeeklyRoadmapForSession } from "@/services/personalized-weekly-roadmap.server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireDemoSession } from "@/lib/auth/demo-session";
+import { getDemoProfile } from "@/services/session.service";
 
 export async function generateStudentPersonalizedRoadmap(offeringId: string) {
   if (!offeringId) return { ok: false, message: "과목을 선택해 주세요." };
@@ -17,13 +17,13 @@ export async function generateStudentPersonalizedRoadmap(offeringId: string) {
 }
 
 export async function saveStudentRoadmapWeekProgress(offeringId: string, weekNumber: number) {
-  const session = await requireDemoSession();
-  if (session.role !== "student" || !offeringId || weekNumber < 1 || weekNumber > 15) {
+  const profile = await getDemoProfile();
+  if (profile?.role !== "student" || !offeringId || weekNumber < 1 || weekNumber > 15) {
     return { ok: false, message: "유효한 과목과 주차를 선택해 주세요." };
   }
   const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("student_weekly_progress").upsert({
-    student_id: session.profileId,
+    student_id: profile.id,
     offering_id: offeringId,
     week_number: weekNumber,
     progress_status_override: "covered",

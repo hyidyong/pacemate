@@ -46,7 +46,8 @@ test("repairs timetable course rows that do not yet have an offering id", async 
 test("accepts duplicate timetable rows when authorizing a selected offering", async () => {
   const source = await readFile(roadmapServer, "utf8");
 
-  assert.match(source, /select\("id"\)\s*\.eq\("student_id", session\.profileId\)\s*\.eq\("offering_id", offeringId\)\s*\.limit\(1\)\s*\.maybeSingle\(\)/);
+  assert.match(source, /const profile = await getStudentProfile\(\)/);
+  assert.match(source, /select\("id"\)\s*\.eq\("student_id", profile\.id\)\s*\.eq\("offering_id", offeringId\)\s*\.limit\(1\)\s*\.maybeSingle\(\)/);
 });
 
 test("falls back to weekly progress storage when roadmap migrations are not deployed", async () => {
