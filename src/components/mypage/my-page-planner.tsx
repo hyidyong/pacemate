@@ -41,6 +41,7 @@ import {
   type StudentTodoCategory,
   type StudentTodoItem,
 } from "@/components/dashboard/student-todo-card";
+import { MyPageSectionTabs, type MyPageSection } from "@/components/mypage/my-page-section-tabs";
 
 type MyPagePlannerProps = {
   courses: CourseRecord[];
@@ -110,6 +111,7 @@ export function MyPagePlanner({
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeCommunityTab, setActiveCommunityTab] = useState<"my" | "scrap" | "comment" | "like">("my");
+  const [activeTab, setActiveTab] = useState<MyPageSection>("all");
   const [todoTitle, setTodoTitle] = useState("");
   const [todoDueDate, setTodoDueDate] = useState(getLocalDateKey(new Date()));
   const [todoCategory, setTodoCategory] = useState<StudentTodoCategory>("과제");
@@ -358,6 +360,7 @@ export function MyPagePlanner({
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-8 pb-20 md:pb-8">
+      <MyPageSectionTabs activeTab={activeTab} onChange={setActiveTab} />
       {/* SECTION 1: 2D Timetable */}
       <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">

@@ -230,6 +230,9 @@ export function AppHeader({
               {route.href === "/dashboard" && <ChevronDown size={14} />}
             </Link>
           ))}
+          {isAuthenticated && !isProfessor && !isOperator ? (
+            <Link href="/notices" className="flex items-center gap-1 py-2 transition-colors hover:text-emerald-700">공지사항</Link>
+          ) : null}
 
           {/* Mega Menu Dropdown */}
           <AnimatePresence>
@@ -365,6 +368,9 @@ export function AppHeader({
                   </Link>
                 );
               })}
+              {isAuthenticated && !isProfessor && !isOperator ? (
+                <Link href="/notices" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 rounded-lg p-2 text-lg font-medium text-gray-700 transition-colors hover:bg-emerald-50 hover:text-emerald-600">공지사항</Link>
+              ) : null}
             </div>
 
             <div className="mt-auto grid grid-cols-2 gap-3">
