@@ -25,6 +25,7 @@ type Props = {
   initialWeeks: Week[];
   completedWeeks: number[];
   hasPersonalizedRoadmap: boolean;
+  suggestProfessorPlanRefresh?: boolean;
 };
 
 export function StudentRoadmapWorkspace({
@@ -33,12 +34,16 @@ export function StudentRoadmapWorkspace({
   initialWeeks,
   completedWeeks,
   hasPersonalizedRoadmap,
+  suggestProfessorPlanRefresh = false,
 }: Props) {
   const router = useRouter();
   const [activeWeek, setActiveWeek] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [savedWeeks, setSavedWeeks] = useState(completedWeeks);
   const [message, setMessage] = useState<string | null>(null);
+  const [showProfessorPlanRefresh, setShowProfessorPlanRefresh] = useState(suggestProfessorPlanRefresh);
+
+  useEffect(() => setShowProfessorPlanRefresh(suggestProfessorPlanRefresh), [suggestProfessorPlanRefresh]);
 
   useEffect(() => {
     setSavedWeeks(completedWeeks);
@@ -70,6 +75,7 @@ export function StudentRoadmapWorkspace({
       const result = await generateStudentPersonalizedRoadmap(selectedOfferingId);
       setMessage(result.message);
       if (result.ok) router.refresh();
+      if (result.ok) setShowProfessorPlanRefresh(false);
     });
   }
 
@@ -114,6 +120,21 @@ export function StudentRoadmapWorkspace({
       </div>
 
       {message ? <p className="mt-3 text-sm text-slate-600" role="status">{message}</p> : null}
+
+      {showProfessorPlanRefresh ? (
+        <div className="mt-4 rounded-2xl bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+          <p className="font-semibold">담당 교수님의 최신 주간 학습 계획이 도착했습니다.</p>
+          <p className="mt-1 text-emerald-800">기존 학습 기록은 유지하고, 최신 계획을 반영해 개인 로드맵을 다시 만들 수 있습니다.</p>
+          <button
+            className="mt-3 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            disabled={isPending || !selectedOfferingId}
+            onClick={generateRoadmap}
+            type="button"
+          >
+            최신 교수 학습 계획 반영하여 로드맵 다시 생성하기
+          </button>
+        </div>
+      ) : null}
 
       {!selectedOfferingId ? (
         <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">

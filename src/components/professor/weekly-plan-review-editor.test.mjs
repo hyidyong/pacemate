@@ -25,4 +25,21 @@ test("approval action accepts validated edited week payloads", async () => {
   assert.match(source, /title\.length > 200/);
   assert.match(source, /content\.length > 4000/);
   assert.match(source, /editedWeek\.content/);
+  assert.match(source, /approve_course_weekly_plan/);
+});
+
+test("weekly-plan preview binds its selected course to the server query", async () => {
+  const source = await readFile(new URL("../../app/professor/weekly-plan-preview/page.tsx", import.meta.url), "utf8");
+  const service = await readFile(new URL("../../services/weekly-roadmap.server.ts", import.meta.url), "utf8");
+
+  assert.match(source, /getWeeklyPlanDraftsForProfessorSession\(profile, selectedCourseId \|\| undefined\)/);
+  assert.match(service, /if \(courseId\) \{\s*offeringsQuery = offeringsQuery\.eq\("course_id", courseId\);\s*\}/);
+});
+
+test("approved plans become a disabled completion state with immediate feedback", async () => {
+  const source = await readFile(new URL("./weekly-plan-review-editor.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /draft\.approvalStatus === "approved"/);
+  assert.match(source, /승인 완료/);
+  assert.match(source, /role="status"/);
 });

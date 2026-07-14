@@ -12,12 +12,12 @@ export const dynamic = "force-dynamic";
 export default async function RoadmapPage({
   searchParams,
 }: {
-  searchParams: Promise<{ offering?: string }>;
+  searchParams: Promise<{ offering?: string; refresh?: string }>;
 }) {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
 
-  const { offering } = await searchParams;
+  const { offering, refresh } = await searchParams;
   const roadmapWorkspace = await getStudentRoadmapWorkspaceForSession(offering).catch((error) => {
     console.error("Roadmap page could not be loaded", error);
     return {
@@ -56,6 +56,7 @@ export default async function RoadmapPage({
         hasPersonalizedRoadmap={roadmapWorkspace.hasPersonalizedRoadmap}
         initialWeeks={roadmapWorkspace.weeks}
         offerings={roadmapWorkspace.offerings}
+        suggestProfessorPlanRefresh={refresh === "professor-plan"}
         selectedOfferingId={roadmapWorkspace.selectedOfferingId}
       />
     </AppShell>

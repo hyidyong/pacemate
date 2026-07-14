@@ -6,7 +6,9 @@ test("mobile timetable uses a full-width bounded grid and overflow-safe course c
   const source = await readFile(new URL("./my-page-planner.tsx", import.meta.url), "utf8");
 
   assert.match(source, /w-full min-w-0 overflow-hidden/);
-  assert.match(source, /gridTemplateColumns/);
+  assert.match(source, /repeat\(\$\{days\.length\}, minmax\(0, 1fr\)\)/);
+  assert.match(source, /const days = \["월", "화", "수", "목", "금", "토", "일"\]/);
+  assert.match(source, /timetableStartHour/);
   assert.match(source, /p-1(?:\.5)?/);
   assert.match(source, /line-clamp-2[^\"]*break-all[^\"]*text-\[11px\]/);
   assert.match(source, /truncate[^\"]*text-\[9px\]/);

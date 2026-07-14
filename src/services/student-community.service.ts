@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isMissingTimetableSchema } from "@/lib/student-timetable-schema";
 import type { DemoProfile } from "@/services/session.service";
 
 export type CourseRecord = {
@@ -213,17 +214,29 @@ export async function getMyCourses(
   }
   const profileId = profile.id;
 
-  const selectCourses = (supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) =>
+  const selectCourses = (
+    supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+    includeScheduleSlots = true,
+  ) =>
     supabase
       .from("student_courses")
       .select(
-        "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text), schedule_slots:student_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)",
+        includeScheduleSlots
+          ? "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text), schedule_slots:student_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)"
+          : "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text)",
       )
       .eq("student_id", profileId)
       .order("updated_at", { ascending: false });
 
   let supabase = await createSupabaseServerClient();
   let { data, error } = await selectCourses(supabase);
+
+  // Some deployed environments still have the original student_courses
+  // columns but not the newer slot table. Those legacy rows are enough for
+  // the timetable renderer, so retry without the embedded relation.
+  if (error && isMissingTimetableSchema(error)) {
+    ({ data, error } = await selectCourses(supabase, false));
+  }
 
   // Demo sessions are HMAC-signed by this server, but an older browser can
   // retain that session after its Supabase Auth refresh cookie expires. Keep
@@ -234,6 +247,9 @@ export async function getMyCourses(
     console.warn("Falling back to verified server-side timetable read", error.message);
     supabase = createSupabaseAdminClient();
     ({ data, error } = await selectCourses(supabase));
+    if (error && isMissingTimetableSchema(error)) {
+      ({ data, error } = await selectCourses(supabase, false));
+    }
   }
 
   if (error) {

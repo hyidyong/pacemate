@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function WeeklyPlanPreviewPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ courseId?: string }>;
+  searchParams?: Promise<{ courseId?: string; approval?: "approved" | "already-approved" | "error" }>;
 }) {
   const profile = await getDemoProfile();
   if (!profile) redirect("/login");
@@ -22,10 +22,7 @@ export default async function WeeklyPlanPreviewPage({
   let loadError = false;
 
   try {
-    const allDrafts = await getWeeklyPlanDraftsForProfessorSession(profile);
-    drafts = selectedCourseId
-      ? allDrafts.filter((draft) => draft.courseId === selectedCourseId)
-      : allDrafts;
+    drafts = await getWeeklyPlanDraftsForProfessorSession(profile, selectedCourseId || undefined);
   } catch {
     loadError = true;
   }
@@ -48,7 +45,7 @@ export default async function WeeklyPlanPreviewPage({
         ) : drafts.length === 0 ? (
           <div className="rounded-2xl bg-white p-6 text-sm text-slate-600 shadow-sm">검토할 주간 계획 초안이 없습니다.</div>
         ) : (
-          <WeeklyPlanReviewEditor drafts={drafts} />
+          <WeeklyPlanReviewEditor drafts={drafts} approvalState={params?.approval} />
         )}
       </main>
     </AppShell>

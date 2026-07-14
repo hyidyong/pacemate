@@ -10,4 +10,6 @@ test("student timetable reads use a verified profile and retain RLS-safe fallbac
   assert.match(source, /if \(error\?\.code === "42501"\)/);
   assert.match(source, /createSupabaseAdminClient\(\)/);
   assert.match(source, /getMyCourses\(profile\)/);
+  assert.match(source, /isMissingTimetableSchema\(error\)/);
+  assert.match(source, /selectCourses\(supabase, false\)/);
 });

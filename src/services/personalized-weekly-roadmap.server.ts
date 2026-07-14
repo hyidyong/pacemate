@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getDemoProfile, type DemoProfile } from "@/services/session.service";
+import { getWeeklyPlanDraftByOfferingId } from "@/services/weekly-plan-draft.server";
 import {
   normalizeWeeklyBaseline,
   validateAiWeeklyRoadmaps,
@@ -26,6 +27,15 @@ type TimetableEnrollment = {
   course: { name?: string | null } | Array<{ name?: string | null }> | null;
 };
 type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>;
+type BaselinePlanRow = { week_number: number; title: string | null; topic: string | null; content: string | null };
+type StudyProgressInput = {
+  week_number: number;
+  progress_status_override: string | null;
+  difficulty_level: number | null;
+  understanding_level: number | null;
+  private_note: string | null;
+  use_private_note_for_ai: boolean;
+};
 
 async function getStudentProfile(): Promise<StudentProfile | null> {
   const profile = await getDemoProfile();
@@ -167,6 +177,42 @@ function toKeywords(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
 }
 
+function toBaselineRows(rows: readonly BaselinePlanRow[]): WeeklyBaseline[] {
+  return normalizeWeeklyBaseline(rows.map((row) => ({
+    weekNumber: row.week_number,
+    title: row.title ?? undefined,
+    topic: row.topic ?? undefined,
+    content: row.content ?? undefined,
+  })));
+}
+
+function getSyllabusBaseline(offeringId: string, rows: readonly BaselinePlanRow[]): WeeklyBaseline[] {
+  if (rows.length) return toBaselineRows(rows);
+
+  // File-backed drafts are the parsed syllabus source while a newly-added
+  // offering has not yet persisted its normalized course_weekly_plans rows.
+  // They are deliberately usable by students before professor review.
+  const draft = getWeeklyPlanDraftByOfferingId(offeringId);
+  if (!draft) return toBaselineRows([]);
+
+  return normalizeWeeklyBaseline(draft.weeks.map((week) => ({
+    weekNumber: week.weekNumber,
+    title: week.title,
+    topic: week.topics.join(" · "),
+    content: week.sourceNote,
+  })));
+}
+
+function toPersonalizationProgress(rows: readonly StudyProgressInput[]) {
+  return rows.map((row) => ({
+    weekNumber: row.week_number,
+    status: row.progress_status_override,
+    difficultyLevel: row.difficulty_level,
+    understandingLevel: row.understanding_level,
+    privateNote: row.use_private_note_for_ai ? row.private_note : null,
+  }));
+}
+
 function isMissingPersonalizedRoadmapTable(error: DatabaseError) {
   return error?.code === "PGRST205";
 }
@@ -254,29 +300,35 @@ export async function getPersonalizedWeeklyRoadmapForSession(offeringId: string)
     .maybeSingle();
   if (enrollmentError || !enrollment) throw new Error("Offering is not assigned to the current student");
 
-  const [plansResult, sourceResult, profileResult, savedResult] = await Promise.all([
-    supabase.from("course_weekly_plans").select("week_number,title,topic,content").eq("offering_id", offeringId).eq("professor_confirmed", true).eq("review_required", false).order("week_number"),
+  const [plansResult, sourceResult, profileResult, progressResult, savedResult] = await Promise.all([
+    // Baseline plans come from the parsed syllabus and stay usable before a
+    // professor has reviewed them. Approval is an optional later input, not a
+    // gate on a student's own roadmap.
+    supabase.from("course_weekly_plans").select("week_number,title,topic,content").eq("offering_id", offeringId).order("week_number"),
     supabase.from("course_roadmap_personalization_sources").select("source_version,foundation_knowledge,focus_keywords,professor_notes").eq("offering_id", offeringId).maybeSingle(),
     supabase.from("student_profiles").select("target_career,interests,weak_basics,completed_courses_text,grade,semester").eq("profile_id", profile.id).maybeSingle(),
+    supabase.from("student_weekly_progress").select("week_number,progress_status_override,difficulty_level,understanding_level,private_note,use_private_note_for_ai").eq("student_id", profile.id).eq("offering_id", offeringId).order("week_number"),
     supabase.from("student_personalized_weekly_roadmaps").select("source_version,onboarding_hash,input_hash").eq("student_id", profile.id).eq("offering_id", offeringId).order("week_number").limit(1),
   ]);
   if (
     plansResult.error
     || profileResult.error
+    || progressResult.error
     || (sourceResult.error && !isMissingPersonalizedRoadmapTable(sourceResult.error))
     || (savedResult.error && !isMissingPersonalizedRoadmapTable(savedResult.error))
   ) {
     throw new Error("Personalized roadmap data could not be read");
   }
 
-  const baseline: WeeklyBaseline[] = normalizeWeeklyBaseline((plansResult.data ?? []).map((row: any) => ({ weekNumber: row.week_number, title: row.title, topic: row.topic, content: row.content })));
-  if (!(plansResult.data ?? []).length) {
-    throw new Error("Approved weekly syllabus is unavailable");
-  }
+  const baseline = getSyllabusBaseline(
+    offeringId,
+    (plansResult.data ?? []) as BaselinePlanRow[],
+  );
   const source = (sourceResult.data ?? { source_version: 1, foundation_knowledge: "", focus_keywords: [], professor_notes: "" }) as Source;
   const onboarding = profileResult.data ?? {};
+  const studyProgress = toPersonalizationProgress((progressResult.data ?? []) as StudyProgressInput[]);
   const onboardingHash = hash(onboarding);
-  const inputHash = hash({ baseline, sourceVersion: source.source_version, foundationKnowledge: source.foundation_knowledge, keywords: toKeywords(source.focus_keywords), notes: source.professor_notes, onboarding });
+  const inputHash = hash({ baseline, sourceVersion: source.source_version, foundationKnowledge: source.foundation_knowledge, keywords: toKeywords(source.focus_keywords), notes: source.professor_notes, onboarding, studyProgress });
   const legacyWeeks = isMissingPersonalizedRoadmapTable(savedResult.error)
     ? await getLegacyRoadmapWeeks(supabase, profile.id, offeringId)
     : [];
@@ -294,7 +346,7 @@ export async function getPersonalizedWeeklyRoadmapForSession(offeringId: string)
     if (!error && data?.length === 15) return data;
   }
 
-  const aiWeeks = await generateWithOpenAi({ baseline, professor: { foundationKnowledge: source.foundation_knowledge, focusKeywords: toKeywords(source.focus_keywords), notes: source.professor_notes }, student: onboarding });
+  const aiWeeks = await generateWithOpenAi({ baseline, professor: { foundationKnowledge: source.foundation_knowledge, focusKeywords: toKeywords(source.focus_keywords), notes: source.professor_notes }, student: { onboarding, studyProgress } });
   const fallback = buildFallbackRoadmaps(baseline, source.source_version, onboardingHash, inputHash);
   const rows = baseline.map((week, index) => {
     const ai = aiWeeks?.[index];
@@ -417,8 +469,6 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
       .from("course_weekly_plans")
       .select("week_number,title,topic,content")
       .eq("offering_id", selectedOfferingId)
-      .eq("professor_confirmed", true)
-      .eq("review_required", false)
       .order("week_number"),
   ]);
 
@@ -430,8 +480,11 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
     console.error("Student roadmap syllabus could not be read", plansResult.error);
   }
 
-  const baselineWeeks = (plansResult.data ?? []).map((row) => ({
-    week_number: row.week_number,
+  const baselineWeeks = getSyllabusBaseline(
+    selectedOfferingId,
+    (plansResult.data ?? []) as BaselinePlanRow[],
+  ).map((row) => ({
+    week_number: row.weekNumber,
     baseline_title: row.title,
     baseline_topic: row.topic,
     baseline_content: row.content,
