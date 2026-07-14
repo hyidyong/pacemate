@@ -10,6 +10,7 @@ import { saveAssistantOnboarding } from "@/services/onboarding.actions";
 import { getStudentOnboardingProfile, type StudentType } from "@/services/onboarding.service";
 import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
 import { redirectNonStudent } from "@/services/role-guard.service";
+import { electronicEngineeringDemoCurriculum } from "@/components/onboarding/electronic-engineering-demo-curriculum";
 
 type OnboardingPageProps = {
   searchParams?: Promise<{
@@ -67,9 +68,11 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       const curriculumResult = await getDraftCurriculumByDepartment("electronic-engineering");
       if (curriculumResult.kind === "preview") {
         electronicCurriculumPreview = curriculumResult;
+      } else {
+        electronicCurriculumPreview = electronicEngineeringDemoCurriculum;
       }
     } catch {
-      electronicCurriculumPreview = null;
+      electronicCurriculumPreview = electronicEngineeringDemoCurriculum;
     }
   }
   const selectedTypes = new Set(savedProfile?.user_types ?? []);

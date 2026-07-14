@@ -1,0 +1,61 @@
+import type { CurriculumPreview } from "@/types/curriculum";
+
+const demoCourses = [
+  [1, ["대학수학", "일반물리학", "일반물리학실험", "컴퓨터프로그래밍", "창의공학설계", "회로이론기초"]],
+  [2, ["회로이론", "전자기학", "디지털논리회로", "자료구조", "신호및시스템", "기초전자회로"]],
+  [3, ["전자회로", "마이크로프로세서", "통신공학", "제어공학", "반도체공학", "임베디드시스템"]],
+  [4, ["캡스톤디자인", "디지털신호처리", "전력전자", "사물인터넷", "인공지능응용", "졸업프로젝트"]],
+] as const;
+
+export const electronicEngineeringDemoCurriculum: CurriculumPreview = {
+  kind: "preview",
+  department: "electronic-engineering",
+  version: {
+    id: "demo-electronic-engineering-2026",
+    departmentId: "demo-electronic-engineering",
+    versionKey: "electronic-engineering-demo-2026",
+    academicYear: 2026,
+    versionLabel: "전자공학과 온보딩 시연용 교육과정",
+    admissionYearFrom: null,
+    admissionYearTo: null,
+    status: "draft",
+    sourceTitle: "전자공학과 온보딩 시연 데이터",
+    sourceFile: "onboarding-demo",
+    sourceAcademicYear: 2026,
+    sourceEdition: "demo",
+    publicationDate: null,
+    sourceVerified: false,
+    notes: "온보딩 화면 시연을 위한 기본 과목 데이터입니다.",
+  },
+  courses: demoCourses.flatMap(([grade, names]) =>
+    names.map((sourceCourseName, index) => ({
+      id: `demo-ee-${grade}-${index + 1}`,
+      curriculumVersionId: "demo-electronic-engineering-2026",
+      courseId: null,
+      sourceCourseName,
+      sourceCourseCode: null,
+      credits: null,
+      requirementType: "major",
+      recommendedGrade: grade,
+      recommendedSemester: null,
+      curriculumLevel: "major",
+      isRequired: true,
+      sourcePage: null,
+      sortOrder: (grade - 1) * 6 + index,
+      metadata: { demo: true },
+    })),
+  ),
+  requirements: [],
+  exceptions: [],
+  careerTracks: [],
+  summary: {
+    courseCount: 24,
+    exactMatchCount: 0,
+    unresolvedCourseCount: 24,
+    requirementCount: 0,
+    exceptionCount: 0,
+    careerTrackCount: 0,
+    seededCareerTrackCourseCount: 0,
+    heldUnresolvedCareerLinkCount: 0,
+  },
+};

@@ -1,4 +1,7 @@
+"use client";
+
 import { ArrowRight } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { saveStudentOnboarding } from "@/services/onboarding.actions";
 import { StudentType } from "@/services/onboarding.service";
@@ -53,6 +56,9 @@ export function StudentOnboardingForm({
   returnTo,
 }: StudentOnboardingFormProps) {
   const selectedTypes = new Set(savedProfile?.user_types ?? []);
+  const [currentGrade, setCurrentGrade] = useState<number | "">(
+    typeof savedProfile?.grade === "number" ? savedProfile.grade : "",
+  );
 
   return (
     <form action={saveStudentOnboarding} className="onboarding-form">
@@ -90,7 +96,12 @@ export function StudentOnboardingForm({
         <div className="onboarding-field-grid">
           <label className="field">
             <span>학년</span>
-            <select name="grade" defaultValue={savedProfile?.grade ?? ""} required>
+            <select
+              name="grade"
+              value={currentGrade}
+              onChange={(event) => setCurrentGrade(event.target.value ? Number(event.target.value) : "")}
+              required
+            >
               <option value="" disabled>
                 선택
               </option>
@@ -158,7 +169,7 @@ export function StudentOnboardingForm({
 
       <ElectronicEngineeringOnboardingWorkspace
         preview={electronicCurriculumPreview}
-        currentGrade={typeof savedProfile?.grade === "number" ? savedProfile.grade : null}
+        currentGrade={currentGrade || null}
         currentSemester={savedProfile?.semester === 1 || savedProfile?.semester === 2 ? savedProfile.semester : null}
       />
 
