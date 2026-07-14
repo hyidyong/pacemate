@@ -105,7 +105,7 @@ type MobileHeaderRoute = HeaderRoute & {
 };
 
 const desktopRoutes: HeaderRoute[] = [
-  { href: "/dashboard", label: "대시보드" },
+  { href: "/dashboard", label: "홈" },
   { href: "/roadmap", label: "로드맵" },
   { href: "/courses", label: "과목" },
   { href: "/counseling", label: "상담" },
@@ -141,7 +141,6 @@ export function AppHeader({
   profileId,
 }: AppHeaderProps) {
   const pathname = usePathname();
-  const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfessorMenuOpen, setIsProfessorMenuOpen] = useState(false);
 
@@ -242,11 +241,7 @@ export function AppHeader({
         {/* Student-only global navigation. Keep it out of the professor header DOM so
             shared nav CSS cannot make student links reappear in the professor GNB. */}
         {!isProfessor ? (
-        <nav
-          className="nav-links flex items-center h-full relative"
-          onMouseEnter={() => setIsMegaMenuOpen(true)}
-          onMouseLeave={() => setIsMegaMenuOpen(false)}
-        >
+        <nav className="nav-links flex items-center h-full relative">
           {desktopRoutes.map((route) => (
             <Link
               href={route.href}
@@ -254,49 +249,11 @@ export function AppHeader({
               className="flex items-center gap-1 hover:text-emerald-700 transition-colors py-2"
             >
               {route.label}
-              {route.href === "/dashboard" && <ChevronDown size={14} />}
             </Link>
           ))}
           {isAuthenticated && !isProfessor && !isOperator ? (
             <Link href="/notices" className="flex items-center gap-1 py-2 transition-colors hover:text-emerald-700">공지사항</Link>
           ) : null}
-
-          {/* Mega Menu Dropdown */}
-          <AnimatePresence>
-            {isMegaMenuOpen && isAuthenticated && !isProfessor && !isOperator && (
-              <MotionDiv
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-[600px] bg-white rounded-2xl shadow-2xl border border-emerald-100 p-6 grid grid-cols-3 gap-6 overflow-hidden z-[100]"
-              >
-                <div className="flex flex-col gap-3">
-                  <h3 className="font-bold text-emerald-800 text-sm mb-1 border-b border-emerald-100 pb-2">학습 및 진도</h3>
-                  <Link href="/dashboard" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">대시보드 홈</Link>
-                  <Link href="/roadmap" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">나의 로드맵</Link>
-                </div>
-                <div className="flex flex-col gap-3">
-                  <h3 className="font-bold text-emerald-800 text-sm mb-1 border-b border-emerald-100 pb-2">상담 및 지원</h3>
-                  <Link href="/chatbot" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">AI 튜터에게 질문</Link>
-                  <Link href="/support" onClick={() => setIsMegaMenuOpen(false)} className="text-sm text-gray-600 hover:text-emerald-600 transition-colors">운영팀 문의</Link>
-                </div>
-                <div className="flex flex-col gap-3 bg-emerald-50 -my-6 -mr-6 p-6">
-                  <h3 className="font-bold text-emerald-800 text-sm mb-1">PaceMate 커뮤니티</h3>
-                  <p className="text-xs text-emerald-600 mb-2 leading-relaxed">
-                    다른 학생들과 함께 공부 팁을 나누고 질문해 보세요!
-                  </p>
-                  <Link
-                    href="/community"
-                    onClick={() => setIsMegaMenuOpen(false)}
-                    className="mt-auto bg-emerald-600 text-white text-xs font-bold py-2 px-4 rounded-xl text-center hover:bg-emerald-700 transition-colors block w-full relative z-10"
-                  >
-                    커뮤니티 바로가기
-                  </Link>
-                </div>
-              </MotionDiv>
-            )}
-          </AnimatePresence>
         </nav>
         ) : null}
 

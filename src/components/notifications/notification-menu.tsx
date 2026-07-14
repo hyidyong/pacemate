@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useId, useState, useTransition } from "react";
 import Link from "next/link";
 import { Bell, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -30,6 +30,7 @@ function newestFirst(items: UserNotification[]) {
 }
 
 export function NotificationMenu({ notifications, unreadCount, profileId }: NotificationMenuProps) {
+  const channelInstanceId = useId().replaceAll(":", "");
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(notifications);
   const [toast, setToast] = useState<UserNotification | null>(null);
@@ -38,8 +39,10 @@ export function NotificationMenu({ notifications, unreadCount, profileId }: Noti
 
   useEffect(() => setItems(newestFirst(notifications)), [notifications]);
   useEffect(() => {
+    if (!profileId) return;
+
     const channel = supabase
-      .channel(`in-app-notifications:${profileId}`)
+      .channel(`in-app-notifications:${profileId}:${channelInstanceId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_notifications", filter: `recipient_id=eq.${profileId}` }, (payload) => {
         const next = asNotification(payload.new as Record<string, unknown>);
         if (!next) return;
@@ -48,7 +51,7 @@ export function NotificationMenu({ notifications, unreadCount, profileId }: Noti
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [profileId]);
+  }, [channelInstanceId, profileId]);
   useEffect(() => {
     if (!toast) return;
     const timeout = window.setTimeout(() => setToast(null), 5000);
