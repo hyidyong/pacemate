@@ -183,9 +183,13 @@ export function AppHeader({
     <>
       {/* --- DESKTOP HEADER --- */}
       <header className={DESKTOP_HEADER_CLASS}>
-        <Link href={homeHref} className="brand" aria-label="PaceMate home">
+        <Link href={homeHref} className="brand" aria-label="Substudy home">
           <span>
-            <strong>PaceMate</strong>
+            <img
+              alt="substudy"
+              className="h-[56px] w-auto object-contain"
+              src="https://i.ibb.co/rKgLL4gX/AIDrawing-260714-730dfff9-7f89-42b7-97c8-5c46b35eafc1-0-Miri-Canvas.png"
+            />
           </span>
         </Link>
 
@@ -339,9 +343,13 @@ export function AppHeader({
 
       {/* --- MOBILE HEADER --- */}
       <header className={MOBILE_HEADER_CLASS}>
-        <Link href={homeHref} className="brand" aria-label="PaceMate home">
+        <Link href={homeHref} className="brand" aria-label="Substudy home">
           <span>
-            <strong>PaceMate</strong>
+            <img
+              alt="substudy"
+              className="h-[42px] w-auto object-contain"
+              src="https://i.ibb.co/rKgLL4gX/AIDrawing-260714-730dfff9-7f89-42b7-97c8-5c46b35eafc1-0-Miri-Canvas.png"
+            />
           </span>
         </Link>
         <div className="flex items-center gap-3">
