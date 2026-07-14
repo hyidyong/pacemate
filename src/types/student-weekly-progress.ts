@@ -10,6 +10,23 @@ export type StudentCourseProgressStatus =
   | "in_progress"
   | "needs_review";
 
+export type StudentDifficultyRating = "HIGH" | "MID" | "LOW";
+
+export type StudentWeeklyFeedbackDraft = {
+  weekNumber: number;
+  difficultyRating: StudentDifficultyRating | null;
+  personalMemo: string;
+  professorMemo: string;
+  updatedAt: string | null;
+};
+
+export type StudentRoadmapCourseGuide = {
+  courseName: string;
+  description: string;
+  prerequisites: string;
+  studyGuide: string;
+};
+
 export type StudentWeeklyProgressRecord = {
   weekNumber: number;
   progressStatusOverride: StudentWeeklyProgressStatus | null;

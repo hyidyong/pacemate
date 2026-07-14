@@ -7,4 +7,7 @@ test("anonymous aggregate uses the request-scoped RLS client without service rol
   assert.doesNotMatch(source, /createSupabaseAdminClient|supabase\/admin/);
   assert.match(source, /student_weekly_progress/);
   assert.match(source, /difficulty_level, understanding_level/);
+  assert.match(source, /difficulty_rating, professor_memo/);
+  assert.doesNotMatch(source, /STUDENT_WEEKLY_PROGRESS_SELECT[^;]*private_note/s);
+  assert.match(source, /course_weekly_plans/);
 });

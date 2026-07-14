@@ -10,10 +10,12 @@ import {
   type ProfessorAnonymousWeeklyAggregateResult,
   type ProfessorAnonymousWeeklyAggregateStatus,
   type ProfessorAnonymousWeeklyAggregateStatusCounts,
+  type ProfessorWeeklyDifficultyCounts,
 } from "@/types/professor-anonymous-weekly-aggregate";
+import type { StudentDifficultyRating } from "@/types/student-weekly-progress";
 
 const STUDENT_WEEKLY_PROGRESS_SELECT =
-  "student_id, offering_id, week_number, progress_status_override, difficulty_level, understanding_level" as const;
+  "student_id, offering_id, week_number, progress_status_override, difficulty_level, understanding_level, difficulty_rating, professor_memo" as const;
 
 const AGGREGATE_STATUSES: readonly ProfessorAnonymousWeeklyAggregateStatus[] = [
   "not_started",
@@ -47,6 +49,8 @@ type ParsedProgressRow = {
   status: ProfessorAnonymousWeeklyAggregateStatus;
   difficultyLevel: number | null;
   understandingLevel: number | null;
+  difficultyRating: StudentDifficultyRating | null;
+  professorMemo: string | null;
 };
 
 type ParseProgressRowResult =
@@ -55,13 +59,17 @@ type ParseProgressRowResult =
 
 type MutableAggregate = {
   offeringId: string;
+  courseName: string;
   weekNumber: number;
+  weeklyTitle: string;
   students: Set<string>;
   statusCounts: ProfessorAnonymousWeeklyAggregateStatusCounts;
   difficultySum: number;
   difficultyCount: number;
   understandingSum: number;
   understandingCount: number;
+  difficultyCounts: ProfessorWeeklyDifficultyCounts;
+  professorMemos: string[];
 };
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -80,6 +88,14 @@ function createStatusCounts(): ProfessorAnonymousWeeklyAggregateStatusCounts {
     needs_review: 0,
     skipped: 0,
   };
+}
+
+function createDifficultyCounts(): ProfessorWeeklyDifficultyCounts {
+  return { HIGH: 0, MID: 0, LOW: 0 };
+}
+
+function isDifficultyRating(value: unknown): value is StudentDifficultyRating {
+  return value === "HIGH" || value === "MID" || value === "LOW";
 }
 
 function failure(code: ProfessorAnonymousWeeklyAggregateErrorCode): ProfessorAnonymousWeeklyAggregateResult {
@@ -115,12 +131,18 @@ function parseProfile(value: unknown): ProfileRow | null {
     : null;
 }
 
-function parseOfferingId(value: unknown): string | null {
+function parseOffering(value: unknown): { id: string; courseName: string } | null {
   if (!isRecord(value) || typeof value.id !== "string") {
     return null;
   }
 
-  return normalizeUuid(value.id);
+  const id = normalizeUuid(value.id);
+  const courseValue = Array.isArray(value.course) ? value.course[0] : value.course;
+  const courseName = isRecord(courseValue) && typeof courseValue.name === "string"
+    ? courseValue.name.trim()
+    : "담당 과목";
+
+  return id ? { id, courseName: courseName || "담당 과목" } : null;
 }
 
 function parseBoundedInteger(value: unknown, minimum: number, maximum: number): number | null {
@@ -141,18 +163,34 @@ function parseProgressRow(value: unknown): ParseProgressRowResult {
     value.difficulty_level === null ? null : parseBoundedInteger(value.difficulty_level, 1, 5);
   const understandingLevel =
     value.understanding_level === null ? null : parseBoundedInteger(value.understanding_level, 1, 5);
+  const fallbackDifficultyRating = difficultyLevel === null
+    ? null
+    : difficultyLevel >= 4
+      ? "HIGH"
+      : difficultyLevel === 3
+        ? "MID"
+        : "LOW";
+  const difficultyRating = value.difficulty_rating === null
+    ? fallbackDifficultyRating
+    : isDifficultyRating(value.difficulty_rating)
+      ? value.difficulty_rating
+      : null;
+  const professorMemo = typeof value.professor_memo === "string" && value.professor_memo.trim()
+    ? value.professor_memo.trim()
+    : null;
 
   if (
     !studentId ||
     !offeringId ||
     weekNumber === null ||
     (value.difficulty_level !== null && difficultyLevel === null) ||
-    (value.understanding_level !== null && understandingLevel === null)
+    (value.understanding_level !== null && understandingLevel === null) ||
+    (value.difficulty_rating !== null && difficultyRating === null)
   ) {
     return { ok: false, code: "invalid_database_row" };
   }
 
-  if (!isAggregateStatus(value.progress_status_override)) {
+  if (value.progress_status_override !== null && !isAggregateStatus(value.progress_status_override)) {
     return { ok: false, code: "invalid_status" };
   }
 
@@ -162,9 +200,11 @@ function parseProgressRow(value: unknown): ParseProgressRowResult {
       studentId,
       offeringId,
       weekNumber,
-      status: value.progress_status_override,
+      status: value.progress_status_override ?? "not_started",
       difficultyLevel,
       understandingLevel,
+      difficultyRating,
+      professorMemo,
     },
   };
 }
@@ -176,10 +216,16 @@ function roundToOneDecimal(value: number): number {
 function toAggregate(group: MutableAggregate): ProfessorAnonymousWeeklyAggregate {
   const sampleSize = group.students.size;
   const suppressed = sampleSize < MINIMUM_ANONYMOUS_GROUP_SIZE;
+  const difficultyResponseCount = Object.values(group.difficultyCounts).reduce((sum, count) => sum + count, 0);
+  const toPercentage = (count: number) => difficultyResponseCount === 0
+    ? 0
+    : Math.round((count / difficultyResponseCount) * 1000) / 10;
 
   return {
     offeringId: group.offeringId,
+    courseName: group.courseName,
     weekNumber: group.weekNumber,
+    weeklyTitle: group.weeklyTitle,
     sampleSize,
     suppressed,
     statusCounts: suppressed ? null : group.statusCounts,
@@ -191,6 +237,16 @@ function toAggregate(group: MutableAggregate): ProfessorAnonymousWeeklyAggregate
       suppressed || group.understandingCount === 0
         ? null
         : roundToOneDecimal(group.understandingSum / group.understandingCount),
+    difficultyResponseCount: suppressed ? 0 : difficultyResponseCount,
+    difficultyCounts: suppressed ? createDifficultyCounts() : group.difficultyCounts,
+    difficultyPercentages: suppressed
+      ? createDifficultyCounts()
+      : {
+          HIGH: toPercentage(group.difficultyCounts.HIGH),
+          MID: toPercentage(group.difficultyCounts.MID),
+          LOW: toPercentage(group.difficultyCounts.LOW),
+        },
+    professorMemos: group.professorMemos,
   };
 }
 
@@ -228,7 +284,7 @@ export async function getProfessorAnonymousWeeklyAggregate(): Promise<ProfessorA
 
   const { data: offeringData, error: offeringError } = await supabase
     .from("course_offerings")
-    .select("id")
+    .select("id, course:courses(name)")
     .order("id", { ascending: true });
 
   if (offeringError) {
@@ -237,19 +293,42 @@ export async function getProfessorAnonymousWeeklyAggregate(): Promise<ProfessorA
 
   const offeringIds: string[] = [];
   const offeringIdSet = new Set<string>();
+  const offeringNames = new Map<string, string>();
 
   for (const rawOffering of (offeringData ?? []) as unknown[]) {
-    const offeringId = parseOfferingId(rawOffering);
-    if (!offeringId || offeringIdSet.has(offeringId)) {
+    const offering = parseOffering(rawOffering);
+    if (!offering || offeringIdSet.has(offering.id)) {
       return failure("invalid_database_row");
     }
 
-    offeringIds.push(offeringId);
-    offeringIdSet.add(offeringId);
+    offeringIds.push(offering.id);
+    offeringIdSet.add(offering.id);
+    offeringNames.set(offering.id, offering.courseName);
   }
 
   if (offeringIds.length === 0) {
     return { ok: true, report: { aggregates: [] } };
+  }
+
+  const { data: planData, error: planError } = await supabase
+    .from("course_weekly_plans")
+    .select("offering_id, week_number, title, topic")
+    .in("offering_id", offeringIds);
+  if (planError) {
+    return failure(classifyReadError(planError));
+  }
+  const weeklyTitles = new Map<string, string>();
+  for (const rawPlan of (planData ?? []) as unknown[]) {
+    if (!isRecord(rawPlan)) continue;
+    const planOfferingId = typeof rawPlan.offering_id === "string" ? normalizeUuid(rawPlan.offering_id) : null;
+    const planWeekNumber = parseBoundedInteger(rawPlan.week_number, 1, 60);
+    if (!planOfferingId || planWeekNumber === null || !offeringIdSet.has(planOfferingId)) continue;
+    const title = typeof rawPlan.title === "string" && rawPlan.title.trim()
+      ? rawPlan.title.trim()
+      : typeof rawPlan.topic === "string" && rawPlan.topic.trim()
+        ? rawPlan.topic.trim()
+        : `${planWeekNumber}주차`;
+    weeklyTitles.set(`${planOfferingId}\u0000${planWeekNumber}`, title);
   }
 
   const { data: progressData, error: progressError } = await supabase
@@ -284,13 +363,17 @@ export async function getProfessorAnonymousWeeklyAggregate(): Promise<ProfessorA
     const groupKey = `${row.offeringId}\u0000${row.weekNumber}`;
     const group = groups.get(groupKey) ?? {
       offeringId: row.offeringId,
+      courseName: offeringNames.get(row.offeringId) ?? "담당 과목",
       weekNumber: row.weekNumber,
+      weeklyTitle: weeklyTitles.get(groupKey) ?? `${row.weekNumber}주차`,
       students: new Set<string>(),
       statusCounts: createStatusCounts(),
       difficultySum: 0,
       difficultyCount: 0,
       understandingSum: 0,
       understandingCount: 0,
+      difficultyCounts: createDifficultyCounts(),
+      professorMemos: [],
     };
 
     group.students.add(row.studentId);
@@ -304,6 +387,14 @@ export async function getProfessorAnonymousWeeklyAggregate(): Promise<ProfessorA
     if (row.understandingLevel !== null) {
       group.understandingSum += row.understandingLevel;
       group.understandingCount += 1;
+    }
+
+    if (row.difficultyRating !== null) {
+      group.difficultyCounts[row.difficultyRating] += 1;
+    }
+
+    if (row.professorMemo !== null) {
+      group.professorMemos.push(row.professorMemo);
     }
 
     groups.set(groupKey, group);
