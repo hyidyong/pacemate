@@ -261,6 +261,7 @@ export function getWeeklyRoadmapDraftPreviewForOffering(
  */
 export async function getWeeklyPlanDraftsForProfessorSession(
   profile?: Pick<DemoProfile, "id" | "role">,
+  courseId?: string,
 ): Promise<WeeklyPlanReview[]> {
   const session = profile
     ? { profileId: profile.id, role: profile.role }
@@ -285,10 +286,16 @@ export async function getWeeklyPlanDraftsForProfessorSession(
   if (professorError) throwDatabaseError(professorError);
   if (!professors || professors.length !== 1) return [];
 
-  const { data: offerings, error: offeringError } = await supabase
+  let offeringsQuery = supabase
     .from("course_offerings")
     .select("id, course_id, professor_id, term_id")
     .eq("professor_id", professors[0].id);
+
+  if (courseId) {
+    offeringsQuery = offeringsQuery.eq("course_id", courseId);
+  }
+
+  const { data: offerings, error: offeringError } = await offeringsQuery;
 
   if (offeringError) throwDatabaseError(offeringError);
 

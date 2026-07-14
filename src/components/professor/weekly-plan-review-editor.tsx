@@ -138,7 +138,11 @@ function DraftReviewCard({ draft }: { draft: WeeklyPlanReview }) {
           <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">{draft.courseName}</h2>
           <p className="mt-1 text-sm text-slate-500">{draft.semesterLabel} · {draft.professorName} 교수</p>
         </div>
-        <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">검토 중</span>
+        {draft.approvalStatus === "approved" ? (
+          <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-800">승인 완료</span>
+        ) : (
+          <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">검토 중</span>
+        )}
       </div>
 
       <ol className="mt-7 space-y-4" aria-label={`${draft.courseName} 주차별 계획`}>
@@ -160,21 +164,32 @@ function DraftReviewCard({ draft }: { draft: WeeklyPlanReview }) {
 
       <form action={approveWeeklyPlan} className="mt-8 flex justify-end">
         <input name="offeringId" type="hidden" value={draft.offeringId} />
+        <input name="courseId" type="hidden" value={draft.courseId} />
         <input name="editedWeeks" type="hidden" value={JSON.stringify(weeks)} readOnly />
         <button
-          className="w-full rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-bold text-white transition-shadow hover:bg-blue-700 hover:shadow-md sm:w-auto"
+          className="w-full rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-bold text-white transition-shadow hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:bg-emerald-200 sm:w-auto"
+          disabled={draft.approvalStatus === "approved"}
           type="submit"
         >
-          주간 계획 최종 승인
+          {draft.approvalStatus === "approved" ? "승인 완료" : "주간 계획 최종 승인"}
         </button>
       </form>
     </article>
   );
 }
 
-export function WeeklyPlanReviewEditor({ drafts }: { drafts: WeeklyPlanReview[] }) {
+export function WeeklyPlanReviewEditor({
+  drafts,
+  approvalState,
+}: {
+  drafts: WeeklyPlanReview[];
+  approvalState?: "approved" | "already-approved" | "error";
+}) {
   return (
     <div data-testid="weekly-plan-review-editor" className="space-y-6">
+      {approvalState === "approved" ? <p role="status" className="rounded-2xl bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800">주간 계획을 승인하고 수강 학생에게 업데이트 알림을 보냈습니다.</p> : null}
+      {approvalState === "already-approved" ? <p role="status" className="rounded-2xl bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-800">이미 승인된 주간 계획입니다.</p> : null}
+      {approvalState === "error" ? <p role="alert" className="rounded-2xl bg-rose-50 px-5 py-4 text-sm font-semibold text-rose-800">주간 계획을 승인하지 못했습니다. 다시 시도해 주세요.</p> : null}
       <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-6" aria-label="평가 기준 비율 안내">
         <p className="text-sm font-semibold text-slate-900">평가 기준 비율 안내</p>
         <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-slate-600">

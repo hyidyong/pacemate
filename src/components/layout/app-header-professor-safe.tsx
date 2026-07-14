@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  UserCircle2,
 } from "lucide-react";
 import { NotificationMenu } from "@/components/notifications/notification-menu";
 import { professorWeeklyPlanPreviewLink } from "@/lib/professor-navigation";
@@ -144,6 +145,8 @@ export function AppHeader({
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfessorMenuOpen, setIsProfessorMenuOpen] = useState(false);
+  const [openProfessorDesktopMenu, setOpenProfessorDesktopMenu] = useState<string | null>(null);
+  const professorDesktopNavRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const handleProfessorMenuState = (event: Event) => {
@@ -156,6 +159,26 @@ export function AppHeader({
       window.removeEventListener("professor-mobile-menu-state", handleProfessorMenuState);
     };
   }, []);
+
+  useEffect(() => {
+    if (!openProfessorDesktopMenu) return;
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!professorDesktopNavRef.current?.contains(event.target as Node)) {
+        setOpenProfessorDesktopMenu(null);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenProfessorDesktopMenu(null);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openProfessorDesktopMenu]);
 
   const handleMobileMenuToggle = () => {
     if (isProfessor) {
@@ -200,42 +223,47 @@ export function AppHeader({
         {isAuthenticated && isProfessor ? (
           <nav
             aria-label="교수 상단 메뉴"
-            className="flex min-w-0 flex-1 items-center justify-start gap-1 overflow-x-auto px-1 lg:justify-center xl:gap-2"
+            className="flex min-w-0 flex-1 items-center justify-start gap-1 overflow-visible px-1 lg:justify-center xl:gap-2"
             data-testid="professor-desktop-dropdown-nav"
+            ref={professorDesktopNavRef}
           >
             {professorDesktopMenuGroups.map((group) => (
-              <div className="group relative shrink-0" key={group.label}>
+              <div className="relative shrink-0" key={group.label}>
                 <button
+                  aria-expanded={openProfessorDesktopMenu === group.label}
                   aria-haspopup="menu"
                   className="inline-flex whitespace-nowrap items-center gap-1.5 rounded-full px-2.5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:bg-emerald-50 focus-visible:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 xl:px-4"
+                  onClick={() => setOpenProfessorDesktopMenu((current) => current === group.label ? null : group.label)}
                   type="button"
                 >
                   <span>{group.label}</span>
                   <ChevronDown
                     aria-hidden="true"
-                    className="h-3.5 w-3.5 transition-transform duration-200 group-hover:rotate-180 group-focus-within:rotate-180"
+                    className={`h-3.5 w-3.5 transition-transform duration-200 ${openProfessorDesktopMenu === group.label ? "rotate-180" : ""}`}
                   />
                 </button>
-                <div
-                  className="pointer-events-none absolute left-1/2 top-full z-[120] mt-3 w-56 -translate-x-1/2 translate-y-2 rounded-2xl border border-slate-200 bg-white/95 p-2 opacity-0 shadow-[0_22px_55px_rgba(15,23,42,0.14)] backdrop-blur-xl transition-all duration-200 ease-out group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100"
-                  role="menu"
-                >
-                  <div className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                    {group.label}
+                {openProfessorDesktopMenu === group.label ? (
+                  <div
+                    className="absolute left-1/2 top-full z-[120] mt-3 w-56 -translate-x-1/2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-[0_22px_55px_rgba(15,23,42,0.14)] backdrop-blur-xl"
+                    role="menu"
+                  >
+                    <div className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                      {group.label}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {group.items.map((item) => (
+                        <Link
+                          className="rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:bg-emerald-50 focus-visible:text-emerald-700 focus-visible:outline-none"
+                          href={item.href}
+                          key={item.label}
+                          role="menuitem"
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    {group.items.map((item) => (
-                      <Link
-                        className="rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus-visible:bg-emerald-50 focus-visible:text-emerald-700 focus-visible:outline-none"
-                        href={item.href}
-                        key={item.label}
-                        role="menuitem"
-                      >
-                        {item.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
+                ) : null}
               </div>
             ))}
           </nav>
@@ -265,6 +293,16 @@ export function AppHeader({
             <Link href="/professor/lounge" className="header-action-link header-action-community-link hidden md:inline-flex hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200">
               <MessageSquareText aria-hidden="true" />
               <span>교수 커뮤니티</span>
+            </Link>
+          ) : null}
+          {isAuthenticated && isProfessor ? (
+            <Link
+              href="/professor/mypage"
+              className="header-action-link header-icon-link header-action-primary hover:scale-[1.01] hover:bg-opacity-90 transition-all duration-200"
+              aria-label="교수 마이페이지로 이동"
+            >
+              <UserCircle2 aria-hidden="true" />
+              <span className="sr-only">마이페이지</span>
             </Link>
           ) : null}
           {isAuthenticated ? (

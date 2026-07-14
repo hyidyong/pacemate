@@ -56,10 +56,13 @@ type MyPagePlannerProps = {
   likedPosts: CommunityPostRecord[];
 };
 
-const days = ["월", "화", "수", "목", "금"];
-const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+const days = ["월", "화", "수", "목", "금", "토", "일"];
 const TIMETABLE_TIME_COLUMN = "clamp(1.85rem, 8vw, 2.75rem)";
-const TIMETABLE_GRID_COLUMNS = `${TIMETABLE_TIME_COLUMN} repeat(5, minmax(0, 1fr))`;
+
+function toMinutes(time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : null;
+}
 
 // 5 Pastel colors for timetable blocks
 const blockColors = [
@@ -301,16 +304,35 @@ export function MyPagePlanner({
     });
   }
 
-  // Position helper for grid
-  const getBlockMetrics = (startTimeStr: string, endTimeStr: string) => {
-    const [startH, startM] = startTimeStr.split(":").map(Number);
-    const [endH, endM] = endTimeStr.split(":").map(Number);
-    const startMinutes = (startH - 9) * 60 + startM;
-    const durationMinutes = (endH - startH) * 60 + (endM - startM);
+  const { timetableHours, timetableStartHour } = useMemo(() => {
+    const startHours = timetableItems
+      .map((item) => toMinutes(item.start_time))
+      .filter((value): value is number => value !== null)
+      .map((value) => Math.floor(value / 60));
+    const endHours = timetableItems
+      .map((item) => toMinutes(item.end_time))
+      .filter((value): value is number => value !== null)
+      .map((value) => Math.ceil(value / 60));
+    const startHour = Math.min(9, ...startHours);
+    const endHour = Math.max(19, startHour + 1, ...endHours);
 
     return {
-      top: startMinutes,
-      height: durationMinutes,
+      timetableStartHour: startHour,
+      timetableHours: Array.from({ length: endHour - startHour }, (_, index) => startHour + index),
+    };
+  }, [timetableItems]);
+
+  const timetableGridColumns = `${TIMETABLE_TIME_COLUMN} repeat(${days.length}, minmax(0, 1fr))`;
+
+  // Position helper for grid
+  const getBlockMetrics = (startTimeStr: string, endTimeStr: string) => {
+    const start = toMinutes(startTimeStr);
+    const end = toMinutes(endTimeStr);
+    if (start === null || end === null) return null;
+
+    return {
+      top: start - timetableStartHour * 60,
+      height: end - start,
     };
   };
 
@@ -511,7 +533,7 @@ export function MyPagePlanner({
             style={{ contain: "layout paint" }}
           >
             {/* Header Row */}
-            <div className="grid h-10 border-b border-gray-100 bg-gray-50" style={{ gridTemplateColumns: TIMETABLE_GRID_COLUMNS }}>
+            <div className="grid h-10 border-b border-gray-100 bg-gray-50" style={{ gridTemplateColumns: timetableGridColumns }}>
               <div className="border-r border-gray-100" />
               {days.map((d) => (
                 <div key={d} className="flex min-w-0 items-center justify-center border-r border-gray-100 px-0.5 text-center text-[11px] font-semibold text-gray-600 last:border-r-0 sm:px-1 sm:text-sm">
@@ -521,10 +543,10 @@ export function MyPagePlanner({
             </div>
 
             {/* Grid Body */}
-            <div className="relative" style={{ height: `${HOURS.length * 60}px` }}>
+            <div className="relative" style={{ height: `${timetableHours.length * 60}px` }}>
               {/* Horizontal Lines & Time Labels */}
-              {HOURS.map((hour, idx) => (
-                <div key={hour} className="absolute grid w-full" style={{ top: `${idx * 60}px`, height: "60px", gridTemplateColumns: TIMETABLE_GRID_COLUMNS }}>
+              {timetableHours.map((hour, idx) => (
+                <div key={hour} className="absolute grid w-full" style={{ top: `${idx * 60}px`, height: "60px", gridTemplateColumns: timetableGridColumns }}>
                   <div className="flex items-start justify-center border-r border-gray-100 pt-2">
                     <span className="text-[10px] font-medium text-gray-400 sm:text-xs">{hour}</span>
                   </div>
@@ -542,6 +564,7 @@ export function MyPagePlanner({
 
                 const colorClass = blockColors[index % blockColors.length];
                 const blockMetrics = getBlockMetrics(item.start_time, item.end_time);
+                if (!blockMetrics || blockMetrics.height <= 0) return null;
 
                 return (
                   <div 
@@ -550,8 +573,8 @@ export function MyPagePlanner({
                     style={{
                       top: `${blockMetrics.top}px`,
                       height: `${blockMetrics.height}px`,
-                      left: `calc(${TIMETABLE_TIME_COLUMN} + ${dayIndex} * ((100% - ${TIMETABLE_TIME_COLUMN}) / 5))`,
-                      width: `calc((100% - ${TIMETABLE_TIME_COLUMN}) / 5)`,
+                      left: `calc(${TIMETABLE_TIME_COLUMN} + ${dayIndex} * ((100% - ${TIMETABLE_TIME_COLUMN}) / ${days.length}))`,
+                      width: `calc((100% - ${TIMETABLE_TIME_COLUMN}) / ${days.length})`,
                     }}
                   >
                     <TimetableCourseCell

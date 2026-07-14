@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isMissingTimetableSchema } from "@/lib/student-timetable-schema";
 import { getDemoProfile } from "@/services/session.service";
 import type { CourseRecord, StudentCourseRecord } from "@/services/student-community.service";
 import { syncStudentCourseSchedule } from "@/services/student-timetable.service";
@@ -10,6 +11,8 @@ import { validateScheduleSlots, type ScheduleSlot, type ScheduleSlotInput } from
 
 const studentCourseSelectColumns =
   "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text), schedule_slots:student_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)";
+const legacyStudentCourseSelectColumns =
+  "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text)";
 
 async function getProfileId() {
   const profile = await getDemoProfile();
@@ -175,46 +178,63 @@ export async function addCourseToSchedule(formData: FormData) {
     return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
-  const { data, error } = existing?.id
-    ? await supabase
+  const saveStudentCourse = (columns: string) => existing?.id
+    ? supabase
         .from("student_courses")
         .update(payload)
         .eq("id", existing.id)
         .eq("student_id", profileId)
-        .select(studentCourseSelectColumns)
+        .select(columns)
         .single()
-    : await supabase
+    : supabase
         .from("student_courses")
         .insert(payload)
-        .select(studentCourseSelectColumns)
+        .select(columns)
         .single();
+
+  let { data, error } = await saveStudentCourse(studentCourseSelectColumns);
+  let usesLegacyTimetableStorage = false;
+
+  // The mobile UI must still save to the established legacy columns when a
+  // deployment has not received the normalized schedule-slot migration yet.
+  if (error && isMissingTimetableSchema(error)) {
+    ({ data, error } = await saveStudentCourse(legacyStudentCourseSelectColumns));
+    usesLegacyTimetableStorage = !error;
+  }
 
   if (error) {
     console.error("addCourseToSchedule failed:", error.message);
     return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
-  const studentCourseId = typeof (data as { id?: unknown })?.id === "string"
-    ? (data as { id: string }).id
+  const savedCourse = data as unknown as { id?: unknown } | null;
+  const studentCourseId = typeof savedCourse?.id === "string"
+    ? savedCourse.id
     : null;
   if (!studentCourseId) {
     return { ok: false, message: "시간표 수강 정보를 확인하지 못했습니다." };
   }
 
-  try {
-    await syncStudentCourseSchedule({
-      supabase,
-      studentCourseId,
-      courseId,
-      semesterLabel: payload.semester_label,
-      manualSlots,
-    });
-  } catch (syncError) {
-    console.error("addCourseToSchedule schedule sync failed", syncError);
-    if (!existing?.id) {
-      await supabase.from("student_courses").delete().eq("id", studentCourseId).eq("student_id", profileId);
+  if (!usesLegacyTimetableStorage) {
+    try {
+      await syncStudentCourseSchedule({
+        supabase,
+        studentCourseId,
+        courseId,
+        semesterLabel: payload.semester_label,
+        manualSlots,
+      });
+    } catch (syncError) {
+      if (isMissingTimetableSchema(syncError)) {
+        usesLegacyTimetableStorage = true;
+      } else {
+        console.error("addCourseToSchedule schedule sync failed", syncError);
+        if (!existing?.id) {
+          await supabase.from("student_courses").delete().eq("id", studentCourseId).eq("student_id", profileId);
+        }
+        return { ok: false, message: "시간표를 안전하게 동기화하지 못했습니다. 기존 시간표는 유지됩니다." };
+      }
     }
-    return { ok: false, message: "시간표를 안전하게 동기화하지 못했습니다. 기존 시간표는 유지됩니다." };
   }
 
   revalidatePath("/mypage");
@@ -223,7 +243,9 @@ export async function addCourseToSchedule(formData: FormData) {
   revalidatePath("/notices");
   return {
     ok: true,
-    message: "시간표에 등록했습니다.",
+    message: usesLegacyTimetableStorage
+      ? "시간표에 등록했습니다. (기존 시간표 형식으로 저장됨)"
+      : "시간표에 등록했습니다.",
     course: normalizeJoinedStudentCourse(data),
   };
 }

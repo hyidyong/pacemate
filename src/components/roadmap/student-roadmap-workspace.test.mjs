@@ -68,12 +68,21 @@ test("persists timetable changes through the server-only admin client", async ()
   assert.match(source, /const supabase = createStudentCommunitySupabaseClient\(\)/);
 });
 
-test("does not report roadmap generation as successful when approved syllabus rows are missing", async () => {
+test("uses parsed weekly syllabus rows without waiting for professor approval", async () => {
   const serverSource = await readFile(roadmapServer, "utf8");
   const actionSource = await readFile(new URL("../../services/student-roadmap.actions.ts", import.meta.url), "utf8");
 
-  assert.match(serverSource, /if \(!\(plansResult\.data \?\? \[\]\)\.length\) \{\s*throw new Error\("Approved weekly syllabus is unavailable"\);\s*\}/);
-  assert.match(actionSource, /Approved weekly syllabus is unavailable/);
+  assert.match(serverSource, /from\("course_weekly_plans"\)\.select\("week_number,title,topic,content"\)\.eq\("offering_id", offeringId\)\.order\("week_number"\)/);
+  assert.doesNotMatch(serverSource, /\.eq\("professor_confirmed", true\)/);
+  assert.doesNotMatch(actionSource, /Approved weekly syllabus is unavailable/);
+});
+
+test("offers an opt-in refresh after opening a professor plan update notification", async () => {
+  const source = await readFile(new URL("./student-roadmap-workspace.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /suggestProfessorPlanRefresh\?: boolean/);
+  assert.match(source, /최신 교수 학습 계획 반영하여 로드맵 다시 생성하기/);
+  assert.match(source, /setShowProfessorPlanRefresh\(false\)/);
 });
 
 test("falls back to weekly progress storage when roadmap migrations are not deployed", async () => {
