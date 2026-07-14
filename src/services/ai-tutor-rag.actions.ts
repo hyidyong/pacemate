@@ -26,6 +26,7 @@ type TutorResult = {
 
 const sourceTypeLabels: Record<TutorKnowledgeSourceType, string> = {
   syllabus: "강의계획서",
+  weekly_plan: "교수 승인 주차계획",
   announcement: "교수 공지사항",
   public_qa: "교수 공식 Q&A",
   bluebook: "Bluebook",
@@ -51,7 +52,7 @@ function toCitation(source: TutorKnowledgeSource): TutorCitation {
 function unavailableResult(message: string): TutorResult {
   return {
     response: message,
-    category: "수업 내용",
+    category: "수업 운영",
     isEscalated: true,
     sources: [],
   };
@@ -74,7 +75,7 @@ export async function askAiTutor(message: string, courseId: string): Promise<Tut
 
   const { data: enrollment, error: enrollmentError } = await admin
     .from("student_courses")
-    .select("course_id")
+    .select("course_id, offering_id")
     .eq("student_id", profile.id)
     .eq("course_id", selectedCourseId)
     .limit(1);
@@ -82,7 +83,14 @@ export async function askAiTutor(message: string, courseId: string): Promise<Tut
     return unavailableResult("수강 중인 과목만 AI 튜터에게 질문할 수 있습니다.");
   }
 
-  const sources = await loadTutorKnowledgeSources(admin, profile.id, selectedCourseId);
+  const offeringIds = Array.from(
+    new Set(
+      enrollment
+        .map((row) => typeof row.offering_id === "string" ? row.offering_id : null)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const sources = await loadTutorKnowledgeSources(admin, profile.id, selectedCourseId, offeringIds);
   const rankedSources = selectTutorKnowledgeSources({
     courseId: selectedCourseId,
     question,
@@ -122,6 +130,7 @@ export async function askAiTutor(message: string, courseId: string): Promise<Tut
               "Never invent dates, policies, schedules, grades, or course facts.",
               "If evidence is insufficient, set confidence below 0.7 and say that a professor or teaching assistant should confirm it.",
               "Return JSON only: {category:string, confidence:number, response:string, citationIds:string[]}.",
+              "category must be one of: 과목 정보, 학사 행정, 수업 운영, 로드맵, 상담 필요.",
               "citationIds may contain only supplied bracket IDs and must support the answer.",
             ].join(" "),
           },
@@ -148,7 +157,7 @@ export async function askAiTutor(message: string, courseId: string): Promise<Tut
     };
     const answer = typeof parsed.response === "string" ? parsed.response.trim() : "";
     const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
-    const category = normalizeQuestionCategory(typeof parsed.category === "string" ? parsed.category : "") ?? "수업 내용";
+    const category = normalizeQuestionCategory(typeof parsed.category === "string" ? parsed.category : "") ?? "수업 운영";
     const citationIds = Array.isArray(parsed.citationIds)
       ? parsed.citationIds.filter((id): id is string => typeof id === "string")
       : [];
@@ -172,9 +181,20 @@ async function loadTutorKnowledgeSources(
   admin: ReturnType<typeof createSupabaseAdminClient>,
   studentId: string,
   courseId: string,
+  offeringIds: readonly string[],
 ): Promise<TutorKnowledgeSource[]> {
-  const [{ data: syllabusRows }, { data: noticeRows }, { data: faqRows }, { data: profile }] = await Promise.all([
-    admin.from("syllabi").select("id, source_name, parsed_text, parsed_data, updated_at").eq("course_id", courseId).order("created_at", { ascending: false }).limit(1),
+  const [{ data: syllabusRows }, { data: weeklyPlanRows }, { data: noticeRows }, { data: faqRows }, { data: profile }] = await Promise.all([
+    admin.from("syllabi").select("id, source_name, parsed_text, raw_extracted_text, parsed_data, updated_at").eq("course_id", courseId).order("created_at", { ascending: false }).limit(1),
+    offeringIds.length
+      ? admin
+          .from("course_weekly_plans")
+          .select("id, week_number, title, topic, content, learning_objectives, preview_guide, review_guide, assignment_json, updated_at")
+          .in("offering_id", offeringIds)
+          .eq("professor_confirmed", true)
+          .eq("review_required", false)
+          .order("week_number", { ascending: true })
+          .limit(15)
+      : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
     admin.from("posts").select("id, title, content, created_at").eq("course_id", courseId).eq("board_key", "course_notice").eq("status", "active").order("created_at", { ascending: false }).limit(20),
     admin.from("faqs").select("id, question, answer, updated_at").eq("course_id", courseId).not("approved_at", "is", null).order("updated_at", { ascending: false }).limit(20),
     admin.from("profiles").select("department_id").eq("id", studentId).maybeSingle(),
@@ -182,8 +202,29 @@ async function loadTutorKnowledgeSources(
 
   const sources: TutorKnowledgeSource[] = [
     ...(syllabusRows ?? []).flatMap((row: any) => {
-      const content = compactText(row.parsed_text) || compactText(row.parsed_data);
+      const content =
+        compactText(row.parsed_text) ||
+        compactText(row.raw_extracted_text) ||
+        compactText(row.parsed_data);
       return content ? [{ id: `syllabus:${row.id}`, courseId, type: "syllabus" as const, title: row.source_name || "강의계획서", content, createdAt: row.updated_at ?? null }] : [];
+    }),
+    ...(weeklyPlanRows ?? []).flatMap((row: any) => {
+      const content = [
+        row.topic,
+        row.content,
+        compactText(row.learning_objectives),
+        compactText(row.preview_guide),
+        compactText(row.review_guide),
+        compactText(row.assignment_json),
+      ].filter((value) => typeof value === "string" && value.trim()).join("\n");
+      return content ? [{
+        id: `weekly_plan:${row.id}`,
+        courseId,
+        type: "weekly_plan" as const,
+        title: `${row.week_number}주차 ${row.title || row.topic || "주차별 학습 계획"}`,
+        content,
+        createdAt: row.updated_at ?? null,
+      }] : [];
     }),
     ...(noticeRows ?? []).flatMap((row: any) => row.title && row.content ? [{ id: `announcement:${row.id}`, courseId, type: "announcement" as const, title: row.title, content: row.content, createdAt: row.created_at ?? null }] : []),
     ...(faqRows ?? []).flatMap((row: any) => row.question && row.answer ? [{ id: `public_qa:${row.id}`, courseId, type: "public_qa" as const, title: row.question, content: row.answer, createdAt: row.updated_at ?? null }] : []),

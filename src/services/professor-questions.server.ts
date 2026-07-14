@@ -1,8 +1,12 @@
 import "server-only";
 
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
-import { createUserNotification } from "@/services/notifications.create.service";
+import {
+  createUserNotifications,
+  createUserNotificationsWithClient,
+} from "@/services/notifications.create.service";
 import {
   professorQuestionCategories,
   type ProfessorQuestion,
@@ -36,6 +40,7 @@ type QuestionRow = {
   answer_mode: string | null;
   source_kind: string;
   question_fingerprint: string;
+  is_anonymous: boolean;
 };
 
 type AutoReplyRuleRow = {
@@ -119,7 +124,7 @@ export async function getProfessorQuestionInbox(): Promise<ProfessorQuestionInbo
   let questionQuery = supabase
     .from("escalations")
     .select(
-      "id, course_id, category, question, status, answer, created_at, answered_at, answer_mode, source_kind, question_fingerprint",
+      "id, course_id, category, question, status, answer, created_at, answered_at, answer_mode, source_kind, question_fingerprint, is_anonymous",
     )
     .order("created_at", { ascending: false });
   if (professorId) questionQuery = questionQuery.eq("professor_id", professorId);
@@ -207,6 +212,7 @@ export async function createProfessorQuestionRecord(input: {
   submissionKey: string;
   sourceMessageId: string | null;
   sourceKind: ProfessorQuestionSourceKind;
+  isAnonymous: boolean;
 }): Promise<ProfessorQuestionCreateResult> {
   const supabase = await createSupabaseServerClient();
   const profile = await getAuthProfile(supabase, "student");
@@ -221,6 +227,7 @@ export async function createProfessorQuestionRecord(input: {
     p_submission_key: input.submissionKey,
     p_source_message_id: input.sourceMessageId,
     p_source_kind: input.sourceKind,
+    p_is_anonymous: input.isAnonymous,
   });
 
   if (error || !Array.isArray(data) || data.length !== 1) {
@@ -235,19 +242,10 @@ export async function createProfessorQuestionRecord(input: {
 
   let notificationDelivered = true;
   if (row.was_created) {
-    const notificationResult = await createUserNotification({
-      recipientRole: null,
-      recipientId: row.recipient_profile_id,
-      category: "question",
-      title: row.question_status === "answered" ? "질문 자동 답변" : "새 교수 질문",
-      body:
-        row.question_status === "answered"
-          ? "등록한 질문에 자동 답변이 도착했습니다."
-          : "담당 과목에 새 질문이 등록되었습니다.",
-      targetHref:
-        row.question_status === "answered"
-          ? "/ask"
-          : "/professor?tab=questions&sub=incoming-questions",
+    const notificationResult = await createQuestionNotifications({
+      courseId: input.courseId,
+      professorProfileId: row.recipient_profile_id,
+      isAutomaticallyAnswered: row.question_status === "answered",
     });
     notificationDelivered = notificationResult.ok;
   }
@@ -259,6 +257,64 @@ export async function createProfessorQuestionRecord(input: {
     answer: row.question_answer,
     notificationDelivered,
   };
+}
+
+async function createQuestionNotifications(input: {
+  courseId: string;
+  professorProfileId: string;
+  isAutomaticallyAnswered: boolean;
+}) {
+  const base = {
+    category: "question" as const,
+    targetHref: input.isAutomaticallyAnswered ? "/ask" : "/professor?tab=questions&sub=incoming-questions",
+  };
+  if (input.isAutomaticallyAnswered) {
+    return createUserNotifications([{
+      ...base,
+      recipientRole: null,
+      recipientId: input.professorProfileId,
+      title: "질문 자동 답변",
+      body: "등록한 질문에 자동 답변이 도착했습니다.",
+    }]);
+  }
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data: course } = await admin
+      .from("courses")
+      .select("department_id")
+      .eq("id", input.courseId)
+      .maybeSingle();
+    const { data: assistants } = course?.department_id
+      ? await admin
+          .from("profiles")
+          .select("id")
+          .eq("role", "assistant")
+          .eq("department_id", course.department_id)
+      : { data: [] as Array<{ id: string }> };
+    const recipientIds = Array.from(new Set([
+      input.professorProfileId,
+      ...(assistants ?? []).map((assistant) => assistant.id),
+    ])).filter((id) => normalizeUuid(id));
+    return createUserNotificationsWithClient(
+      admin,
+      recipientIds.map((recipientId) => ({
+        ...base,
+        recipientRole: null,
+        recipientId,
+        title: "새 교수 질문",
+        body: "담당 학과 과목에 새 질문이 등록되었습니다.",
+      })),
+    );
+  } catch {
+    return createUserNotifications([{
+      ...base,
+      recipientRole: null,
+      recipientId: input.professorProfileId,
+      title: "새 교수 질문",
+      body: "담당 과목에 새 질문이 등록되었습니다.",
+    }]);
+  }
 }
 
 export async function getAuthenticatedProfessorIdentity(): Promise<{
@@ -442,7 +498,7 @@ async function getQuestionRows(supabase: ServerClient) {
   const { data, error } = await supabase
     .from("escalations")
     .select(
-      "id, course_id, category, question, status, answer, created_at, answered_at, answer_mode, source_kind, question_fingerprint",
+      "id, course_id, category, question, status, answer, created_at, answered_at, answer_mode, source_kind, question_fingerprint, is_anonymous",
     )
     .order("created_at", { ascending: false });
   return error ? [] : ((data ?? []) as QuestionRow[]);
@@ -491,6 +547,7 @@ function parseQuestionRow(row: QuestionRow, courseNames: Map<string, string>): P
     answeredAt: row.answered_at,
     answerMode,
     sourceKind,
+    isAnonymous: row.is_anonymous === true,
     fingerprint: row.question_fingerprint,
   };
 }

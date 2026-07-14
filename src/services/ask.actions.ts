@@ -15,11 +15,16 @@ function text(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function boolean(value: FormDataEntryValue | null) {
+  return value === "true";
+}
+
 export async function submitQuestionToProfessor(formData: FormData) {
   const courseId = normalizeUuid(text(formData.get("courseId")));
   const category = normalizeQuestionCategory(text(formData.get("category")));
   const question = validateProfessorQuestion(text(formData.get("question")));
   const submissionKey = normalizeUuid(text(formData.get("submissionKey")));
+  const isAnonymous = boolean(formData.get("isAnonymous"));
 
   if (!courseId || !category || !question || !submissionKey) {
     return { ok: false, message: INVALID_QUESTION_MESSAGE };
@@ -32,6 +37,7 @@ export async function submitQuestionToProfessor(formData: FormData) {
     submissionKey,
     sourceMessageId: null,
     sourceKind: "direct",
+    isAnonymous,
   });
   if (!result.ok) {
     return {
@@ -42,6 +48,8 @@ export async function submitQuestionToProfessor(formData: FormData) {
 
   revalidatePath("/ask");
   revalidatePath("/professor");
+  revalidatePath("/dashboard");
+  revalidatePath("/mypage");
   if (!result.notificationDelivered) {
     return { ok: true, message: "질문은 접수됐지만 알림 전송에 실패했습니다." };
   }
@@ -50,7 +58,7 @@ export async function submitQuestionToProfessor(formData: FormData) {
   }
   return {
     ok: true,
-    message: result.status === "answered" ? "질문이 접수되어 자동 답변이 등록됐습니다." : "질문을 담당 교수에게 전달했습니다.",
+    message: result.status === "answered" ? "질문이 접수되어 자동 답변이 등록됐습니다." : "질문을 담당 교수와 조교에게 전달했습니다.",
   };
 }
 
@@ -70,6 +78,7 @@ export async function escalateTutorQuestion(formData: FormData) {
     submissionKey: sourceMessageId,
     sourceMessageId,
     sourceKind: "tutor",
+    isAnonymous: boolean(formData.get("isAnonymous")),
   });
   if (!result.ok) {
     return {
@@ -80,6 +89,8 @@ export async function escalateTutorQuestion(formData: FormData) {
 
   revalidatePath("/ask");
   revalidatePath("/professor");
+  revalidatePath("/dashboard");
+  revalidatePath("/mypage");
   if (!result.notificationDelivered) {
     return { ok: true, message: "질문은 접수됐지만 알림 전송에 실패했습니다." };
   }

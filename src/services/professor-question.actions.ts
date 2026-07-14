@@ -73,14 +73,18 @@ export async function answerProfessorQuestions(formData: FormData) {
       recipientRole: null,
       recipientId,
       category: "question" as const,
-      title: "교수 답변 도착",
-      body: "등록한 질문에 담당 교수의 답변이 도착했습니다.",
+      title: identity.role === "assistant" ? "조교 답변 도착" : "교수 답변 도착",
+      body: identity.role === "assistant"
+        ? "질문하신 과목에 대한 조교님의 답변이 도착했습니다."
+        : "질문하신 과목에 대한 교수님의 답변이 도착했습니다.",
       targetHref: "/ask",
     })),
   );
 
   revalidatePath("/professor");
   revalidatePath("/ask");
+  revalidatePath("/dashboard");
+  revalidatePath("/mypage");
   return notificationResult.ok
     ? { ok: true, message: `${uniqueQuestionIds.length}개 질문에 답변했습니다.` }
     : { ok: true, message: "답변은 저장됐지만 일부 알림 전송에 실패했습니다." };

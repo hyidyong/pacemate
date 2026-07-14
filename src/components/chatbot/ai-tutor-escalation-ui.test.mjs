@@ -11,6 +11,9 @@ test("AI tutor hands an editable prefilled question to the professor request act
   assert.match(source, /formData\.set\("question", escalationDraft\)/);
   assert.match(source, /escalationSubmissionKeys\.current\.get\(message\.id\) \?\? crypto\.randomUUID\(\)/);
   assert.match(source, /formData\.set\("submissionKey", submissionKey\)/);
+  assert.match(source, /formData\.set\("isAnonymous"/);
+  assert.match(source, /익명으로 질문하기/);
+  assert.match(source, /전송 중/);
   assert.doesNotMatch(source, /false && m\.isEscalated/);
 });
 
