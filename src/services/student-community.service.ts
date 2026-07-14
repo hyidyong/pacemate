@@ -207,6 +207,7 @@ export async function getMyCourses(
     .order("updated_at", { ascending: false });
 
   if (error) {
+    console.error("getMyCourses failed:", error.message);
     throw new Error(`Failed to load my courses: ${error.message}`);
   }
 
@@ -225,6 +226,7 @@ async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
     .limit(80);
 
   if (isMissingCommunityTypeColumn(error)) {
+    console.error("getPosts community_type filter skipped:", error?.message);
     const fallback = await supabase
       .from("posts")
       .select(postSelectColumns)
@@ -237,6 +239,7 @@ async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
   }
 
   if (error) {
+    console.error("getPosts failed:", error.message);
     throw new Error(`Failed to load posts: ${error.message}`);
   }
 

@@ -36,16 +36,36 @@ export async function addCourseToSchedule(formData: FormData) {
     source_text: "mypage",
   };
 
-  const { error } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from("student_courses")
-    .upsert(payload, { onConflict: "student_id,course_id,status" });
+    .select("id")
+    .eq("student_id", profileId)
+    .eq("course_id", courseId)
+    .eq("status", payload.status)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error("addCourseToSchedule lookup failed:", lookupError.message);
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+
+  const { error } = existing?.id
+    ? await supabase
+        .from("student_courses")
+        .update(payload)
+        .eq("id", existing.id)
+        .eq("student_id", profileId)
+    : await supabase
+        .from("student_courses")
+        .insert(payload);
 
   if (error) {
-      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    console.error("addCourseToSchedule failed:", error.message);
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/mypage");
-  revalidatePath("/community");
+  revalidatePath("/dashboard");
   return { ok: true, message: "시간표에 등록했습니다." };
 }
 
@@ -66,11 +86,12 @@ export async function toggleFavoriteCourse(formData: FormData) {
     .eq("student_id", profileId);
 
   if (error) {
-      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    console.error("toggleFavoriteCourse failed:", error.message);
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/mypage");
-  revalidatePath("/community");
+  revalidatePath("/dashboard");
   return { ok: true, message: nextValue ? "즐겨찾기에 추가했습니다." : "즐겨찾기를 해제했습니다." };
 }
 
@@ -83,18 +104,35 @@ export async function removeCourseFromSchedule(formData: FormData) {
   }
   const supabase = await createSupabaseServerClient();
 
+  const { data: existing, error: lookupError } = await supabase
+    .from("student_courses")
+    .select("id")
+    .eq("id", enrollmentId)
+    .eq("student_id", profileId)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error("removeCourseFromSchedule lookup failed:", lookupError.message);
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+
+  if (!existing?.id) {
+    return { ok: false, message: "삭제할 시간표를 찾을 수 없습니다." };
+  }
+
   const { error } = await supabase
     .from("student_courses")
     .delete()
-    .eq("id", enrollmentId)
+    .eq("id", existing.id)
     .eq("student_id", profileId);
 
   if (error) {
-      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    console.error("removeCourseFromSchedule failed:", error.message);
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
 
   revalidatePath("/mypage");
-  revalidatePath("/community");
+  revalidatePath("/dashboard");
   return { ok: true, message: "시간표에서 제거했습니다." };
 }
 

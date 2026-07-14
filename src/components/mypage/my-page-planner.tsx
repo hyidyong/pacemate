@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
   Bookmark,
@@ -65,6 +66,7 @@ export function MyPagePlanner({
   commentedPosts,
   likedPosts,
 }: MyPagePlannerProps) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0]?.id ?? "");
   const [day, setDay] = useState("월");
@@ -97,11 +99,14 @@ export function MyPagePlanner({
 
   const scheduledCourseIds = new Set(myCourses.map((item) => item.course.id));
 
-  function runAction(action: (formData: FormData) => Promise<{ message: string }>, formData: FormData) {
+  function runAction(action: (formData: FormData) => Promise<{ ok: boolean; message: string }>, formData: FormData) {
     setMessage("");
     startTransition(async () => {
       const result = await action(formData);
       setMessage(result.message);
+      if (result.ok) {
+        router.refresh();
+      }
     });
   }
 
