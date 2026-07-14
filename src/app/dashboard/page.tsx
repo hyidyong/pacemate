@@ -85,7 +85,7 @@ export default async function DashboardPage() {
 
   if (!profile) {
     return (
-      <AppShell>
+      <AppShell showSiteFooter>
         <ScrollReveal>
           <section className="screen-hero">
             <span className="status-line">로그인이 필요합니다</span>
@@ -219,7 +219,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <AppShell>
+    <AppShell showSiteFooter>
       <ScrollReveal>
         <section className="screen-hero">
           <h1>{copy.title}</h1>
