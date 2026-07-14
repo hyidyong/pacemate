@@ -59,7 +59,11 @@ import {
 } from "./professor-home-section-tabs";
 import { ProfessorPortalShortcutCard } from "./professor-portal-shortcut-card";
 import { getCourseRoadmap, addCourseNotice, addCourseTextbook, removeCourseAssignment } from "@/services/course-settings.actions";
-import { professorWeeklyPlanPreviewLink } from "@/lib/professor-navigation";
+import {
+  professorCourseManagementItems,
+  professorWeeklyPlanPreviewLink,
+} from "@/lib/professor-navigation";
+import { saveProfessorRoadmapPersonalization } from "@/services/personalized-weekly-roadmap.actions";
 
 // ============== TYPES ==============
 type ProfessorWorkspaceProps = {
@@ -120,16 +124,21 @@ const professorTabs: Array<{ id: ProfessorTab; label: string }> = [
   { id: "report", label: "\ud559\uc2b5 \ub9ac\ud3ec\ud2b8" },
 ];
 
+const courseManagementIcons: Record<(typeof professorCourseManagementItems)[number]["id"], any> = {
+  "roadmap-edit": PencilLine,
+  "weekly-plan-preview": FileText,
+  "sensitive-request": FileText,
+  "course-faq": HelpCircle,
+  "course-settings": Settings,
+};
+
 const sidebarMenus: Record<ProfessorTab, Array<{ id: SubMenu; label: string; icon: any }>> = {
   schedule: [
     { id: "calendar", label: "\uc2a4\ub9c8\ud2b8 \uc8fc\uac04 \uce98\ub9b0\ub354", icon: CalendarClock },
     { id: "manual-schedule", label: "\uc77c\uc815 \uc218\ub3d9 \ucd94\uac00/\uad00\ub9ac", icon: Clock },
   ],
   roadmap: [
-    { id: "roadmap-edit", label: "\ub0b4 \uacfc\ubaa9 \ub85c\ub4dc\ub9f5 \uc218\uc815", icon: PencilLine },
-    { id: "sensitive-request", label: "\ubbfc\uac10\ud55c \uc218\uc815 \uc694\uccad", icon: FileText },
-    { id: "course-settings", label: "\uae30\ud0c0 \uc218\uc5c5 \uc124\uc815", icon: Settings },
-    { id: "course-faq", label: "\uacfc\ubaa9 \uad00\ub828 \uc9c8\ubb38 \ubaa8\uc74c", icon: HelpCircle },
+    ...professorCourseManagementItems.map((item) => ({ id: item.id, label: item.label, icon: courseManagementIcons[item.id] })),
   ],
   questions: [
     { id: "incoming-questions", label: "\ub4e4\uc5b4\uc628 \uc9c8\ubb38 \ubcf4\uae30", icon: Inbox },
@@ -394,6 +403,21 @@ export function ProfessorWorkspace({
             runAction={runAction}
             showToast={showToast}
           />
+        );
+      case "weekly-plan-preview":
+        return (
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900">주간 계획 초안 검토</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              교수 승인 전 주차별 계획을 검토하고 확정할 수 있습니다.
+            </p>
+            <Link
+              className="mt-5 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+              href="/professor/weekly-plan-preview"
+            >
+              주간 계획 초안 열기
+            </Link>
+          </section>
         );
       case "sensitive-request":
         return (
@@ -920,15 +944,11 @@ function RoadmapEditSub({
 
   function handleDirectRoadmapUpdate() {
     const formData = new FormData();
-    formData.set("course", directCourse);
-    formData.set("title", directTitle);
-    formData.set("shortReason", directReason);
-    formData.set("basics", directBasics);
-    formData.set("generalStudyMethod", directGeneralMethod);
-    formData.set("courseStudyMethod", directCourseMethod);
-    formData.set("weeklyFocus", directFocus);
-    runAction(updateOwnCourseRoadmap, formData, () => {
-      setDirectReason("");
+    formData.set("courseId", directCourse.split("|")[1] ?? "");
+    formData.set("foundationKnowledge", directBasics);
+    formData.set("focusKeywords", directFocus);
+    formData.set("professorNotes", [directGeneralMethod, directCourseMethod].filter(Boolean).join("\n\n"));
+    runAction(saveProfessorRoadmapPersonalization, formData, () => {
       setDirectBasics("");
       setDirectGeneralMethod("");
       setDirectCourseMethod("");

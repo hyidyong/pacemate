@@ -28,8 +28,7 @@ export function SiteFooter({ hasMobileNav = false }: SiteFooterProps) {
             <p className="site-footer__eyebrow">PaceMate Beta</p>
             <h2>8진수</h2>
             <p className="site-footer__lead">
-              학습과 진로 탐색을 더 안정적으로 이어갈 수 있도록 돕는 PaceMate의 베타
-              서비스를 운영하고 있습니다.
+              학습과 진로 탐색을 안정적으로 이어갈 수 있도록 돕는 PaceMate 베타 서비스를 운영하고 있습니다.
             </p>
           </section>
 
@@ -37,7 +36,7 @@ export function SiteFooter({ hasMobileNav = false }: SiteFooterProps) {
             <h3>사업자 정보</h3>
             <dl className="site-footer__list">
               <div>
-                <dt>대표자</dt>
+                <dt>대표자명</dt>
                 <dd>손희정, 윤성혜</dd>
               </div>
               <div>

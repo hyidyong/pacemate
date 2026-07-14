@@ -18,6 +18,9 @@ import { resolveCompanyLaw2026OfferingForSession } from "@/services/company-law-
 import { getCourseTermCompletionEligibility } from "@/services/course-term-completion-eligibility.server";
 import { getStudentLearningRecommendations } from "@/services/student-learning-recommendations.server";
 import { StudentLearningRecommendationsCard } from "@/components/dashboard/student-learning-recommendations-card";
+import { listStudentCourseNotices } from "@/services/course-notices.server";
+import type { StudentAnnouncement } from "@/components/dashboard/student-announcement-feed";
+import { StudentAnnouncementBanner } from "@/components/dashboard/student-announcement-banner";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
@@ -82,7 +85,7 @@ export default async function DashboardPage() {
 
   if (!profile) {
     return (
-      <AppShell>
+      <AppShell showSiteFooter>
         <ScrollReveal>
           <section className="screen-hero">
             <span className="status-line">로그인이 필요합니다</span>
@@ -113,11 +116,13 @@ export default async function DashboardPage() {
   let myCourses: StudentCourseRecord[] = [];
   let todoItems: StudentTodoItem[] = [];
   let academicEvents: AcademicEvent[] = [];
+  let announcements: StudentAnnouncement[] = [];
   let eligibilityResult: Awaited<ReturnType<typeof getCourseTermCompletionEligibility>> | null = null;
   let recommendationResult: Awaited<ReturnType<typeof getStudentLearningRecommendations>> | null = null;
   let eligibilityCourseName: string | null = null;
   if (profile.role === "student") {
     myCourses = await getMyCourses(profile.id);
+    announcements = await listStudentCourseNotices(profile.id);
     academicEvents = getAcademicEvents().filter(
       (event) => event.audience === "all" || event.audience === "student",
     );
@@ -214,7 +219,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <AppShell>
+    <AppShell showSiteFooter>
       <ScrollReveal>
         <section className="screen-hero">
           <h1>{copy.title}</h1>
@@ -236,6 +241,8 @@ export default async function DashboardPage() {
         <NotificationStrip notifications={notifications} showSummary={profile.role !== "student"} />
       </ScrollReveal>
 
+      {profile.role === "student" ? <StudentAnnouncementBanner announcement={announcements[0] ?? null} /> : null}
+
       {/* 학생 전용: 오늘 시간표 위젯 */}
       {profile.role === "student" && (
         <ScrollReveal>
@@ -243,6 +250,7 @@ export default async function DashboardPage() {
             academicEvents={academicEvents}
             myCourses={myCourses}
             todoItems={todoItems}
+            announcements={announcements}
           />
         </ScrollReveal>
       )}

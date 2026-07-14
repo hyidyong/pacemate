@@ -1,5 +1,6 @@
 .env*.local
 .next/
+.next-personalized-roadmap/
 .worktrees/
 node_modules/
 tsconfig.tsbuildinfo

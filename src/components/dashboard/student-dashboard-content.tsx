@@ -9,6 +9,7 @@ import {
 } from "@/components/dashboard/dashboard-section-tabs";
 import { StudentTodoCard, type StudentTodoItem } from "@/components/dashboard/student-todo-card";
 import { TodayTimetableWidget } from "@/components/dashboard/today-timetable-widget";
+import { StudentAnnouncementFeed, type StudentAnnouncement } from "@/components/dashboard/student-announcement-feed";
 import type { StudentCourseRecord } from "@/services/student-community.service";
 import type { AcademicEvent } from "@/types/academic-calendar";
 
@@ -16,12 +17,14 @@ type StudentDashboardContentProps = {
   academicEvents: AcademicEvent[];
   myCourses: StudentCourseRecord[];
   todoItems: StudentTodoItem[];
+  announcements: StudentAnnouncement[];
 };
 
 export function StudentDashboardContent({
   academicEvents,
   myCourses,
   todoItems,
+  announcements,
 }: StudentDashboardContentProps) {
   const [activeSection, setActiveSection] = useState<DashboardSection>("all");
   const panelId = "student-dashboard-section-panel";
@@ -50,6 +53,7 @@ export function StudentDashboardContent({
       >
         {showTimetable && <TodayTimetableWidget myCourses={myCourses} />}
         {showTodo && <StudentTodoCard items={todoItems} />}
+        {showTodo && <StudentAnnouncementFeed announcements={announcements} />}
         {showPortal && <PortalShortcutCard description="" />}
         {showAcademic && <AcademicScheduleCard academicEvents={academicEvents} />}
       </div>

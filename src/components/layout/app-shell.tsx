@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { AppHeader } from "@/components/layout/app-header-professor-safe";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { SiteFooter } from "@/components/layout/site-footer";
 import {
   getNotificationsForProfile,
   getUnreadNotificationCount,
@@ -11,11 +12,13 @@ import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
 type AppShellProps = {
   children: React.ReactNode;
   showAiTutorFab?: boolean;
+  showSiteFooter?: boolean;
 };
 
 export async function AppShell({
   children,
   showAiTutorFab = true,
+  showSiteFooter = false,
 }: AppShellProps) {
   const profile = await getDemoProfile();
   const [notifications, unreadCount] = await Promise.all([
@@ -47,6 +50,8 @@ export async function AppShell({
           {children}
         </main>
       </div>
+
+      {showSiteFooter ? <SiteFooter hasMobileNav={isStudent || isProfessor || isOperator} /> : null}
 
       {isStudent && <MobileBottomNav />}
 
