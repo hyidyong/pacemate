@@ -8,37 +8,44 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import {
   getNotificationsForProfile,
   getUnreadNotificationCount,
+  type UserNotification,
 } from "@/services/notifications.service";
-import { getDemoProfile, getRoleHomePath } from "@/services/session.service";
+import { getDemoProfile, getRoleHomePath, type DemoProfile } from "@/services/session.service";
 
 type AppShellProps = {
   children: React.ReactNode;
   showAiTutorFab?: boolean;
   showSiteFooter?: boolean;
+  profile?: DemoProfile | null;
+  notifications?: UserNotification[];
+  unreadCount?: number;
 };
 
 export async function AppShell({
   children,
   showAiTutorFab = true,
   showSiteFooter = true,
+  profile,
+  notifications,
+  unreadCount,
 }: AppShellProps) {
-  const profile = await getDemoProfile();
-  const [notifications, unreadCount] = await Promise.all([
-    getNotificationsForProfile(profile, 5).catch((error) => {
+  const resolvedProfile = profile === undefined ? await getDemoProfile() : profile;
+  const [resolvedNotifications, resolvedUnreadCount] = await Promise.all([
+    notifications ?? getNotificationsForProfile(resolvedProfile, 5).catch((error) => {
       console.error("App shell notifications could not be loaded", error);
       return [];
     }),
-    getUnreadNotificationCount(profile).catch((error) => {
+    unreadCount ?? getUnreadNotificationCount(resolvedProfile).catch((error) => {
       console.error("App shell notification count could not be loaded", error);
       return 0;
     }),
   ]);
 
-  const isAuthenticated = Boolean(profile);
-  const isProfessor = profile?.role === "professor";
-  const isOperator = profile?.role === "assistant" || profile?.role === "admin";
+  const isAuthenticated = Boolean(resolvedProfile);
+  const isProfessor = resolvedProfile?.role === "professor";
+  const isOperator = resolvedProfile?.role === "assistant" || resolvedProfile?.role === "admin";
   const isStudent = isAuthenticated && !isProfessor && !isOperator;
-  const homeHref = profile ? getRoleHomePath(profile.role) : "/";
+  const homeHref = resolvedProfile ? getRoleHomePath(resolvedProfile.role) : "/";
 
   return (
     <>
@@ -48,9 +55,9 @@ export async function AppShell({
           isProfessor={isProfessor}
           isOperator={isOperator}
           homeHref={homeHref}
-          notifications={notifications}
-          unreadCount={unreadCount}
-          profileId={profile?.id ?? ""}
+          notifications={resolvedNotifications}
+          unreadCount={resolvedUnreadCount}
+          profileId={resolvedProfile?.id ?? ""}
         />
 
         <main

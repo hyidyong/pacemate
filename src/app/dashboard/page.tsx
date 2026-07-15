@@ -4,7 +4,10 @@ import { AppShell } from "@/components/layout/app-shell";
 import { NotificationStrip } from "@/components/notifications/notification-strip";
 import { Button } from "@/components/ui/button";
 import { clearDemoSession } from "@/services/demo-auth.service";
-import { getNotificationsForProfile } from "@/services/notifications.service";
+import {
+  getNotificationsForProfile,
+  getUnreadNotificationCount,
+} from "@/services/notifications.service";
 import { getDemoProfile } from "@/services/session.service";
 import { WeeklyMissions } from "@/components/roadmap/weekly-missions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -21,6 +24,7 @@ import { StudentLearningRecommendationsCard } from "@/components/dashboard/stude
 import { listStudentCourseNotices } from "@/services/course-notices.server";
 import type { StudentAnnouncement } from "@/components/dashboard/student-announcement-feed";
 import { StudentAnnouncementBanner } from "@/components/dashboard/student-announcement-banner";
+import { StudentHeroCarousel } from "@/components/dashboard/student-hero-carousel";
 
 // Import Micro-Interactions
 import { ScrollReveal, ScrollRevealList, ScrollRevealItem } from "@/components/ui/scroll-reveal";
@@ -112,7 +116,10 @@ export default async function DashboardPage() {
 
   const copy = roleCopy[profile.role];
   const shouldShowPrimaryAction = profile.role !== "student";
-  const notifications = await getNotificationsForProfile(profile, 4);
+  const [notifications, unreadCount] = await Promise.all([
+    getNotificationsForProfile(profile, 5),
+    getUnreadNotificationCount(profile),
+  ]);
 
   // Fetch student courses if student
   let coursesData: any[] = [];
@@ -127,13 +134,14 @@ export default async function DashboardPage() {
     // This page runs on the server, so keep the signed-in user's cookies on
     // every query and let Supabase RLS enforce the same access as the API.
     const supabase = await createSupabaseServerClient();
-    myCourses = await getMyCourses(profile);
-    announcements = await listStudentCourseNotices(profile.id);
     academicEvents = getAcademicEvents().filter(
       (event) => event.audience === "all" || event.audience === "student",
     );
 
-    const [{ data: studentCourseData }, { data: counselingRows }] = await Promise.all([
+    const offeringResolutionPromise = resolveCompanyLaw2026OfferingForSession();
+    const [myCoursesResult, announcementsResult, studentCourseResult, counselingResult] = await Promise.all([
+      getMyCourses(profile),
+      listStudentCourseNotices(profile.id),
       supabase
         .from("student_courses")
         .select(`
@@ -148,24 +156,33 @@ export default async function DashboardPage() {
         .order("created_at", { ascending: false })
         .limit(20),
     ]);
+    myCourses = myCoursesResult;
+    announcements = announcementsResult;
+    const studentCourseData = studentCourseResult.data;
+    const counselingRows = counselingResult.data;
 
     if (studentCourseData && studentCourseData.length > 0) {
-      for (const sc of studentCourseData) {
-        const { data: progress } = await supabase
-          .from("student_mission_progress")
-          .select("calibrated_mission_json")
-          .eq("student_id", profile.id)
-          .eq("course_id", sc.course_id)
-          .eq("week_number", sc.current_week)
-          .maybeSingle();
+      const courseIds = studentCourseData.map((course) => course.course_id);
+      const currentWeeks = studentCourseData.map((course) => course.current_week);
+      const { data: progressRows } = await supabase
+        .from("student_mission_progress")
+        .select("course_id, week_number, calibrated_mission_json")
+        .eq("student_id", profile.id)
+        .in("course_id", courseIds)
+        .in("week_number", currentWeeks);
+      const progressByCourseWeek = new Map(
+        (progressRows ?? []).map((progress) => [
+          `${progress.course_id}:${progress.week_number}`,
+          progress.calibrated_mission_json,
+        ]),
+      );
 
-        coursesData.push({
+      coursesData = studentCourseData.map((sc) => ({
           courseId: sc.course_id,
           courseName: Array.isArray(sc.courses) ? sc.courses[0]?.name : (sc.courses as any)?.name,
           currentWeek: sc.current_week,
-          initialGuide: progress?.calibrated_mission_json || null,
-        });
-      }
+          initialGuide: progressByCourseWeek.get(`${sc.course_id}:${sc.current_week}`) || null,
+        }));
     }
 
     const noticeTodoItems = announcements
@@ -204,39 +221,51 @@ export default async function DashboardPage() {
 
     todoItems = [...noticeTodoItems, ...counselingTodoItems].slice(0, 6);
 
-    const offeringResolution = await resolveCompanyLaw2026OfferingForSession();
+    const offeringResolution = await offeringResolutionPromise;
     eligibilityCourseName = offeringResolution.ok ? offeringResolution.courseName : null;
-    eligibilityResult = offeringResolution.ok
-      ? await getCourseTermCompletionEligibility(offeringResolution.offeringId)
-      : offeringResolution;
-    recommendationResult = offeringResolution.ok
-      ? await getStudentLearningRecommendations(offeringResolution.offeringId)
-      : { ok: false, code: "read_failed" };
+    if (offeringResolution.ok) {
+      [eligibilityResult, recommendationResult] = await Promise.all([
+        getCourseTermCompletionEligibility(offeringResolution.offeringId),
+        getStudentLearningRecommendations(offeringResolution.offeringId),
+      ]);
+    } else {
+      eligibilityResult = offeringResolution;
+      recommendationResult = { ok: false, code: "read_failed" };
+    }
   }
 
   return (
-    <AppShell showSiteFooter>
-      <ScrollReveal>
-        <section className="screen-hero">
-          <h1>{copy.title}</h1>
-          {copy.description ? <p>{copy.description}</p> : null}
-          <div className="actions">
-            {shouldShowPrimaryAction ? (
-              <Link href={copy.primaryHref} data-testid="dashboard-primary-action">
-                <ShimmerButton>
-                  {copy.primaryLabel}
-                  <ArrowRight size={16} aria-hidden="true" />
-                </ShimmerButton>
-              </Link>
-            ) : null}
-            <form action={clearDemoSession}>
-            </form>
-          </div>
-        </section>
-      </ScrollReveal>
+    <AppShell
+      showSiteFooter
+      profile={profile}
+      notifications={notifications}
+      unreadCount={unreadCount}
+    >
+      {profile.role === "student" ? (
+        <StudentHeroCarousel />
+      ) : (
+        <ScrollReveal>
+          <section className="screen-hero">
+            <h1>{copy.title}</h1>
+            {copy.description ? <p>{copy.description}</p> : null}
+            <div className="actions">
+              {shouldShowPrimaryAction ? (
+                <Link href={copy.primaryHref} data-testid="dashboard-primary-action">
+                  <ShimmerButton>
+                    {copy.primaryLabel}
+                    <ArrowRight size={16} aria-hidden="true" />
+                  </ShimmerButton>
+                </Link>
+              ) : null}
+              <form action={clearDemoSession}>
+              </form>
+            </div>
+          </section>
+        </ScrollReveal>
+      )}
 
       <ScrollReveal>
-        <NotificationStrip notifications={notifications} showSummary={profile.role !== "student"} />
+        <NotificationStrip notifications={notifications.slice(0, 4)} showSummary={profile.role !== "student"} />
       </ScrollReveal>
 
       {profile.role === "student" ? <StudentAnnouncementBanner announcement={announcements[0] ?? null} /> : null}
