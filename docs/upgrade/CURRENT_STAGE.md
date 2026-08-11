@@ -2,39 +2,37 @@
 
 ## Current Stage
 
-Stage 2 / 10
-Availability Domain / Single Source of Truth
-Status: COMPLETE on branch `upgrade/stage-2` (2026-08-12) — awaiting PR review/merge.
-See docs/upgrade/stage-02/HANDOFF.md.
+Stage 3 / 10
+Loading Performance / Critical Path Optimization
+Status: IN PROGRESS
 
-Next stage: Stage 3 (Loading Performance / Critical Path Optimization) — NOT started.
-Stage 3 must begin from the Stage 2 HANDOFF's "Stage 3 inputs" section after the PR
-merges.
+Branch: `upgrade/stage-3` (from `main` @ cfa540f, the Stage 2 merge — PR #36).
+Stage docs: docs/upgrade/stage-03/.
 
-## Primary Objective (achieved)
+## Primary Objective
 
-Canonical scheduling-availability semantics established in
-`src/lib/counseling-slots.ts` (D-004); professor calendar, booking path, and related
-consumers migrated; cross-consumer identity regression protection added; KI-001
-resolved.
+Improve real user-perceived loading and interaction performance using measured
+evidence while preserving Stage 1 behavior and Stage 2 availability correctness.
 
 ## Non-goals
 
 Do not begin:
 
-- Stage 3 broad performance optimization
-- Stage 4 UI/UX redesign
-- Stage 5 full concurrency/transaction architecture
+- Stage 4 role/mobile/web UIUX redesign
+- Stage 5 full reservation concurrency redesign
 - Stage 6 multi-tenancy
-- Stage 7 SSO
-- Stage 8 scaling infrastructure
-- Stage 9 broad security redesign
-- Stage 10 CI/CD redesign
+- Stage 7 university SSO
+- Stage 8 large-scale reliability infrastructure
+- Stage 9 broad security architecture
+- Stage 10 CI/CD production rollout work
 
-Small changes required to safely implement Stage 2 were allowed; out-of-scope findings
-are recorded in KNOWN_ISSUES.md (KI-013..KI-015) instead of being fixed.
+Stage 3 is performance optimization, not product redesign.
 
-## Completion rule
+## Stage 3 inputs (from Stage 2 handoff)
 
-Stage 2 work is complete on the branch only; merging requires external review and
-human approval (see HANDOFF "Exact next action").
+- Stage 1 PERFORMANCE_BASELINE.md targets: query waterfalls, force-dynamic
+  everywhere, no loading states, AppShell profile refetch.
+- KI-013 (professor workspace lazy-load hydration flake) — intersects Stage 3
+  bundle/loading work.
+- Professor page's extra `getCalendarRequests` query — fold into query
+  consolidation.
