@@ -78,7 +78,7 @@ Status: OPEN.
   professors (counseling-workspace.tsx:190) — second professor reachable only via 교수별 검색.
 - Demo student login lands on /onboarding although onboarding data exists (cause UNVERIFIED).
 
-## KI-006 — RLS policy recursion (42P17) on course_offerings; migration written but NOT applied
+## KI-006 — RLS policy recursion (42P17) on course_offerings
 
 Status: DB FIX APPLIED 2026-08-12 — the owner ran
 20260812000000_fix_offering_policy_recursion.sql in the SQL editor; verified via PostgREST
@@ -90,18 +90,20 @@ Root cause: mutually recursive authenticated policies — "students read own cou
 evidence" (20260713013521, subqueries course_offerings). Every authenticated SELECT on
 course_offerings fails with 42P17. Reproduced live with a student JWT via PostgREST.
 
-Consequences and current state:
+Consequences and current state (reconciled 2026-08-12 after the DB fix):
 - Student dashboard 학기 완료 근거/다음 학습 추천 cards were dead → FIXED at app level
   (ownership gate via own student_courses row + server-only admin-client reads scoped to the
   verified ids) in course-term-completion-eligibility.server.ts,
-  student-learning-recommendations.server.ts, company-law-offering.server.ts.
-- Professor 과목 진행 현황 report + 익명 주간 집계 remain BROKEN (error panel) — NOT
-  worked around because professor-anonymous-weekly-aggregate-security.test.mjs deliberately
-  forbids the service-role client there (RLS must gate sensitive columns).
-- Real fix: supabase/migrations/20260812000000_fix_offering_policy_recursion.sql
-  (security definer helpers break the cycle). UNAPPLIED — the QA session had no DB
-  credentials/CLI auth. Apply with `supabase db push`, verify professor report tabs, then the
-  app-level admin-client workarounds can be reverted to session reads.
+  student-learning-recommendations.server.ts, company-law-offering.server.ts. With the DB
+  fix applied these workarounds are redundant; revert to session reads in Stage 2.
+- Professor 과목 진행 현황 report: was broken (error panel) while the recursion existed;
+  confirmed rendering real data live after the DB fix (commit f2f490d). The 익명 주간 집계
+  view is expected fixed by the same policy change but was not separately re-verified —
+  UNVERIFIED. professor-anonymous-weekly-aggregate-security.test.mjs still (correctly)
+  forbids service-role reads there.
+- supabase/migrations/20260812000000_fix_offering_policy_recursion.sql was applied manually
+  via the SQL editor, NOT `supabase db push` — the CLI migration history table may not list
+  it as applied. Reconcile migration history before the next `db push` (Stage 2/10).
 
 ## KI-007 — student_profiles/student_courses authenticated policies use pre-mapping identity
 
