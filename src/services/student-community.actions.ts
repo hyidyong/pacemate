@@ -6,8 +6,19 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTimetableSchema } from "@/lib/student-timetable-schema";
 import { getDemoProfile } from "@/services/session.service";
 import type { CourseRecord, StudentCourseRecord } from "@/services/student-community.service";
-import { syncStudentCourseSchedule } from "@/services/student-timetable.service";
-import { validateScheduleSlots, type ScheduleSlot, type ScheduleSlotInput } from "@/services/student-timetable.rules";
+import {
+  getExistingScheduleEntries,
+  resolveStudentCourseSchedule,
+  writeStudentCourseScheduleSlots,
+} from "@/services/student-timetable.service";
+import {
+  findScheduleConflicts,
+  validateScheduleSlots,
+  type ScheduleConflict,
+  type ScheduleSlot,
+  type ScheduleSlotInput,
+  type ScheduleSource,
+} from "@/services/student-timetable.rules";
 
 const studentCourseSelectColumns =
   "id, status, is_favorite, schedule_day, start_time, end_time, classroom, semester_label, course:courses(id, school_id, code, name, credit, category, description, prerequisite_text), schedule_slots:student_course_schedule_slots(id, day_of_week, start_time, end_time, classroom)";
@@ -143,39 +154,91 @@ export async function addCourseToSchedule(formData: FormData) {
   }
 
   const manualSlots = readScheduleSlots(formData);
-  if (!manualSlots.length) {
-    return { ok: false, message: "At least one valid day and time is required." };
+  const semesterLabel = requiredText(formData.get("semesterLabel"), "2026-2");
+
+  // Resolve the real schedule (course_schedules → professor_teaching_slots
+  // → manual input) before touching any row, so a course with no usable
+  // time and no manual entry never creates an empty enrollment, and a
+  // detected conflict never has to be rolled back.
+  let resolved: { source: ScheduleSource; slots: ScheduleSlot[] };
+  let usesLegacyTimetableStorage = false;
+  try {
+    resolved = await resolveStudentCourseSchedule({ supabase, courseId, semesterLabel, manualSlots });
+  } catch (resolveError) {
+    if (isMissingTimetableSchema(resolveError)) {
+      usesLegacyTimetableStorage = true;
+      resolved = { source: "manual", slots: manualSlots };
+    } else {
+      console.error("addCourseToSchedule resolve failed", resolveError);
+      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    }
   }
-  const payload = {
-    student_id: profileId,
-    course_id: courseId,
-    status: "interested",
-    is_favorite: formData.get("isFavorite") === "true",
-    schedule_day: requiredText(formData.get("scheduleDay"), "월"),
-    start_time: requiredText(formData.get("startTime"), "09:00"),
-    end_time: requiredText(formData.get("endTime"), "10:15"),
-    classroom: requiredText(formData.get("classroom"), "강의실 미정"),
-    semester_label: requiredText(formData.get("semesterLabel"), "2026-2"),
-    source_text: "mypage",
-  };
 
-  // The legacy columns remain a compatibility snapshot of the first slot.
-  payload.schedule_day = manualSlots[0].dayOfWeek;
-  payload.start_time = manualSlots[0].startTime;
-  payload.end_time = manualSlots[0].endTime;
-  payload.classroom = manualSlots[0].classroom ?? "";
+  if (!resolved.slots.length) {
+    return {
+      ok: false,
+      needsManualEntry: true,
+      message: "이 과목에 등록된 시간표 정보를 찾지 못했어요. 요일과 시간을 직접 입력해 주세요.",
+    };
+  }
 
+  // Looked up early so a re-registration of a course the student already has
+  // can exclude its own (about-to-be-replaced) slots from the conflict scan.
   const { data: existing, error: lookupError } = await supabase
     .from("student_courses")
     .select("id")
     .eq("student_id", profileId)
     .eq("course_id", courseId)
-    .eq("status", payload.status)
+    .eq("status", "interested")
     .maybeSingle();
 
   if (lookupError) {
     console.error("addCourseToSchedule lookup failed:", lookupError.message);
     return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+
+  if (!usesLegacyTimetableStorage && formData.get("confirmOverlap") !== "true") {
+    try {
+      const existingEntries = await getExistingScheduleEntries({
+        supabase,
+        studentId: profileId,
+        excludeParentId: existing?.id,
+      });
+      const conflicts = findScheduleConflicts(resolved.slots, existingEntries);
+      if (conflicts.length) {
+        return {
+          ok: false,
+          conflict: { source: resolved.source, items: conflicts } as {
+            source: ScheduleSource;
+            items: ScheduleConflict[];
+          },
+          message: "이미 시간표에 겹치는 과목이 있어요.",
+        };
+      }
+    } catch (conflictError) {
+      if (!isMissingTimetableSchema(conflictError)) {
+        console.error("addCourseToSchedule conflict check failed", conflictError);
+      }
+      // A failed conflict check should not block registration outright.
+    }
+  }
+
+  const primarySlot = resolved.slots[0];
+  const payload: Record<string, unknown> = {
+    student_id: profileId,
+    course_id: courseId,
+    status: "interested",
+    schedule_day: primarySlot.dayOfWeek,
+    start_time: primarySlot.startTime,
+    end_time: primarySlot.endTime,
+    classroom: primarySlot.classroom ?? "",
+    semester_label: semesterLabel,
+    source_text: "mypage",
+  };
+  // Only touch is_favorite when the caller explicitly says so — registering
+  // a course is not the same action as favoriting it.
+  if (formData.has("isFavorite")) {
+    payload.is_favorite = formData.get("isFavorite") === "true";
   }
 
   const saveStudentCourse = (columns: string) => existing?.id
@@ -193,13 +256,12 @@ export async function addCourseToSchedule(formData: FormData) {
         .single();
 
   let { data, error } = await saveStudentCourse(studentCourseSelectColumns);
-  let usesLegacyTimetableStorage = false;
 
   // The mobile UI must still save to the established legacy columns when a
   // deployment has not received the normalized schedule-slot migration yet.
   if (error && isMissingTimetableSchema(error)) {
     ({ data, error } = await saveStudentCourse(legacyStudentCourseSelectColumns));
-    usesLegacyTimetableStorage = !error;
+    usesLegacyTimetableStorage = usesLegacyTimetableStorage || !error;
   }
 
   if (error) {
@@ -217,18 +279,12 @@ export async function addCourseToSchedule(formData: FormData) {
 
   if (!usesLegacyTimetableStorage) {
     try {
-      await syncStudentCourseSchedule({
-        supabase,
-        studentCourseId,
-        courseId,
-        semesterLabel: payload.semester_label,
-        manualSlots,
-      });
-    } catch (syncError) {
-      if (isMissingTimetableSchema(syncError)) {
+      await writeStudentCourseScheduleSlots({ supabase, studentCourseId, resolved });
+    } catch (writeError) {
+      if (isMissingTimetableSchema(writeError)) {
         usesLegacyTimetableStorage = true;
       } else {
-        console.error("addCourseToSchedule schedule sync failed", syncError);
+        console.error("addCourseToSchedule schedule write failed", writeError);
         if (!existing?.id) {
           await supabase.from("student_courses").delete().eq("id", studentCourseId).eq("student_id", profileId);
         }
@@ -260,6 +316,28 @@ export async function saveCustomCourseToSchedule(formData: FormData) {
   }
   const supabase = createStudentCommunitySupabaseClient();
   if (!supabase) return { ok: false, message: "Timetable storage is unavailable." };
+
+  if (formData.get("confirmOverlap") !== "true") {
+    try {
+      const existingEntries = await getExistingScheduleEntries({
+        supabase,
+        studentId: profileId,
+        excludeParentId: customCourseId || undefined,
+      });
+      const conflicts = findScheduleConflicts(slots, existingEntries);
+      if (conflicts.length) {
+        return {
+          ok: false,
+          conflict: { source: "manual" as ScheduleSource, items: conflicts },
+          message: "이미 시간표에 겹치는 일정이 있어요.",
+        };
+      }
+    } catch (conflictError) {
+      if (!isMissingTimetableSchema(conflictError)) {
+        console.error("saveCustomCourseToSchedule conflict check failed", conflictError);
+      }
+    }
+  }
 
   const color = requiredText(formData.get("color")) || null;
   const { data: customCourse, error: courseError } = customCourseId

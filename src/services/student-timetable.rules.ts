@@ -76,3 +76,48 @@ export function resolveScheduleSource(
 
   return { source, slots: validateScheduleSlots(slots) };
 }
+
+// A slot already known to belong to some parent (a registered course or a
+// custom schedule entry) that a new slot can be checked for overlap against.
+export type ExistingScheduleEntry = {
+  parentId: string;
+  label: string;
+  dayOfWeek: KoreanWeekday;
+  startTime: string;
+  endTime: string;
+};
+
+export type ScheduleConflict = {
+  newSlot: ScheduleSlot;
+  existing: ExistingScheduleEntry;
+};
+
+// Half-open interval overlap test on zero-padded "HH:MM" strings, which sort
+// lexicographically the same as chronologically, so no minute conversion is
+// needed (matches the format validateScheduleSlots already enforces).
+export function slotsOverlap(
+  a: { dayOfWeek: KoreanWeekday; startTime: string; endTime: string },
+  b: { dayOfWeek: KoreanWeekday; startTime: string; endTime: string },
+): boolean {
+  return a.dayOfWeek === b.dayOfWeek && a.startTime < b.endTime && b.startTime < a.endTime;
+}
+
+export function findScheduleConflicts(
+  newSlots: ScheduleSlot[],
+  existingEntries: ExistingScheduleEntry[],
+  excludeParentId?: string,
+): ScheduleConflict[] {
+  const candidates = excludeParentId
+    ? existingEntries.filter((entry) => entry.parentId !== excludeParentId)
+    : existingEntries;
+
+  const conflicts: ScheduleConflict[] = [];
+  for (const newSlot of newSlots) {
+    for (const existing of candidates) {
+      if (slotsOverlap(newSlot, existing)) {
+        conflicts.push({ newSlot, existing });
+      }
+    }
+  }
+  return conflicts;
+}
