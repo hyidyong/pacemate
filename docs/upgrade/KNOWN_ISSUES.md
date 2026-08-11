@@ -3,6 +3,28 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-010 — Vercel build failed: pnpm-lock.yaml out of sync (ERR_PNPM_OUTDATED_LOCKFILE)
+
+Status: FIXED 2026-08-12.
+The repo ships both `package-lock.json` (npm — what local dev/CI actually used, per
+SYSTEM_BASELINE.md) and a committed `pnpm-lock.yaml` + `pnpm-workspace.yaml`. Vercel
+auto-detects the package manager from whichever lockfile is present and picked pnpm; that
+lockfile was stale (`tw-animate-css` was added to `package.json` without regenerating
+`pnpm-lock.yaml`), so Vercel's `pnpm install --frozen-lockfile` failed with
+`ERR_PNPM_OUTDATED_LOCKFILE`, blocking the deploy for PR #32.
+
+Fix: ran `pnpm install --lockfile-only` to resync `pnpm-lock.yaml` with `package.json`, then
+verified with `pnpm install --frozen-lockfile` (the exact mode Vercel/CI use) and a full
+`npm run build`. `npm ci` was also re-verified to still succeed, so both lockfiles are
+consistent with `package.json` again.
+
+**How to apply / avoid recurrence:** whenever a dependency changes in `package.json`, run
+`pnpm install --lockfile-only` (in addition to whatever `npm install` already updates) before
+committing — two lockfiles means two things to keep in sync. A commit
+(`6187549 fix: sync pnpm lockfile for vercel builds`) shows this has broken before. Consider
+removing one lockfile/manager entirely in Stage 10 (CI/CD hardening) so this class of failure
+becomes structurally impossible instead of process-dependent.
+
 ## KI-001 — Professor calendar availability engine diverges from canonical student engine
 
 Status: PARTIALLY FIXED in Stage 1 (2026-08-11); remainder deferred to Stage 2.
