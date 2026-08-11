@@ -16,14 +16,6 @@ const nextConfig = {
   // root so Next does not infer the parent workspace when multiple lockfiles exist.
   outputFileTracingRoot: __dirname,
   serverExternalPackages: ["pdf-parse"],
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "i.ibb.co",
-      },
-    ],
-  },
   webpack(config) {
     config.resolveLoader = config.resolveLoader || {};
     config.resolveLoader.modules = [
@@ -44,7 +36,7 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           {
             key: "Content-Security-Policy",
-            value: `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://i.ibb.co; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co`,
+            value: `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co`,
           },
         ],
       },

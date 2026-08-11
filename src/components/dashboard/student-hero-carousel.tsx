@@ -5,19 +5,19 @@ import { useEffect, useState } from "react";
 
 const HERO_SLIDES = [
   {
-    src: "https://i.ibb.co/DPWZc0RC/Chat-GPT-Image-2026-7-14-04-24-00.png",
+    src: "/images/hero-1.jpg",
     alt: "Sub-Study 학생 대시보드 안내 배너 1",
   },
   {
-    src: "https://i.ibb.co/B5rxRtLJ/Chat-GPT-Image-2026-7-14-04-19-13.png",
+    src: "/images/hero-2.jpg",
     alt: "Sub-Study 학생 대시보드 안내 배너 2",
   },
   {
-    src: "https://i.ibb.co/fdtxFxpn/Chat-GPT-Image-2026-7-14-04-19-37.png",
+    src: "/images/hero-3.jpg",
     alt: "Sub-Study 학생 대시보드 안내 배너 3",
   },
   {
-    src: "https://i.ibb.co/Dg8QmZp0/Chat-GPT-Image-2026-7-14-04-19-29.png",
+    src: "/images/hero-4.jpg",
     alt: "Sub-Study 학생 대시보드 안내 배너 4",
   },
 ] as const;

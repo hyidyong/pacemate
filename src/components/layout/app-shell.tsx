@@ -109,7 +109,7 @@ export async function AppShell({
               alt="터디"
               className="h-full w-full object-contain scale-125 fab-bot-icon"
               height={96}
-              src="https://i.ibb.co/whB3QBtt/AIDrawing-260714-621f8e04-8036-47f2-b44a-a11ac360ee20-0-Miri-Canvas.png"
+              src="/images/tuti-bot.png"
               width={96}
             />
           </Link>

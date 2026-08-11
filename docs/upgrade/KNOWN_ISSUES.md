@@ -58,7 +58,11 @@ Status: OPEN.
 
 ## KI-006 — RLS policy recursion (42P17) on course_offerings; migration written but NOT applied
 
-Status: PARTIALLY MITIGATED in app code (2026-08-12 QA session); DB fix pending.
+Status: DB FIX APPLIED 2026-08-12 — the owner ran
+20260812000000_fix_offering_policy_recursion.sql in the SQL editor; verified via PostgREST
+that student and professor authenticated reads of course_offerings / student_weekly_progress /
+student_course_progress no longer return 42P17. App-level admin-client workarounds remain in
+place (harmless; candidates to revert to session reads in Stage 2).
 Root cause: mutually recursive authenticated policies — "students read own course offerings"
 (20260712183907, subqueries student_weekly_progress) ⇄ "professors read own weekly aggregate
 evidence" (20260713013521, subqueries course_offerings). Every authenticated SELECT on
@@ -89,13 +93,12 @@ update belongs with KI-006's migration family (Stage 2/9).
 
 ## KI-008 — External images on i.ibb.co are slow (5–12 s, 0.9–1.3 MB each)
 
-Status: OPEN — decision needed (vendor locally vs keep external).
-Header logo (app-header-professor-safe.tsx:217,359) renders through /_next/image whose
-upstream fetch times out on the slow host → intermittent 500 → broken logo. Carousel
-(student-hero-carousel.tsx) uses plain <img> so it renders but ships ~4 MB slowly on every
-dashboard visit. All 6 URLs verified reachable-but-slow via curl on 2026-08-11. Options:
-vendor the images into public/ (repo +~6.6 MB, or downscale first), or keep external and
-accept intermittent logo 500s. Owner decision pending.
+Status: RESOLVED 2026-08-12 (owner-approved).
+All 6 images (header logo, chatbot FAB, 4 hero banners) were downloaded, resized to display
+dimensions, and vendored into public/images/ (~444 KB total vs ~6.6 MB originals). Sources
+updated (app-header-professor-safe.tsx, app-shell.tsx, student-hero-carousel.tsx + its test);
+i.ibb.co removed from next.config.mjs remotePatterns and CSP img-src. The carousel test now
+guards against the external host returning (doesNotMatch i.ibb.co).
 
 ## KI-009 — Mobile touch-target sizes below guideline
 
