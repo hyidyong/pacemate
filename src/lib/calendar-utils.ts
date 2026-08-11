@@ -72,9 +72,10 @@ export function calculateRecommendedAvailability(
       }
     });
 
-    // 3. Approved Counseling
+    // 3. Busy counseling requests — pending AND approved both block student
+    // booking (DB exclusion constraint), so both must occupy the calendar.
     counselingRequests.forEach((req) => {
-      if (req.status === "approved") {
+      if (req.status === "approved" || req.status === "pending") {
         const start = new Date(req.suggested_start || req.requested_start);
         const end = new Date(req.suggested_end || req.requested_end);
         const startLocalStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
@@ -134,10 +135,25 @@ export function calculateRecommendedAvailability(
           (a) => a.day_of_week === day && a.start_time.startsWith(startStr)
         );
 
+        // A blackout (is_active=false) row can span multiple chunks (the
+        // calendar's own toggle writes 1-hour rows), so match by overlap —
+        // the student engine blocks the entire covered range the same way.
+        const overlappingBlackout = existingAvailability.find(
+          (a) =>
+            a.day_of_week === day &&
+            !a.is_active &&
+            currentChunkStart < timeToMinutes(a.end_time.slice(0, 5)) &&
+            timeToMinutes(a.start_time.slice(0, 5)) < chunkEnd
+        );
+
         // If no record exists, it is "recommended" (active by default)
         // If a record exists and is_active is false, it's a blackout.
         // If a record exists and is_active is true, it's explicitly active.
-        const isBlackout = existingRecord ? !existingRecord.is_active : false;
+        const isBlackout = overlappingBlackout
+          ? true
+          : existingRecord
+            ? !existingRecord.is_active
+            : false;
 
         recommendedSlots.push({
           day,
@@ -145,7 +161,7 @@ export function calculateRecommendedAvailability(
           start: startStr,
           end: endStr,
           isBlackout,
-          id: existingRecord?.id,
+          id: existingRecord?.id ?? overlappingBlackout?.id,
         });
 
         currentChunkStart += 30;

@@ -214,7 +214,7 @@ export function AppHeader({
               alt="substudy"
               className="h-[56px] w-auto object-contain"
               height={56}
-              src="https://i.ibb.co/rKgLL4gX/AIDrawing-260714-730dfff9-7f89-42b7-97c8-5c46b35eafc1-0-Miri-Canvas.png"
+              src="/images/substudy-logo.png"
               width={168}
             />
           </span>
@@ -356,7 +356,7 @@ export function AppHeader({
               alt="substudy"
               className="h-[42px] w-auto object-contain"
               height={42}
-              src="https://i.ibb.co/rKgLL4gX/AIDrawing-260714-730dfff9-7f89-42b7-97c8-5c46b35eafc1-0-Miri-Canvas.png"
+              src="/images/substudy-logo.png"
               width={126}
             />
           </span>

@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase/client";
 import { createUserNotification } from "@/services/notifications.create.service";
 import { getDemoProfile } from "@/services/session.service";
 

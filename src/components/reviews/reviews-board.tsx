@@ -158,7 +158,7 @@ export function ReviewsBoard({
                   <small>{review.team_project ? "팀플 있음" : "팀플 적음"}</small>
                 </div>
                 <p>{review.content}</p>
-                <em>{new Date(review.created_at).toLocaleDateString("ko-KR")}</em>
+                <em>{new Date(review.created_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</em>
               </article>
             ))
           ) : (

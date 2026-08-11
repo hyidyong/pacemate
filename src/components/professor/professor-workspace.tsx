@@ -30,7 +30,7 @@ import {
   updateOwnCourseRoadmap,
   toggleProfessorAvailability,
 } from "@/services/professor.actions";
-import {
+import type {
   ProfessorAvailability,
   ProfessorCourse,
   ProfessorCounselingRequest,
@@ -1507,7 +1507,7 @@ function PendingCounselingSub({
                       {counselingStatusLabels[request.status]}
                     </span>
                   </div>
-                  <p className="text-gray-500 text-sm">{new Date(request.requested_start).toLocaleString("ko-KR", { dateStyle: "long", timeStyle: "short" })}</p>
+                  <p className="text-gray-500 text-sm">{new Date(request.requested_start).toLocaleString("ko-KR", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Seoul" })}</p>
                 </div>
                 <div className="text-right text-emerald-900/70 text-sm font-medium bg-emerald-50 px-3 py-1.5 rounded-md">
                   {request.topic}
@@ -1616,7 +1616,7 @@ function CounselingLogSub({
                 </span>
               </div>
               <p className="text-sm text-gray-600 mb-1">학생: <span className="font-medium text-emerald-900">{entry.student ? `${entry.student.name} (${entry.student.identifier})` : entry.student_id}</span></p>
-              <p className="text-sm text-gray-500">{new Date(entry.requested_start).toLocaleString("ko-KR", { dateStyle: "long", timeStyle: "short" })}</p>
+              <p className="text-sm text-gray-500">{new Date(entry.requested_start).toLocaleString("ko-KR", { dateStyle: "long", timeStyle: "short", timeZone: "Asia/Seoul" })}</p>
               {entry.professor_note ? (
                 <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-700">
                   <span className="font-semibold text-emerald-950 block mb-1">교수 메모</span>

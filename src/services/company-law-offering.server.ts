@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   selectCompanyLawOffering,
@@ -86,7 +87,12 @@ export async function resolveCompanyLaw2026OfferingForSession(): Promise<Company
 
   if (assignedOfferingIds.length === 0) return failure("offering_not_found");
 
-  const { data: offerings, error: offeringsError } = await supabase
+  // The student RLS policy on course_offerings and the professor policy on
+  // student_weekly_progress reference each other, so authenticated reads of
+  // course_offerings fail with 42P17 (infinite recursion). Read with the
+  // server-only admin client, scoped to the offering ids that were just
+  // verified to belong to this student's own student_courses rows.
+  const { data: offerings, error: offeringsError } = await createSupabaseAdminClient()
     .from("course_offerings")
     .select("id, course:courses(name), academic_term:academic_terms(semester_label)")
     .in("id", assignedOfferingIds);

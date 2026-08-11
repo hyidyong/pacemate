@@ -138,6 +138,7 @@ export function StudentRoadmapWorkspace({
           ...current,
           [activeWeek]: { ...activeFeedback, updatedAt: new Date().toISOString() },
         }));
+        router.refresh();
       }
     });
   }
@@ -205,27 +206,58 @@ export function StudentRoadmapWorkspace({
           {courseGuide ? (
             <section className="mt-6" aria-labelledby="roadmap-course-guide-title">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">Syllabus guide</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">Syllabus guide</p>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                    courseGuide.personalized_content.is_applied
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}>
+                    {courseGuide.personalized_content.is_applied ? "개인 맞춤 적용" : "기본 가이드"}
+                  </span>
+                </div>
                 <h2 id="roadmap-course-guide-title" className="mt-1 text-xl font-bold text-slate-900">
                   {courseGuide.courseName} 학습 가이드
                 </h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{courseGuide.description}</p>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{courseGuide.course_summary}</p>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <article className="rounded-2xl bg-blue-50/80 p-5 shadow-sm">
+                <article aria-label="효과적인 학습 방법" className="rounded-2xl bg-blue-50/80 p-5 shadow-sm">
                   <div className="flex items-center gap-2 text-blue-700">
                     <BookOpenCheck size={19} aria-hidden="true" />
-                    <h3 className="font-bold">학습 방법</h3>
+                    <h3 className="font-bold">{courseGuide.learning_method.title}</h3>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">{courseGuide.studyGuide}</p>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-700">
+                    {courseGuide.learning_method.content}
+                  </p>
                 </article>
-                <article className="rounded-2xl bg-violet-50/80 p-5 shadow-sm">
+                <article aria-label="필요한 선수 지식" className="rounded-2xl bg-violet-50/80 p-5 shadow-sm">
                   <div className="flex items-center gap-2 text-violet-700">
                     <BrainCircuit size={19} aria-hidden="true" />
-                    <h3 className="font-bold">필요한 선수 지식</h3>
+                    <h3 className="font-bold">{courseGuide.prerequisites.title}</h3>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-700">{courseGuide.prerequisites}</p>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-700">
+                    {courseGuide.prerequisites.content}
+                  </p>
                 </article>
+                <article aria-label="주차별 예습/복습 가이드" className="rounded-2xl bg-amber-50/70 p-5 shadow-sm md:col-span-2">
+                  <div className="flex items-center gap-2 text-amber-700">
+                    <Sparkles size={19} aria-hidden="true" />
+                    <h3 className="font-bold">{courseGuide.preview_review_guide.title}</h3>
+                  </div>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-700">
+                    {courseGuide.preview_review_guide.content}
+                  </p>
+                </article>
+                {courseGuide.personalized_content.is_applied ? (
+                  <article className="rounded-2xl bg-emerald-50/80 p-5 shadow-sm md:col-span-2">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Personalized tips</p>
+                    <h3 className="mt-1 font-bold text-slate-900">나에게 맞춘 추가 학습 팁</h3>
+                    <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-700">
+                      {courseGuide.personalized_content.additional_tips}
+                    </p>
+                  </article>
+                ) : null}
               </div>
             </section>
           ) : null}

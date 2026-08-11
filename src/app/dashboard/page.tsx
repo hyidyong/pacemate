@@ -140,8 +140,14 @@ export default async function DashboardPage() {
 
     const offeringResolutionPromise = resolveCompanyLaw2026OfferingForSession();
     const [myCoursesResult, announcementsResult, studentCourseResult, counselingResult] = await Promise.all([
-      getMyCourses(profile),
-      listStudentCourseNotices(profile.id),
+      getMyCourses(profile).catch((error) => {
+        console.error("Dashboard my courses could not be loaded", error);
+        return [] as StudentCourseRecord[];
+      }),
+      listStudentCourseNotices(profile.id).catch((error) => {
+        console.error("Dashboard course notices could not be loaded", error);
+        return [] as StudentAnnouncement[];
+      }),
       supabase
         .from("student_courses")
         .select(`

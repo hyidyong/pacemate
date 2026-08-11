@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, Ban, CalendarPlus, CheckCircle2 } from "lucide-react";
 import type { ProfessorTeachingSlot, ProfessorCounselingRequest, ProfessorAdminTaskRecord, ProfessorAvailability } from "@/services/professor.service";

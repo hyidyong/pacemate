@@ -59,6 +59,7 @@ function formatLastActivity(value: string | null): string {
   return new Date(value).toLocaleString("ko-KR", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Asia/Seoul",
   });
 }
 

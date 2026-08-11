@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getDemoProfile, type DemoProfile } from "@/services/session.service";
+import { getStudentCourseStudyGuideForSession } from "@/services/student-course-study-guide.server";
 import { getWeeklyPlanDraftByOfferingId } from "@/services/weekly-plan-draft.server";
 import {
   normalizeWeeklyBaseline,
@@ -529,7 +530,7 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
       weeklyFeedback: [] as StudentWeeklyFeedbackDraft[],
     };
   }
-  const [savedWeeks, progressResult, plansResult, courseResult, sourceResult] = await Promise.all([
+  const [savedWeeks, progressResult, plansResult, courseGuide] = await Promise.all([
     getSavedPersonalizedRoadmapForSession(selectedOfferingId).catch((error) => {
       console.error("Saved personalized roadmap could not be loaded", error);
       return [];
@@ -540,16 +541,10 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
       .select("week_number,title,topic,content")
       .eq("offering_id", selectedOfferingId)
       .order("week_number"),
-    supabase
-      .from("course_offerings")
-      .select("course:courses(name,description,prerequisite_text)")
-      .eq("id", selectedOfferingId)
-      .maybeSingle(),
-    supabase
-      .from("course_roadmap_personalization_sources")
-      .select("foundation_knowledge,focus_keywords,professor_notes")
-      .eq("offering_id", selectedOfferingId)
-      .maybeSingle(),
+    getStudentCourseStudyGuideForSession(selectedOfferingId).catch((error) => {
+      console.error("Student roadmap course guide could not be generated", error);
+      return null;
+    }),
   ]);
 
   if (progressResult.error) {
@@ -558,14 +553,6 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
 
   if (plansResult.error) {
     console.error("Student roadmap syllabus could not be read", plansResult.error);
-  }
-
-  if (courseResult.error) {
-    console.error("Student roadmap course guide could not be read", courseResult.error);
-  }
-
-  if (sourceResult.error && !isMissingPersonalizedRoadmapTable(sourceResult.error)) {
-    console.error("Student roadmap study guide source could not be read", sourceResult.error);
   }
 
   const baselineWeeks = getSyllabusBaseline(
@@ -581,33 +568,6 @@ export async function getStudentRoadmapWorkspaceForSession(requestedOfferingId?:
     review_guide: row.content,
   }));
   const selectedWeeks = savedWeeks.length ? savedWeeks : baselineWeeks;
-  const rawCourse = courseResult.data?.course;
-  const course = (Array.isArray(rawCourse) ? rawCourse[0] : rawCourse) as {
-    name?: string | null;
-    description?: string | null;
-    prerequisite_text?: string | null;
-  } | null | undefined;
-  const source = sourceResult.data as {
-    foundation_knowledge?: string | null;
-    focus_keywords?: unknown;
-    professor_notes?: string | null;
-  } | null;
-  const focusKeywords = Array.isArray(source?.focus_keywords)
-    ? source.focus_keywords.filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
-    : [];
-  const weeklyFocus = selectedWeeks
-    .slice(0, 3)
-    .map((row) => row.baseline_topic)
-    .filter(Boolean)
-    .join(" · ");
-  const courseGuide: StudentRoadmapCourseGuide = {
-    courseName: course?.name?.trim() || offerings.find((item) => item.offeringId === selectedOfferingId)?.courseName || "선택 과목",
-    description: course?.description?.trim() || "강의계획서의 주차별 핵심 주제를 따라 개념 이해와 복습을 반복합니다.",
-    prerequisites: source?.foundation_knowledge?.trim() || course?.prerequisite_text?.trim() || "별도로 등록된 선수 지식이 없습니다.",
-    studyGuide: source?.professor_notes?.trim()
-      || (focusKeywords.length ? `핵심 키워드 ${focusKeywords.join(", ")}를 중심으로 예습과 복습을 진행하세요.` : "강의 전 핵심 주제를 미리 읽고, 수업 후 개인 메모와 질문을 남겨 복습하세요.")
-      + (weeklyFocus ? ` 이번 학기 주요 흐름은 ${weeklyFocus}입니다.` : ""),
-  };
   const weeklyFeedback: StudentWeeklyFeedbackDraft[] = progressResult.error
     ? []
     : ((progressResult.data ?? []) as WeeklyFeedbackRow[]).map((row) => ({

@@ -304,6 +304,26 @@ export async function getMyCourses(
   return [...regularCourses, ...customCourses];
 }
 
+// Used by /courses and /courses/[id], which fetch their course list through
+// the separate, anon-client course.service.ts module that carries no
+// is_favorite field. Degrades to an empty set on failure since favoriting is
+// a supplementary affordance, not something that should block the page.
+export async function getFavoriteCourseIds(profileId: string): Promise<Set<string>> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("student_courses")
+    .select("course_id")
+    .eq("student_id", profileId)
+    .eq("is_favorite", true);
+
+  if (error) {
+    console.error("getFavoriteCourseIds failed:", error.message);
+    return new Set();
+  }
+
+  return new Set((data ?? []).map((row) => row.course_id as string));
+}
+
 async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
   const supabase = await createSupabaseServerClient();
 

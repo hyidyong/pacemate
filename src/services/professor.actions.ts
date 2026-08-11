@@ -1,7 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase/client";
+// The demo schema grants professor_availability/faqs writes to the anon role
+// only (see supabase/schema.sql "demo anon manage ..." policies), so those
+// writes must keep using the anon browser client until a migration adds
+// authenticated write policies for them.
+import { supabase as anonSupabase } from "@/lib/supabase/client";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createUserNotification } from "@/services/notifications.create.service";
 import {
@@ -58,23 +63,15 @@ export async function updateProfessorProfile(formData: FormData) {
 }
 
 async function getCurrentProfessorForAction(profileId?: string | null) {
-  if (profileId) {
-    const { data } = await supabase
-      .from("professors")
-      .select("id, name")
-      .eq("profile_id", profileId)
-      .maybeSingle();
-
-    if (data) {
-      return data;
-    }
+  if (!profileId) {
+    return null;
   }
 
+  const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("professors")
     .select("id, name")
-    .order("created_at", { ascending: true })
-    .limit(1)
+    .eq("profile_id", profileId)
     .maybeSingle();
 
   return data;
@@ -93,6 +90,7 @@ async function resolveOwnedCourse(courseValue: string, profileId?: string | null
     return { ok: false as const, message: "연결된 교수 정보를 찾을 수 없습니다." };
   }
 
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("course_professors")
     .select("course_id")
@@ -144,7 +142,7 @@ export async function addProfessorAvailability(formData: FormData) {
       return { ok: false, message: "상담 가능 시간은 18:00 이전으로만 등록할 수 있습니다." };
     }
 
-    const { error } = await supabase.from("professor_availability").insert({
+    const { error } = await anonSupabase.from("professor_availability").insert({
       professor_id: professorId,
       day_of_week: day,
       specific_date: specificDate || null,
@@ -180,7 +178,7 @@ export async function addProfessorFaq(formData: FormData) {
   const isTA = profile?.role === "assistant";
   const prefix = isTA ? "[조교 답변] " : "";
 
-  const { error } = await supabase.from("faqs").insert({
+  const { error } = await anonSupabase.from("faqs").insert({
     professor_id: professorId,
     course_id: courseId || null,
     question,
@@ -198,6 +196,11 @@ export async function addProfessorFaq(formData: FormData) {
 }
 
 export async function updateCounselingStatus(formData: FormData) {
+  const profile = await getDemoProfile();
+  if (profile?.role !== "professor" && profile?.role !== "assistant") {
+    return { ok: false, message: "교수 계정으로만 상담 요청을 처리할 수 있습니다." };
+  }
+
   const requestId = text(formData.get("requestId"));
   const status = text(formData.get("status"));
   const professorNote = text(formData.get("professorNote"));
@@ -212,6 +215,10 @@ export async function updateCounselingStatus(formData: FormData) {
     return { ok: false, message: "거절 사유와 추천 시간대를 입력해 주세요." };
   }
 
+  // Service role with the app-level role guard above: neither anon (select
+  // revoked) nor authenticated (legacy auth.uid()=profiles.id policy) can
+  // complete this update on the current schema.
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("counseling_requests")
     .update({
@@ -251,6 +258,11 @@ export async function updateCounselingStatus(formData: FormData) {
 }
 
 export async function updateCounselingDetails(formData: FormData) {
+  const profile = await getDemoProfile();
+  if (profile?.role !== "professor" && profile?.role !== "assistant") {
+    return { ok: false, message: "교수 계정으로만 상담 일정을 수정할 수 있습니다." };
+  }
+
   const requestId = text(formData.get("requestId"));
   const professorNote = text(formData.get("professorNote"));
   const location = text(formData.get("location"));
@@ -259,6 +271,7 @@ export async function updateCounselingDetails(formData: FormData) {
     return { ok: false, message: "상담 일정을 찾을 수 없습니다." };
   }
 
+  const supabase = createSupabaseAdminClient();
   const { error } = await supabase
     .from("counseling_requests")
     .update({
@@ -309,6 +322,7 @@ export async function createRoadmapRevisionRequest(formData: FormData) {
     ...(weeklyFocus.length ? { weeklyFocus } : {}),
   };
 
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("roadmap_revision_requests")
     .insert({
@@ -385,6 +399,7 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
   };
 
   const timestamp = new Date().toISOString();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("roadmap_revision_requests")
     .insert({
@@ -517,7 +532,7 @@ export async function toggleProfessorAvailability(formData: FormData) {
 
     if (!id) return { ok: false, message: "ID 누락" };
 
-    const { error } = await supabase
+    const { error } = await anonSupabase
       .from("professor_availability")
       .update({ is_active: isActive })
       .eq("id", id);

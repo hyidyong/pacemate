@@ -121,7 +121,7 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
                   {post.display_mode === "anonymous"
                     ? post.anonymous_alias ?? "익명 교수"
                     : post.author?.name ?? "교수"}{" "}
-                  · {new Date(post.created_at).toLocaleDateString("ko-KR")}
+                  · {new Date(post.created_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}
                 </small>
               </article>
             ))

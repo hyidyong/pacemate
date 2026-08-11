@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import {
   Bookmark,
   CalendarPlus,
+  Heart,
   MessageSquareText,
   Search,
   Star,
@@ -21,6 +22,7 @@ import {
   removeCustomCourseFromSchedule,
   removeCourseFromSchedule,
   saveCustomCourseToSchedule,
+  toggleFavoriteCourse,
 } from "@/services/student-community.actions";
 import {
   createLocalTimetableCourse,
@@ -30,6 +32,13 @@ import {
   upsertTimetableCourse,
   useStudentTimetable,
 } from "@/lib/student-timetable";
+import {
+  findScheduleConflicts,
+  toKoreanWeekday,
+  type ExistingScheduleEntry,
+} from "@/services/student-timetable.rules";
+import { ScheduleConflictDialog } from "@/components/schedule/schedule-conflict-dialog";
+import type { ScheduleConflictInfo } from "@/components/schedule/schedule-conflict-list";
 import type {
   CommunityPostRecord,
   CourseRecord,
@@ -135,8 +144,53 @@ export function MyPagePlanner({
   const [isDoneLoaded, setIsDoneLoaded] = useState(false);
   const { timetableCourses, timetableItems, setTimetableCourses } = useStudentTimetable(myCourses);
   const [syncedLocalCourseIds, setSyncedLocalCourseIds] = useState<string[]>([]);
+  const [conflict, setConflict] = useState<ScheduleConflictInfo | null>(null);
+  const [retryWithOverlapConfirmed, setRetryWithOverlapConfirmed] = useState<(() => void) | null>(null);
 
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0];
+
+  // The other slots already on this timetable, used for both the live
+  // in-form warning and to build the confirm-anyway retry payload.
+  const existingScheduleEntries = useMemo<ExistingScheduleEntry[]>(
+    () =>
+      timetableItems.flatMap((item) => {
+        const dayOfWeek = toKoreanWeekday(item.schedule_day);
+        if (!dayOfWeek || !item.start_time || !item.end_time) return [];
+        return [
+          {
+            parentId: item.parentId,
+            label: item.course.name,
+            dayOfWeek,
+            startTime: item.start_time,
+            endTime: item.end_time,
+          },
+        ];
+      }),
+    [timetableItems],
+  );
+
+  const registerFormConflicts = useMemo(() => {
+    const dayOfWeek = toKoreanWeekday(day);
+    if (!dayOfWeek || !startTime || !endTime || startTime >= endTime) return [];
+    return findScheduleConflicts(
+      [{ dayOfWeek, startTime, endTime, classroom: classroom || null }],
+      existingScheduleEntries,
+    );
+  }, [day, startTime, endTime, classroom, existingScheduleEntries]);
+
+  const customSlotConflicts = useMemo(
+    () =>
+      customSlots.map((slot) => {
+        const dayOfWeek = toKoreanWeekday(slot.day);
+        if (!dayOfWeek || !slot.startTime || !slot.endTime || slot.startTime >= slot.endTime) return [];
+        return findScheduleConflicts(
+          [{ dayOfWeek, startTime: slot.startTime, endTime: slot.endTime, classroom: slot.classroom || null }],
+          existingScheduleEntries,
+          editingCustomId ? `custom:${editingCustomId}` : undefined,
+        );
+      }),
+    [customSlots, existingScheduleEntries, editingCustomId],
+  );
 
   // Keep the server's first render deterministic, then set the browser-local
   // default date after hydration.
@@ -154,7 +208,11 @@ export function MyPagePlanner({
     );
   }, [courses, query]);
 
-  const scheduledCourseIds = new Set(timetableCourses.map((item) => item.course.id));
+  // Based on timetableItems (which only includes courses with real schedule
+  // slots), not timetableCourses (every student_courses row) — a
+  // favorite-only course has a row but no slots, and should still be
+  // registerable from this panel.
+  const scheduledCourseIds = new Set(timetableItems.map((item) => item.course.id));
 
   useEffect(() => {
     const unsyncedLocalCourses = timetableCourses.filter(
@@ -168,7 +226,6 @@ export function MyPagePlanner({
       for (const item of unsyncedLocalCourses) {
         const formData = new FormData();
         formData.set("courseId", item.course.id);
-        formData.set("isFavorite", "true");
         formData.set("scheduleDay", item.schedule_day ?? day);
         formData.set("startTime", item.start_time ?? "09:00");
         formData.set("endTime", item.end_time ?? "10:15");
@@ -193,6 +250,44 @@ export function MyPagePlanner({
     };
   }, [day, router, setTimetableCourses, syncedLocalCourseIds, timetableCourses]);
 
+  function submitAddCourse(formData: FormData, optimisticCourseId: string | null) {
+    startTransition(async () => {
+      const result = await addCourseToSchedule(formData);
+
+      if (result.ok && result.course) {
+        setFeedback({ ok: true, message: result.message });
+        setTimetableCourses((previous) =>
+          upsertTimetableCourse(
+            optimisticCourseId ? removeTimetableCourse(previous, optimisticCourseId) : previous,
+            result.course as StudentCourseRecord,
+          ),
+        );
+        setConflict(null);
+        setRetryWithOverlapConfirmed(null);
+        router.refresh();
+        return;
+      }
+
+      // The server didn't accept it — drop the optimistic block instead of
+      // leaving a phantom entry on the grid.
+      if (optimisticCourseId) {
+        setTimetableCourses((previous) => removeTimetableCourse(previous, optimisticCourseId));
+      }
+
+      if ("conflict" in result && result.conflict) {
+        setConflict(result.conflict);
+        const confirmedFormData = new FormData();
+        formData.forEach((value, key) => confirmedFormData.set(key, value as string));
+        confirmedFormData.set("confirmOverlap", "true");
+        setRetryWithOverlapConfirmed(() => () => submitAddCourse(confirmedFormData, null));
+        return;
+      }
+
+      setConflict(null);
+      setFeedback({ ok: false, message: result.message });
+    });
+  }
+
   function handleAddCourse() {
     if (!selectedCourse) return;
 
@@ -209,12 +304,11 @@ export function MyPagePlanner({
       classroom: classroom || "강의실 미정",
     });
 
-    setTimetableCourses(upsertTimetableCourse(timetableCourses, nextCourse));
+    setTimetableCourses((previous) => upsertTimetableCourse(previous, nextCourse));
     setFeedback({ ok: true, message: "시간표에 등록 중입니다." });
 
     const formData = new FormData();
     formData.set("courseId", selectedCourse.id);
-    formData.set("isFavorite", "true");
     formData.set("scheduleDay", day);
     formData.set("startTime", startTime);
     formData.set("endTime", endTime);
@@ -222,13 +316,36 @@ export function MyPagePlanner({
     formData.set("semesterLabel", "2026-2");
     if (regularSlotsJson.trim()) formData.set("scheduleSlots", regularSlotsJson);
 
+    submitAddCourse(formData, nextCourse.id);
+  }
+
+  function submitCustomCourse(formData: FormData) {
     startTransition(async () => {
-      const result = await addCourseToSchedule(formData);
-      setFeedback({ ok: result.ok, message: result.message });
+      const result = await saveCustomCourseToSchedule(formData);
+
       if (result.ok && result.course) {
-        setTimetableCourses(upsertTimetableCourse(removeTimetableCourse(timetableCourses, nextCourse.id), result.course));
+        setFeedback({ ok: true, message: result.message });
+        setTimetableCourses((previous) => upsertTimetableCourse(previous, result.course as StudentCourseRecord));
+        setCustomTitle("");
+        setEditingCustomId(null);
+        setCustomSlots([{ day: days[0], startTime: "09:00", endTime: "10:15", classroom: "" }]);
+        setConflict(null);
+        setRetryWithOverlapConfirmed(null);
         router.refresh();
+        return;
       }
+
+      if ("conflict" in result && result.conflict) {
+        setConflict(result.conflict);
+        const confirmedFormData = new FormData();
+        formData.forEach((value, key) => confirmedFormData.set(key, value as string));
+        confirmedFormData.set("confirmOverlap", "true");
+        setRetryWithOverlapConfirmed(() => () => submitCustomCourse(confirmedFormData));
+        return;
+      }
+
+      setConflict(null);
+      setFeedback({ ok: false, message: result.message });
     });
   }
 
@@ -242,17 +359,16 @@ export function MyPagePlanner({
       endTime: slot.endTime,
       classroom: slot.classroom,
     }))));
-    startTransition(async () => {
-      const result = await saveCustomCourseToSchedule(formData);
-      setFeedback({ ok: result.ok, message: result.message });
-      if (result.ok && result.course) {
-        setTimetableCourses(upsertTimetableCourse(timetableCourses, result.course));
-        setCustomTitle("");
-        setEditingCustomId(null);
-        setCustomSlots([{ day: days[0], startTime: "09:00", endTime: "10:15", classroom: "" }]);
-        router.refresh();
-      }
-    });
+    submitCustomCourse(formData);
+  }
+
+  function handleConfirmOverlap() {
+    retryWithOverlapConfirmed?.();
+  }
+
+  function handleEditConflictingTime() {
+    setConflict(null);
+    setRetryWithOverlapConfirmed(null);
   }
 
   function beginCustomCourseEdit(course: StudentCourseRecord) {
@@ -300,6 +416,30 @@ export function MyPagePlanner({
       if (result.ok) {
         setTimetableCourses(removeTimetableCourse(timetableCourses, enrollmentId));
         router.refresh();
+      }
+    });
+  }
+
+  const favoriteCourses = useMemo(
+    () => timetableCourses.filter((course) => course.is_favorite),
+    [timetableCourses],
+  );
+
+  function handleUnfavorite(enrollmentId: string) {
+    setTimetableCourses((previous) =>
+      previous.map((item) => (item.id === enrollmentId ? { ...item, is_favorite: false } : item)),
+    );
+
+    const formData = new FormData();
+    formData.set("enrollmentId", enrollmentId);
+    formData.set("nextValue", "false");
+    startTransition(async () => {
+      const result = await toggleFavoriteCourse(formData);
+      if (!result.ok) {
+        setTimetableCourses((previous) =>
+          previous.map((item) => (item.id === enrollmentId ? { ...item, is_favorite: true } : item)),
+        );
+        setFeedback({ ok: false, message: result.message });
       }
     });
   }
@@ -511,7 +651,7 @@ export function MyPagePlanner({
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-xl font-bold flex items-center gap-2">
             내 시간표
-            <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{timetableCourses.length}과목</span>
+            <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{scheduledCourseIds.size}과목</span>
           </h2>
         </div>
         {feedback ? (
@@ -690,6 +830,12 @@ export function MyPagePlanner({
                     />
                   </div>
                 </div>
+
+                {registerFormConflicts.length > 0 ? (
+                  <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                    이 시간에 {registerFormConflicts[0].existing.label} 과목이 있어요.
+                  </p>
+                ) : null}
               </div>
 
               <details className="mt-3 rounded-xl bg-emerald-50/70 p-3 text-xs text-emerald-900">
@@ -732,14 +878,21 @@ export function MyPagePlanner({
             className="w-full rounded-xl border border-sky-100 bg-white px-3 py-2.5 text-sm outline-none focus:border-sky-400"
           />
           {customSlots.map((slot, index) => (
-            <div key={index} className="grid gap-2 rounded-xl bg-white/90 p-3 shadow-sm sm:grid-cols-[0.8fr_1fr_1fr_1.2fr_auto]">
-              <select value={slot.day} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, day: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm">
-                {days.map((value) => <option key={value} value={value}>{value}</option>)}
-              </select>
-              <input type="time" value={slot.startTime} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, startTime: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
-              <input type="time" value={slot.endTime} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, endTime: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
-              <input value={slot.classroom} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, classroom: event.target.value } : item))} placeholder="강의실" className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
-              <button type="button" disabled={customSlots.length === 1} onClick={() => setCustomSlots((slots) => slots.filter((_, slotIndex) => slotIndex !== index))} className="rounded-lg px-2 text-sm text-rose-600 disabled:text-slate-300">삭제</button>
+            <div key={index}>
+              <div className="grid gap-2 rounded-xl bg-white/90 p-3 shadow-sm sm:grid-cols-[0.8fr_1fr_1fr_1.2fr_auto]">
+                <select value={slot.day} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, day: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm">
+                  {days.map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+                <input type="time" value={slot.startTime} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, startTime: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
+                <input type="time" value={slot.endTime} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, endTime: event.target.value } : item))} className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
+                <input value={slot.classroom} onChange={(event) => setCustomSlots((slots) => slots.map((item, slotIndex) => slotIndex === index ? { ...item, classroom: event.target.value } : item))} placeholder="강의실" className="rounded-lg border border-sky-100 px-2 py-2 text-sm" />
+                <button type="button" disabled={customSlots.length === 1} onClick={() => setCustomSlots((slots) => slots.filter((_, slotIndex) => slotIndex !== index))} className="rounded-lg px-2 text-sm text-rose-600 disabled:text-slate-300">삭제</button>
+              </div>
+              {customSlotConflicts[index]?.length > 0 ? (
+                <p className="mt-1 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
+                  이 시간에 {customSlotConflicts[index][0].existing.label} 과목이 있어요.
+                </p>
+              ) : null}
             </div>
           ))}
           <div className="flex flex-wrap gap-2">
@@ -913,7 +1066,7 @@ export function MyPagePlanner({
                     <span className="flex items-center gap-1"><MessageCircle size={12} /> {post.comments}</span>
                     <span className="flex items-center gap-1"><Bookmark size={12} className={post.is_scrapped ? "text-emerald-500" : ""} /> {post.scraps}</span>
                     <span>·</span>
-                    <span>{new Date(post.created_at).toLocaleDateString()}</span>
+                    <span>{new Date(post.created_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</span>
                   </div>
                 </Link>
               ))}
@@ -927,6 +1080,59 @@ export function MyPagePlanner({
         </div>
       </section>
 
+      {/* SECTION 5: Favorited courses — deliberately not shown under "all",
+          since a registered-and-favorited course already appears in the
+          timetable grid above. */}
+      <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "favorites" ? "" : "hidden"}`}>
+        <div className="p-5 border-b border-gray-100 flex items-center gap-3">
+          <Heart className="text-rose-500" size={20} />
+          <h2 className="text-xl font-bold">찜한 과목</h2>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {favoriteCourses.length ? (
+            favoriteCourses.map((course) => (
+              <div key={course.id} className="flex items-center justify-between p-5">
+                <div>
+                  <div className="font-bold text-gray-800">{course.course.name}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {course.course.code} · {course.course.credit}학점
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link href={`/courses/${course.course.id}`} className="text-sm text-primary hover:underline">
+                    상세보기
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleUnfavorite(course.id)}
+                    className="text-sm font-medium text-rose-600 hover:text-rose-700"
+                  >
+                    찜 해제
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-10 text-center text-gray-400 flex flex-col items-center">
+              <Heart size={32} className="mb-3 opacity-50" />
+              <p>찜한 과목이 없습니다. 과목 목록에서 하트를 눌러 찜해보세요.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <ScheduleConflictDialog
+        conflict={conflict}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConflict(null);
+            setRetryWithOverlapConfirmed(null);
+          }
+        }}
+        onConfirm={handleConfirmOverlap}
+        onEditTime={handleEditConflictingTime}
+        isPending={isPending}
+      />
     </div>
   );
 }

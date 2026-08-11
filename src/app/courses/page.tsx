@@ -12,6 +12,8 @@ import {
 import { sampleSyllabus } from "@/data/sample-syllabus";
 import { getCourseSummaries } from "@/services/course.service";
 import { RegisterCourseButton } from "@/components/courses/register-course-button";
+import { FavoriteCourseButton } from "@/components/courses/favorite-course-button";
+import { getFavoriteCourseIds } from "@/services/student-community.service";
 import { redirectNonStudent } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 
@@ -52,6 +54,9 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
     : courses;
 
   const isStudent = profile?.role === "student";
+  const favoriteCourseIds = isStudent && profile
+    ? await getFavoriteCourseIds(profile.id)
+    : new Set<string>();
 
   return (
     <AppShell showAiTutorFab={false}>
@@ -120,7 +125,15 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                       {course.code} · {course.credit}학점 · {course.category ?? "분류 미정"}
                     </CardDescription>
                   </div>
-                  {isStudent && <RegisterCourseButton courseId={course.id} />}
+                  {isStudent && (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <FavoriteCourseButton
+                        courseId={course.id}
+                        initialFavorite={favoriteCourseIds.has(course.id)}
+                      />
+                      <RegisterCourseButton courseId={course.id} />
+                    </div>
+                  )}
                 </div>
               </CardHeader>
               <CardContent>

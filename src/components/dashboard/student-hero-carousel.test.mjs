@@ -28,16 +28,18 @@ test("student hero carousel keeps banner images uncropped and supports every nav
   assert.match(source, /aria-label=\{`\$\{index \+ 1\}번 슬라이드로 이동`\}/);
 });
 
-test("student hero carousel uses direct image URLs that are easy to replace", async () => {
+test("student hero carousel uses local static banners that are easy to replace", async () => {
   const source = await readFile(componentPath, "utf8");
   const urls = [
-    "https://i.ibb.co/DPWZc0RC/Chat-GPT-Image-2026-7-14-04-24-00.png",
-    "https://i.ibb.co/B5rxRtLJ/Chat-GPT-Image-2026-7-14-04-19-13.png",
-    "https://i.ibb.co/fdtxFxpn/Chat-GPT-Image-2026-7-14-04-19-37.png",
-    "https://i.ibb.co/Dg8QmZp0/Chat-GPT-Image-2026-7-14-04-19-29.png",
+    "/images/hero-1.jpg",
+    "/images/hero-2.jpg",
+    "/images/hero-3.jpg",
+    "/images/hero-4.jpg",
   ];
 
   for (const url of urls) assert.match(source, new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  // The slow external image host must stay gone (KI-008).
+  assert.doesNotMatch(source, /i\.ibb\.co/);
 });
 
 test("student hero carousel only loads the active transition images", async () => {

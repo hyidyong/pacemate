@@ -1,4 +1,10 @@
-import { supabase } from "@/lib/supabase/client";
+// professor_availability/faqs rows must stay readable in every state
+// (inactive slots, unapproved answers), which only the demo anon policies
+// currently allow; counseling request reads need the service role because the
+// authenticated role can no longer read student names after the profile
+// column-grant hardening migrations.
+import { supabase as anonSupabase } from "@/lib/supabase/client";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { RoadmapRevisionRequest } from "@/services/roadmap-revisions.service";
 import type { DemoProfile } from "@/services/session.service";
@@ -142,6 +148,7 @@ export async function getProfessorProfile(profile: DemoProfile | null): Promise<
     return null;
   }
 
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("professors")
     .select("id, name, office, email, bio, department:departments(name)")
@@ -156,6 +163,7 @@ export async function getProfessorProfile(profile: DemoProfile | null): Promise<
 }
 
 async function getCurrentProfessor(profile: DemoProfile | null) {
+  const supabase = await createSupabaseServerClient();
   if (profile?.role === "professor") {
     const { data } = await supabase
       .from("professors")
@@ -179,6 +187,7 @@ async function getCurrentProfessor(profile: DemoProfile | null) {
 }
 
 async function getProfessorCourses(professorId: string): Promise<ProfessorCourse[]> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("course_professors")
     .select("course:courses(id, code, name, credit, category)")
@@ -195,6 +204,7 @@ async function getProfessorCourses(professorId: string): Promise<ProfessorCourse
 async function getTeachingSlots(
   professorId: string,
 ): Promise<ProfessorTeachingSlot[]> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("professor_teaching_slots")
     .select(
@@ -214,7 +224,7 @@ async function getTeachingSlots(
 async function getAvailability(
   professorId: string,
 ): Promise<ProfessorAvailability[]> {
-  const { data, error } = await supabase
+  const { data, error } = await anonSupabase
     .from("professor_availability")
     .select("id, professor_id, day_of_week, start_time, end_time, slot_minutes, is_active")
     .eq("professor_id", professorId)
@@ -248,7 +258,7 @@ async function getAdminTasks(
 }
 
 async function getFaqs(professorId: string): Promise<ProfessorFaq[]> {
-  const { data, error } = await supabase
+  const { data, error } = await anonSupabase
     .from("faqs")
     .select("id, question, answer, category, approved_at, course:courses(id, name)")
     .eq("professor_id", professorId)
@@ -265,6 +275,9 @@ async function getFaqs(professorId: string): Promise<ProfessorFaq[]> {
 async function getCounselingRequests(
   professorId: string,
 ): Promise<ProfessorCounselingRequest[]> {
+  // Service role: the professor page has already resolved the professor from
+  // the signed session, and the query is scoped to that professor_id.
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("counseling_requests")
     .select("id, student_id, requested_start, requested_end, topic, status, professor_note, location, suggested_start, suggested_end, student:profiles(name, identifier)")
@@ -278,93 +291,13 @@ async function getCounselingRequests(
 
   const result = (data ?? []) as any[];
 
-  const dummyData: ProfessorCounselingRequest[] = [
-    {
-      id: "cReq1",
-      student_id: "s1",
-      requested_start: "2026-07-06T15:00:00Z",
-      requested_end: "2026-07-06T15:30:00Z",
-      topic: "수강신청 관련 상담",
-      location: null,
-      status: "pending",
-      professor_note: null,
-      suggested_start: null,
-      suggested_end: null,
-      student: { name: "김학생", identifier: "20230001", major: "법학" },
-    },
-    {
-      id: "cReq2",
-      student_id: "s2",
-      requested_start: "2026-07-07T10:00:00Z",
-      requested_end: "2026-07-07T10:30:00Z",
-      topic: "진로 상담",
-      location: null,
-      status: "pending",
-      professor_note: null,
-      suggested_start: null,
-      suggested_end: null,
-      student: { name: "이학생", identifier: "20230002", major: "법학" },
-    },
-    {
-      id: "cReq3",
-      student_id: "s3",
-      requested_start: "2026-07-07T10:30:00Z",
-      requested_end: "2026-07-07T11:00:00Z",
-      topic: "졸업 논문 방향성 논의",
-      location: "연구실",
-      status: "approved",
-      professor_note: null,
-      suggested_start: null,
-      suggested_end: null,
-      student: { name: "손희정", identifier: "20220003", major: "법학" },
-    },
-    {
-      id: "cReq4",
-      student_id: "s4",
-      requested_start: "2026-07-08T14:00:00Z",
-      requested_end: "2026-07-08T14:30:00Z",
-      topic: "학사 경고 면담",
-      location: "교무처",
-      status: "approved",
-      professor_note: null,
-      suggested_start: null,
-      suggested_end: null,
-      student: { name: "박학생", identifier: "20210004", major: "법학" },
-    },
-    {
-      id: "cReq5",
-      student_id: "s5",
-      requested_start: "2026-07-09T09:00:00Z",
-      requested_end: "2026-07-09T09:30:00Z",
-      topic: "대학원 진학 문의",
-      location: null,
-      status: "pending",
-      professor_note: null,
-      suggested_start: null,
-      suggested_end: null,
-      student: { name: "최학생", identifier: "20200005", major: "법학" },
-    },
-    {
-      id: "cReq6",
-      student_id: "s6",
-      requested_start: "2026-07-09T10:00:00Z",
-      requested_end: "2026-07-09T10:30:00Z",
-      topic: "수업 내용 질문",
-      location: null,
-      status: "rejected",
-      professor_note: "질문은 LMS 게시판을 이용해주세요.",
-      suggested_start: "2026-07-09T11:00:00Z",
-      suggested_end: "2026-07-09T11:30:00Z",
-      student: { name: "정학생", identifier: "20190006", major: "법학" },
-    },
-  ];
-
   return normalizeProfessorCounselingRows(
     result as unknown as ProfessorCounselingRequest[],
   );
 }
 
 async function getRoadmapRequests(): Promise<RoadmapRevisionRequest[]> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("roadmap_revision_requests")
     .select(

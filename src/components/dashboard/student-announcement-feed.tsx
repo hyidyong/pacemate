@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, X } from "lucide-react";
 
@@ -30,7 +30,12 @@ export function filterVisibleAnnouncements<T extends { id: string }>(announcemen
 }
 
 export function StudentAnnouncementFeed({ announcements }: { announcements: StudentAnnouncement[] }) {
-  const [dismissedIds, setDismissedIds] = useState(readDismissedIds);
+  const [dismissedIds, setDismissedIds] = useState(new Set<string>());
+
+  useEffect(() => {
+    setDismissedIds(readDismissedIds());
+  }, []);
+
   const visible = filterVisibleAnnouncements(announcements, dismissedIds);
 
   function dismiss(id: string) {

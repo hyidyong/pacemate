@@ -1,8 +1,8 @@
 "use client";
 
-import { CalendarDays, CheckSquare, LayoutGrid, MessageSquare } from "lucide-react";
+import { CalendarDays, CheckSquare, Heart, LayoutGrid, MessageSquare } from "lucide-react";
 
-export type MyPageSection = "all" | "timetable" | "todo" | "community";
+export type MyPageSection = "all" | "timetable" | "todo" | "community" | "favorites";
 
 export function shouldRenderMyPageSection(active: MyPageSection, section: Exclude<MyPageSection, "all">) {
   return active === "all" || active === section;
@@ -13,6 +13,7 @@ const tabs = [
   { id: "timetable", label: "시간표", icon: CalendarDays },
   { id: "todo", label: "투두", icon: CheckSquare },
   { id: "community", label: "커뮤니티", icon: MessageSquare },
+  { id: "favorites", label: "찜", icon: Heart },
 ] as const;
 
 export function MyPageSectionTabs({ activeTab, onChange }: { activeTab: MyPageSection; onChange: (tab: MyPageSection) => void }) {

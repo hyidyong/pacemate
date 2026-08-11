@@ -1,3 +1,5 @@
+import type { StudentCourseStudyGuideView } from "@/types/student-course-study-guide";
+
 export type StudentWeeklyProgressStatus =
   | "not_started"
   | "in_progress"
@@ -20,12 +22,7 @@ export type StudentWeeklyFeedbackDraft = {
   updatedAt: string | null;
 };
 
-export type StudentRoadmapCourseGuide = {
-  courseName: string;
-  description: string;
-  prerequisites: string;
-  studyGuide: string;
-};
+export type StudentRoadmapCourseGuide = StudentCourseStudyGuideView;
 
 export type StudentWeeklyProgressRecord = {
   weekNumber: number;

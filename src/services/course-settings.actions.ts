@@ -137,7 +137,7 @@ export async function addCourseNotice(formData: FormData) {
 
   if (studentCourses && studentCourses.length > 0) {
     const courseName = Array.isArray(studentCourses[0].courses)
-      ? studentCourses[0].courses[0].name
+      ? studentCourses[0].courses[0]?.name ?? "과목"
       : (studentCourses[0].courses as any)?.name ?? "과목";
 
     const notifications = studentCourses.map((sc) => ({
@@ -241,7 +241,7 @@ export async function addCourseTextbook(formData: FormData) {
 
   if (studentCourses && studentCourses.length > 0) {
     const courseName = Array.isArray(studentCourses[0].courses)
-      ? studentCourses[0].courses[0].name
+      ? studentCourses[0].courses[0]?.name ?? "과목"
       : (studentCourses[0].courses as any)?.name ?? "과목";
 
     const notifications = studentCourses.map((sc) => ({

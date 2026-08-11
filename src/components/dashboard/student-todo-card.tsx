@@ -191,7 +191,11 @@ export function StudentTodoCard({ items }: { items: StudentTodoItem[] }) {
     }
   };
 
-  const todayKey = useMemo(() => getLocalDateKey(new Date()), []);
+  const [todayKey, setTodayKey] = useState("");
+
+  useEffect(() => {
+    setTodayKey(getLocalDateKey(new Date()));
+  }, []);
 
   const combinedItems = useMemo(() => {
     const visibleAutoItems = items

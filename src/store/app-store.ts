@@ -10,14 +10,6 @@ export type ChatSession = {
   last_message?: string;
 };
 
-export type TimetableItem = {
-  id: string | number;
-  name: string;
-  time: string;
-  room: string;
-  color: string;
-};
-
 interface AppState {
   // 현재 활성 탭
   activeTab: MobileTab;
@@ -30,12 +22,6 @@ interface AppState {
   setCachedSessions: (sessions: ChatSession[]) => void;
   isChatSidebarOpen: boolean;
   setIsChatSidebarOpen: (open: boolean) => void;
-
-  // 시간표 상태 및 모달
-  timetableItems: TimetableItem[];
-  addTimetableItem: (item: TimetableItem) => void;
-  isTimetableModalOpen: boolean;
-  setIsTimetableModalOpen: (open: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -50,13 +36,4 @@ export const useAppStore = create<AppState>((set) => ({
   setCachedSessions: (sessions) => set({ cachedSessions: sessions }),
   isChatSidebarOpen: false,
   setIsChatSidebarOpen: (open) => set({ isChatSidebarOpen: open }),
-
-  // 시간표 상태 및 모달
-  timetableItems: [
-    { id: 1, name: "고급웹프로그래밍", time: "09:00 - 10:30", room: "공학관 201호", color: "bg-blue-100 text-blue-700" },
-    { id: 2, name: "데이터베이스", time: "11:00 - 12:15", room: "정보관 304호", color: "bg-emerald-100 text-emerald-700" },
-  ],
-  addTimetableItem: (item) => set((state) => ({ timetableItems: [...state.timetableItems, item] })),
-  isTimetableModalOpen: false,
-  setIsTimetableModalOpen: (open) => set({ isTimetableModalOpen: open }),
 }));

@@ -9,7 +9,10 @@ export const dynamic = "force-dynamic";
 export default async function CounselingPage() {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
-  const data = await getCounselingPageData(profile);
+  const data = await getCounselingPageData(profile).catch((error) => {
+    console.error("Counseling page data could not be loaded", error);
+    return { availableSlots: [], courses: [], professors: [], requests: [] };
+  });
 
   return (
     <AppShell>
