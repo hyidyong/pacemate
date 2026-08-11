@@ -34,11 +34,18 @@ function safeNotificationTargetHref(value: string) {
   return targetHref;
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
 function formatDate(value: string) {
-  const date = new Date(value);
-  return `${date.getFullYear()}. ${date.getMonth() + 1}. ${date.getDate()}. ${String(
-    date.getHours(),
-  ).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  return dateTimeFormatter.format(new Date(value));
 }
 
 function formatRelativeDate(value: string) {
@@ -103,7 +110,7 @@ export function NotificationList({ initialNotifications }: { initialNotification
               </span>
               <strong>{notification.title}</strong>
               <p>{notification.body}</p>
-              <small>
+              <small suppressHydrationWarning>
                 {formatRelativeDate(notification.created_at)} · {formatDate(notification.created_at)}
               </small>
             </div>

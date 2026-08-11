@@ -66,7 +66,7 @@ export function ProfessorProfileEditor({ professor: initialProfessor }: Professo
             <p className="mt-1 text-sm text-slate-500">{professor.name} 교수</p>
           </div>
           {!isEditing ? (
-            <button type="button" onClick={startEditing} className="btn-primary" disabled={isPending}>
+            <button type="button" onClick={startEditing} className="button button-default button-md" disabled={isPending}>
               수정
             </button>
           ) : null}
@@ -127,10 +127,10 @@ export function ProfessorProfileEditor({ professor: initialProfessor }: Professo
 
         {isEditing ? (
           <div className="mt-6 flex items-center gap-3">
-            <button type="button" onClick={saveProfile} className="btn-primary" disabled={isPending}>
+            <button type="button" onClick={saveProfile} className="button button-default button-md" disabled={isPending}>
               {isPending ? "저장 중" : "저장"}
             </button>
-            <button type="button" onClick={cancelEditing} className="btn-secondary" disabled={isPending}>
+            <button type="button" onClick={cancelEditing} className="button button-outline button-md" disabled={isPending}>
               취소
             </button>
           </div>

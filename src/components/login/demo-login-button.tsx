@@ -4,8 +4,6 @@ import { useState } from "react";
 import demoUsers from "@/config/demo-users.json";
 import { Button } from "@/components/ui/button";
 
-const studentOneIdentifier = "student1@pacemate.edu";
-
 export function DemoLoginButton() {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -17,13 +15,8 @@ export function DemoLoginButton() {
 
     if (idInput && pwInput && form) {
       idInput.value = identifier;
-      pwInput.value = identifier === studentOneIdentifier ? "1234" : pass;
+      pwInput.value = pass;
 
-      if (identifier === studentOneIdentifier) {
-        pwInput.focus();
-        return;
-      }
-      
       // Next.js Server Action을 정상적으로 트리거하기 위해 requestSubmit 사용
       const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
       if (submitBtn) {

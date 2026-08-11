@@ -64,7 +64,7 @@ export default async function AdminPage({
               <Link href={notification.target_href} key={notification.id}>
                 <strong>{notification.title}</strong>
                 <p>{notification.body}</p>
-                <small>{new Date(notification.created_at).toLocaleString("ko-KR")}</small>
+                <small>{new Date(notification.created_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}</small>
               </Link>
             ))}
           </div>

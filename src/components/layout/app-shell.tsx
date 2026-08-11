@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
@@ -71,7 +72,11 @@ export async function AppShell({
 
       {isStudent && <MobileBottomNav />}
 
-      {isAuthenticated && isProfessor && <ProfessorMobileBottomNav />}
+      {isAuthenticated && isProfessor && (
+        <Suspense fallback={null}>
+          <ProfessorMobileBottomNav />
+        </Suspense>
+      )}
 
       {isAuthenticated && isOperator && !isProfessor && (
         <nav

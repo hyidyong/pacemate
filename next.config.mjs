@@ -3,11 +3,19 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Next.js dev mode evaluates script strings for fast refresh/source maps, so
+// the CSP must allow 'unsafe-eval' there; production keeps the strict policy.
+const scriptSrc =
+  process.env.NODE_ENV === "development"
+    ? "'self' 'unsafe-inline' 'unsafe-eval'"
+    : "'self' 'unsafe-inline'";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Each Git worktree runs with its own source and build output. Pin the tracing
   // root so Next does not infer the parent workspace when multiple lockfiles exist.
   outputFileTracingRoot: __dirname,
+  serverExternalPackages: ["pdf-parse"],
   images: {
     remotePatterns: [
       {
@@ -36,7 +44,7 @@ const nextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://i.ibb.co; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+            value: `default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://i.ibb.co; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co`,
           },
         ],
       },

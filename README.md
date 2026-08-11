@@ -60,7 +60,7 @@ npm install
 
 # 4. 환경 변수 설정 (.env.local 파일 생성 후 아래 값 입력)
 # NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-# NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+# NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 
 # 5. 개발 서버 실행
 npm run dev

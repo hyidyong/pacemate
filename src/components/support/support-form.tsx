@@ -11,6 +11,12 @@ type ChatMessage = {
   time: string;
 };
 
+const timeFormatter = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul" });
+
+function formatTime(date: Date = new Date()) {
+  return timeFormatter.format(date);
+}
+
 export function SupportForm() {
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
@@ -18,11 +24,17 @@ export function SupportForm() {
       id: "init",
       sender: "system",
       text: "안녕하세요! PaceMate AI 어시스턴트입니다. 계정/권한, 상담 예약, 로드맵, 기타 오류 등에 대해 편하게 물어보세요. 즉시 해결할 수 있는 부분은 자동 답변해 드립니다.",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: "",
     }
   ]);
   const [isPending, startTransition] = useTransition();
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setChatHistory((prev) =>
+      prev.map((msg) => (msg.id === "init" && !msg.time ? { ...msg, time: formatTime() } : msg))
+    );
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,7 +47,7 @@ export function SupportForm() {
       id: `user-${Date.now()}`,
       sender: "user",
       text: message,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: formatTime(),
     };
 
     setChatHistory((prev) => [...prev, userMessage]);
@@ -58,7 +70,7 @@ export function SupportForm() {
             id: `sys-${Date.now()}`,
             sender: "system",
             text: result.message || "문의가 성공적으로 접수되었습니다. 추가 도움이 필요하시면 언제든 말씀해 주세요.",
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            time: formatTime(),
           },
         ]);
       }, 600);

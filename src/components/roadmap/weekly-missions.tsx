@@ -40,13 +40,13 @@ export function WeeklyMissions({ studentId, courseId, currentWeek, initialGuide 
         </div>
       ) : (
         <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
-          <div style={{ background: "var(--color-bg-subtle)", padding: "12px", borderRadius: "6px" }}>
+          <div style={{ background: "var(--muted)", padding: "12px", borderRadius: "6px" }}>
             <strong>예상 진도:</strong>
             <p style={{ marginTop: "4px" }}>{guide.predicted_progress_text}</p>
           </div>
-          <div style={{ background: "var(--color-tone-setup-bg)", padding: "12px", borderRadius: "6px" }}>
-            <strong style={{ color: "var(--color-tone-setup-fg)" }}>예습 및 복습 가이드:</strong>
-            <p style={{ marginTop: "4px", color: "var(--color-tone-setup-fg)" }}>{guide.prep_review_guide}</p>
+          <div style={{ background: "var(--accent)", padding: "12px", borderRadius: "6px" }}>
+            <strong style={{ color: "var(--accent-foreground)" }}>예습 및 복습 가이드:</strong>
+            <p style={{ marginTop: "4px", color: "var(--accent-foreground)" }}>{guide.prep_review_guide}</p>
           </div>
           
           <div style={{ marginTop: "8px" }}>

@@ -913,7 +913,7 @@ export function MyPagePlanner({
                     <span className="flex items-center gap-1"><MessageCircle size={12} /> {post.comments}</span>
                     <span className="flex items-center gap-1"><Bookmark size={12} className={post.is_scrapped ? "text-emerald-500" : ""} /> {post.scraps}</span>
                     <span>·</span>
-                    <span>{new Date(post.created_at).toLocaleDateString()}</span>
+                    <span>{new Date(post.created_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}</span>
                   </div>
                 </Link>
               ))}

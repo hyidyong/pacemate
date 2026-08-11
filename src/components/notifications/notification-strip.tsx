@@ -9,7 +9,6 @@ import {
   type UserNotification,
 } from "@/types/notifications";
 import { markNotificationAsRead } from "@/services/notifications.actions";
-import { useAppStore } from "@/store/app-store";
 
 type NotificationStripProps = {
   notifications: UserNotification[];
@@ -18,7 +17,6 @@ type NotificationStripProps = {
 
 export function NotificationStrip({ notifications: initialNotifications, showSummary = true }: NotificationStripProps) {
   const router = useRouter();
-  const { addTimetableItem } = useAppStore();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [selectedNotification, setSelectedNotification] = useState<UserNotification | null>(null);
@@ -98,14 +96,11 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
 
   const handleConfirmCounseling = () => {
     if (selectedNotification) {
-      addTimetableItem({
-        id: Date.now(),
-        name: "상담: " + selectedNotification.title.replace("상담 신청이 승인되었습니다", "").trim(),
-        time: "15:00 - 15:30",
-        room: "교수 연구실",
-        color: "bg-purple-100 text-purple-700",
-      });
+      // The old handler pushed a hardcoded slot into a store no view reads.
+      // The confirmed schedule lives on /counseling, so go there instead.
+      const target = selectedNotification.target_href || "/counseling";
       setSelectedNotification(null);
+      router.push(target);
     }
   };
 
