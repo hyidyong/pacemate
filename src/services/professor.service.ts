@@ -30,7 +30,8 @@ export type ProfessorProfile = {
 export type ProfessorAvailability = {
   id: string;
   professor_id: string;
-  day_of_week: number;
+  day_of_week: number | null;
+  specific_date: string | null;
   start_time: string;
   end_time: string;
   slot_minutes: number;
@@ -89,6 +90,7 @@ export type ProfessorPageData = {
   adminTasks: ProfessorAdminTaskRecord[];
   faqs: ProfessorFaq[];
   counselingRequests: ProfessorCounselingRequest[];
+  calendarRequests: ProfessorCounselingRequest[];
   roadmapRequests: RoadmapRevisionRequest[];
 };
 
@@ -107,6 +109,7 @@ export async function getProfessorPageData(
       adminTasks: [],
       faqs: [],
       counselingRequests: [],
+      calendarRequests: [],
       roadmapRequests: [],
     };
   }
@@ -118,6 +121,7 @@ export async function getProfessorPageData(
     adminTasks,
     faqs,
     counselingRequests,
+    calendarRequests,
     roadmapRequests,
   ] =
     await Promise.all([
@@ -127,6 +131,7 @@ export async function getProfessorPageData(
       getAdminTasks(professor.id),
       getFaqs(professor.id),
       getCounselingRequests(professor.id),
+      getCalendarRequests(professor.id),
       getRoadmapRequests(),
     ]);
 
@@ -139,6 +144,7 @@ export async function getProfessorPageData(
     adminTasks,
     faqs,
     counselingRequests,
+    calendarRequests,
     roadmapRequests,
   };
 }
@@ -226,7 +232,7 @@ async function getAvailability(
 ): Promise<ProfessorAvailability[]> {
   const { data, error } = await anonSupabase
     .from("professor_availability")
-    .select("id, professor_id, day_of_week, start_time, end_time, slot_minutes, is_active")
+    .select("id, professor_id, day_of_week, specific_date, start_time, end_time, slot_minutes, is_active")
     .eq("professor_id", professorId)
     .order("day_of_week", { ascending: true })
     .order("start_time", { ascending: true });
@@ -293,6 +299,29 @@ async function getCounselingRequests(
 
   return normalizeProfessorCounselingRows(
     result as unknown as ProfessorCounselingRequest[],
+  );
+}
+
+async function getCalendarRequests(
+  professorId: string,
+): Promise<ProfessorCounselingRequest[]> {
+  // The calendar's busy computation needs EVERY pending/approved request for
+  // this professor — the management list above keeps its own narrower query.
+  // Same service-role rationale as getCounselingRequests.
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("counseling_requests")
+    .select("id, student_id, requested_start, requested_end, topic, status, professor_note, location, suggested_start, suggested_end, student:profiles(name, identifier)")
+    .eq("professor_id", professorId)
+    .in("status", ["pending", "approved"])
+    .order("requested_start", { ascending: true });
+
+  if (error) {
+    console.error(error);
+  }
+
+  return normalizeProfessorCounselingRows(
+    (data ?? []) as unknown as ProfessorCounselingRequest[],
   );
 }
 

@@ -87,6 +87,7 @@ type ProfessorWorkspaceProps = {
   availability: ProfessorAvailability[];
   faqs: ProfessorFaq[];
   counselingRequests: ProfessorCounselingRequest[];
+  calendarRequests: ProfessorCounselingRequest[];
   roadmapRequests: RoadmapRevisionRequest[];
   adminTasks: ProfessorAdminTaskRecord[];
   notificationCounts: {
@@ -184,6 +185,7 @@ export function ProfessorWorkspace({
   availability,
   faqs,
   counselingRequests,
+  calendarRequests,
   roadmapRequests,
   adminTasks,
   professorCourseProgressReport,
@@ -205,6 +207,7 @@ export function ProfessorWorkspace({
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState("");
   const [currentCounselingRequests, setCurrentCounselingRequests] = useState<ProfessorCounselingRequest[]>(counselingRequests);
+  const [currentCalendarRequests, setCurrentCalendarRequests] = useState<ProfessorCounselingRequest[]>(calendarRequests);
   const [currentNotificationCounts, setCurrentNotificationCounts] = useState(notificationCounts);
   const [announcements] = useState<Array<{ question: string; answer: string; courseName: string }>>([]);
 
@@ -228,6 +231,10 @@ export function ProfessorWorkspace({
   useEffect(() => {
     setCurrentCounselingRequests(counselingRequests);
   }, [counselingRequests]);
+
+  useEffect(() => {
+    setCurrentCalendarRequests(calendarRequests);
+  }, [calendarRequests]);
 
   useEffect(() => {
     setCurrentNotificationCounts(notificationCounts);
@@ -393,7 +400,7 @@ export function ProfessorWorkspace({
             academicEvents={academicEvents}
             dashboardTasks={dashboardTasks}
             availability={availability}
-            counselingRequests={currentCounselingRequests}
+            counselingRequests={currentCalendarRequests}
             teachingSlots={teachingSlots}
             notificationCounts={currentNotificationCounts}
             pendingQuestionCount={pendingQuestionCount}
@@ -507,6 +514,7 @@ export function ProfessorWorkspace({
             showToast={showToast}
             onRequestStatusChange={(updated) => {
               setCurrentCounselingRequests((prev) => prev.map((request) => (request.id === updated.id ? updated : request)));
+              setCurrentCalendarRequests((prev) => prev.map((request) => (request.id === updated.id ? updated : request)));
               setCurrentNotificationCounts((prev) => ({ ...prev, counseling: 0 }));
             }}
           />
@@ -921,7 +929,7 @@ function ScheduleManualSub({
       <div className="professor-slot-list">
         {availability.map((item) => (
           <span key={item.id}>
-            {weekDays[item.day_of_week]} {item.start_time.slice(0, 5)}-
+            {item.specific_date ?? weekDays[item.day_of_week ?? 0]} {item.start_time.slice(0, 5)}-
             {item.end_time.slice(0, 5)} · {item.slot_minutes}분
             {item.is_active ? "" : " (비활성)"}
           </span>
