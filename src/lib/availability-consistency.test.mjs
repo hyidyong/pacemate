@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 
 import {
   PACEMATE_TIME_ZONE,
@@ -8,7 +10,23 @@ import {
   instantToLocalParts,
   timeToMinutes,
 } from "./counseling-slots.ts";
-import { buildProfessorWeekAvailability } from "./calendar-utils.ts";
+
+// Same loader as calendar-utils.week.test.mjs: the adapter imports the domain
+// via the "@/" alias, so rewrite it to an absolute file URL before importing.
+const require = createRequire(import.meta.url);
+const { transpileModule, ModuleKind, ScriptTarget } = require("typescript");
+
+async function loadCalendarUtils() {
+  const source = await readFile(new URL("./calendar-utils.ts", import.meta.url), "utf8");
+  const domainUrl = new URL("./counseling-slots.ts", import.meta.url).href;
+  const compiled = transpileModule(
+    source.replace('from "@/lib/counseling-slots"', `from ${JSON.stringify(domainUrl)}`),
+    { compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 } },
+  ).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+}
+
+const { buildProfessorWeekAvailability } = await loadCalendarUtils();
 
 // Stage 2 exit-gate invariant (#28/#29): given the same canonical source data,
 // the student counseling engine and the professor week grid must agree on

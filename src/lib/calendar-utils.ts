@@ -1,7 +1,4 @@
 import type { CounselingSlot } from "@/types/counseling";
-// Relative .ts import (not the @/ alias) so the node:test type-stripping
-// runner can execute this module directly; see tsconfig
-// allowImportingTsExtensions.
 import {
   PACEMATE_TIME_ZONE,
   buildBookableSlotsForLocalDate,
@@ -11,7 +8,7 @@ import {
   minutesToTime as domainMinutesToTime,
   instantToLocalParts,
   type CounselingScheduleContext,
-} from "./counseling-slots.ts";
+} from "@/lib/counseling-slots";
 
 // ---------------------------------------------------------------------------
 // Professor week availability adapter (Stage 2).

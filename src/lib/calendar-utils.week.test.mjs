@@ -1,7 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 
-import { buildProfessorWeekAvailability } from "./calendar-utils.ts";
+// calendar-utils.ts imports the domain via the "@/" alias (webpack dev cannot
+// hydrate lazy chunks that use relative .ts-extension imports), which node:test
+// cannot resolve — so transpile with the alias rewritten to an absolute file
+// URL, following the loader convention of student-timetable.test.mjs.
+const require = createRequire(import.meta.url);
+const { transpileModule, ModuleKind, ScriptTarget } = require("typescript");
+
+async function loadCalendarUtils() {
+  const source = await readFile(new URL("./calendar-utils.ts", import.meta.url), "utf8");
+  const domainUrl = new URL("./counseling-slots.ts", import.meta.url).href;
+  const compiled = transpileModule(
+    source.replace('from "@/lib/counseling-slots"', `from ${JSON.stringify(domainUrl)}`),
+    { compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 } },
+  ).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+}
+
+const { buildProfessorWeekAvailability } = await loadCalendarUtils();
 
 // Contract tests for the canonical professor week adapter (Stage 2).
 // Week under test: Mon 2026-07-13 .. Fri 2026-07-17 (KST date keys).
