@@ -435,6 +435,65 @@ export async function toggleFavoriteCourse(formData: FormData) {
   return { ok: true, message: nextValue ? "즐겨찾기에 추가했습니다." : "즐겨찾기를 해제했습니다." };
 }
 
+// Favoriting from /courses, where the student may not have any student_courses
+// row for this course yet. Reuses whichever row already exists regardless of
+// status (a naive upsert keyed on student_id+course_id+status='interested'
+// would create a second, duplicate-looking row for a course already marked
+// completed) and never touches schedule slots — favoriting is not the same
+// action as registering.
+export async function toggleCourseFavorite(formData: FormData) {
+  const profileId = await getProfileId();
+  const courseId = requiredText(formData.get("courseId"));
+  const nextValue = formData.get("nextValue") === "true";
+
+  if (!profileId || !courseId) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+  const supabase = createStudentCommunitySupabaseClient();
+  if (!supabase) {
+    return { ok: false, message: "시간표 데이터베이스 설정을 확인해 주세요." };
+  }
+
+  const { data: existing, error: lookupError } = await supabase
+    .from("student_courses")
+    .select("id")
+    .eq("student_id", profileId)
+    .eq("course_id", courseId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error("toggleCourseFavorite lookup failed:", lookupError.message);
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+
+  const { error } = existing?.id
+    ? await supabase
+        .from("student_courses")
+        .update({ is_favorite: nextValue })
+        .eq("id", existing.id)
+        .eq("student_id", profileId)
+    : await supabase.from("student_courses").insert({
+        student_id: profileId,
+        course_id: courseId,
+        status: "interested",
+        is_favorite: nextValue,
+        semester_label: "2026-2",
+        source_text: "favorite",
+      });
+
+  if (error) {
+    console.error("toggleCourseFavorite failed:", error.message);
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+
+  revalidatePath("/mypage");
+  revalidatePath("/dashboard");
+  revalidatePath("/courses");
+  return { ok: true, message: nextValue ? "찜한 과목에 추가했습니다." : "찜한 과목에서 제거했습니다." };
+}
+
 export async function removeCourseFromSchedule(formData: FormData) {
   const profileId = await getProfileId();
   const enrollmentId = requiredText(formData.get("enrollmentId"));

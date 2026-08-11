@@ -18,7 +18,7 @@ export function createLocalTimetableCourse({
 }): StudentCourseRecord {
   return {
     id: `${LOCAL_TIMETABLE_ID_PREFIX}${course.id}-${Date.now()}`,
-    status: "interested", is_favorite: true, schedule_day: scheduleDay,
+    status: "interested", is_favorite: false, schedule_day: scheduleDay,
     start_time: startTime, end_time: endTime, classroom, semester_label: "2026-2", course,
   };
 }

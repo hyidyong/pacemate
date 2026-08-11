@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import {
   Bookmark,
   CalendarPlus,
+  Heart,
   MessageSquareText,
   Search,
   Star,
@@ -21,6 +22,7 @@ import {
   removeCustomCourseFromSchedule,
   removeCourseFromSchedule,
   saveCustomCourseToSchedule,
+  toggleFavoriteCourse,
 } from "@/services/student-community.actions";
 import {
   createLocalTimetableCourse,
@@ -206,7 +208,11 @@ export function MyPagePlanner({
     );
   }, [courses, query]);
 
-  const scheduledCourseIds = new Set(timetableCourses.map((item) => item.course.id));
+  // Based on timetableItems (which only includes courses with real schedule
+  // slots), not timetableCourses (every student_courses row) — a
+  // favorite-only course has a row but no slots, and should still be
+  // registerable from this panel.
+  const scheduledCourseIds = new Set(timetableItems.map((item) => item.course.id));
 
   useEffect(() => {
     const unsyncedLocalCourses = timetableCourses.filter(
@@ -410,6 +416,30 @@ export function MyPagePlanner({
       if (result.ok) {
         setTimetableCourses(removeTimetableCourse(timetableCourses, enrollmentId));
         router.refresh();
+      }
+    });
+  }
+
+  const favoriteCourses = useMemo(
+    () => timetableCourses.filter((course) => course.is_favorite),
+    [timetableCourses],
+  );
+
+  function handleUnfavorite(enrollmentId: string) {
+    setTimetableCourses((previous) =>
+      previous.map((item) => (item.id === enrollmentId ? { ...item, is_favorite: false } : item)),
+    );
+
+    const formData = new FormData();
+    formData.set("enrollmentId", enrollmentId);
+    formData.set("nextValue", "false");
+    startTransition(async () => {
+      const result = await toggleFavoriteCourse(formData);
+      if (!result.ok) {
+        setTimetableCourses((previous) =>
+          previous.map((item) => (item.id === enrollmentId ? { ...item, is_favorite: true } : item)),
+        );
+        setFeedback({ ok: false, message: result.message });
       }
     });
   }
@@ -621,7 +651,7 @@ export function MyPagePlanner({
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-xl font-bold flex items-center gap-2">
             내 시간표
-            <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{timetableCourses.length}과목</span>
+            <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{scheduledCourseIds.size}과목</span>
           </h2>
         </div>
         {feedback ? (
@@ -1045,6 +1075,47 @@ export function MyPagePlanner({
             <div className="p-10 text-center text-gray-400 flex flex-col items-center">
               <MessageSquareText size={32} className="mb-3 opacity-50" />
               <p>해당하는 게시글이 없습니다.</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* SECTION 5: Favorited courses — deliberately not shown under "all",
+          since a registered-and-favorited course already appears in the
+          timetable grid above. */}
+      <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "favorites" ? "" : "hidden"}`}>
+        <div className="p-5 border-b border-gray-100 flex items-center gap-3">
+          <Heart className="text-rose-500" size={20} />
+          <h2 className="text-xl font-bold">찜한 과목</h2>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {favoriteCourses.length ? (
+            favoriteCourses.map((course) => (
+              <div key={course.id} className="flex items-center justify-between p-5">
+                <div>
+                  <div className="font-bold text-gray-800">{course.course.name}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {course.course.code} · {course.course.credit}학점
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link href={`/courses/${course.course.id}`} className="text-sm text-primary hover:underline">
+                    상세보기
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleUnfavorite(course.id)}
+                    className="text-sm font-medium text-rose-600 hover:text-rose-700"
+                  >
+                    찜 해제
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-10 text-center text-gray-400 flex flex-col items-center">
+              <Heart size={32} className="mb-3 opacity-50" />
+              <p>찜한 과목이 없습니다. 과목 목록에서 하트를 눌러 찜해보세요.</p>
             </div>
           )}
         </div>

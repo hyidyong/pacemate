@@ -13,6 +13,8 @@ import {
 import { sampleSyllabus } from "@/data/sample-syllabus";
 import { getCourseById } from "@/services/course.service";
 import { RegisterCourseButton } from "@/components/courses/register-course-button";
+import { FavoriteCourseButton } from "@/components/courses/favorite-course-button";
+import { getFavoriteCourseIds } from "@/services/student-community.service";
 import { redirectNonStudent } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 
@@ -36,6 +38,9 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
   }
 
   const isStudent = profile?.role === "student";
+  const favoriteCourseIds = isStudent && profile
+    ? await getFavoriteCourseIds(profile.id)
+    : new Set<string>();
 
   // Use sample syllabus if it matches the code, otherwise use a generic display or partial data
   const isSample = course.code === sampleSyllabus.course.code;
@@ -53,6 +58,12 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
           {course.code} · {course.credit}학점 · {course.category ?? "분류 미정"}
         </p>
         <div className="actions">
+          {isStudent && (
+            <FavoriteCourseButton
+              courseId={course.id}
+              initialFavorite={favoriteCourseIds.has(course.id)}
+            />
+          )}
           {isStudent && <RegisterCourseButton courseId={course.id} />}
           <Button asChild variant="outline">
             <Link href={`/reviews?course=${course.id}`}>
