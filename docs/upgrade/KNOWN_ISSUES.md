@@ -3,6 +3,37 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-012 — Dashboard ownership gates errored on duplicate student_courses rows
+
+Status: FIXED 2026-08-12 (Red → Green; latent — no live occurrence at fix time).
+The KI-006 app-level ownership gates in course-term-completion-eligibility.server.ts and
+student-learning-recommendations.server.ts used a bare `.maybeSingle()` on
+`student_courses (student_id, offering_id)`. The table is unique on (student_id, course_id,
+STATUS), so one student can own the same offering via several rows (e.g. an "interested"
+registration next to a "completed" row linked by the roadmap repair flow,
+personalized-weekly-roadmap.server.ts:175). supabase-js `maybeSingle()` errors on >1 row,
+which would have broken the dashboard cards for exactly those students. Live check
+2026-08-12: 0 duplicate (student, offering) pairs today (7 offering-linked rows, all
+`interested`) — latent, one flow away, so no runtime repro was manufactured.
+Fix: `.limit(1).maybeSingle()`, the same idiom the roadmap server's authorization check
+already uses (frozen by student-roadmap-workspace.test.mjs). RED:
+src/services/offering-ownership-gate.test.mjs 2/2 fail for the intended reason → GREEN 2/2
+pass; full suite 150/147 pass/3 fail (same KI-002 trio); typecheck clean.
+Found by external real-time review (P2); premise verified against schema and live data.
+
+## KI-011 — SECURITY DEFINER RLS helpers live in the exposed public schema
+
+Status: OPEN (hardening; fold into Stage 2 RLS work — flagged by external review 2026-08-12).
+is_professor_of_offering / is_student_of_offering (migration 20260812000000) are SECURITY
+DEFINER functions in `public`, so PostgREST exposes them as RPC endpoints to the
+authenticated role. Mitigations already in the migration: EXECUTE revoked from public/anon
+(authenticated only), both predicates answer only about the caller (auth.uid() is evaluated
+inside — no cross-user disclosure), and search_path is pinned to `public` (not mutable).
+Residual risk is low: an authenticated user can merely probe their own membership of
+arbitrary offering ids. Supabase guidance still prefers a non-exposed schema (e.g.
+`private`) and `set search_path = ''` with fully qualified names. Do that in the Stage 2
+RLS unification (same migration family as KI-006/KI-007) instead of churning the live DB now.
+
 ## KI-010 — Vercel build failed: pnpm-lock.yaml out of sync (ERR_PNPM_OUTDATED_LOCKFILE)
 
 Status: FIXED 2026-08-12.

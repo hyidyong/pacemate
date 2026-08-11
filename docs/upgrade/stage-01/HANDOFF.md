@@ -29,6 +29,16 @@ Fresh verification at HEAD 91851cd (2026-08-12):
   student-hero-carousel.tsx:67).
 - `npm run build`: PASS (First Load JS shared 102 kB — unchanged).
 
+External real-time review response (2026-08-12, later the same day):
+
+- P2 `.maybeSingle()` ownership gates → CONFIRMED latent defect, fixed Red → Green
+  (KI-012; src/services/offering-ownership-gate.test.mjs; suite now 150/147/3).
+- P2 SECURITY DEFINER helpers in public schema → verified partially mitigated already
+  (revoke + authenticated-only + pinned search_path; caller-scoped predicates); residual
+  hardening documented as KI-011 for Stage 2, no live-DB churn now.
+- P3 stale "NOT YET APPLIED" header in migration 20260812000000 → CONFIRMED, header
+  rewritten to the applied/verified state.
+
 ## Work completed
 
 1. Repository state verified; branch `upgrade/stage-1` created from `codex/mobile-student-timetable-fix` @ bbd3aa3.

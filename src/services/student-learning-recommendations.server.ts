@@ -22,11 +22,14 @@ export async function getStudentLearningRecommendations(offeringIdValue: string)
   // recurses (42P17) against the professor policy on student_weekly_progress,
   // so verify ownership via the student's own student_courses rows and read
   // the recursion-affected tables with the server-only admin client.
+  // limit(1): student_courses is unique on (student_id, course_id, status), so
+  // the same offering can be owned via several rows — existence is enough here.
   const { data: ownedOffering, error: ownedOfferingError } = await supabase
     .from("student_courses")
     .select("offering_id")
     .eq("student_id", profile.id)
     .eq("offering_id", offeringId)
+    .limit(1)
     .maybeSingle();
   if (ownedOfferingError) return { ok: false, code: "read_failed" };
   if (!ownedOffering) return { ok: false, code: "forbidden" };
