@@ -119,9 +119,12 @@ export function useStudentTimetable(initialCourses: StudentCourseRecord[]) {
     setCourses(initialSnapshot);
   }, [initialSnapshot]);
 
-  const replaceCourses = useCallback((nextCourses: StudentCourseRecord[]) => {
-    setCourses(nextCourses);
-  }, []);
+  const replaceCourses = useCallback(
+    (next: StudentCourseRecord[] | ((previous: StudentCourseRecord[]) => StudentCourseRecord[])) => {
+      setCourses(next);
+    },
+    [],
+  );
 
   return {
     timetableCourses: courses,
