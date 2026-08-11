@@ -45,7 +45,19 @@ type LocalDate = { year: number; month: number; day: number };
 export function getCounselingSlotId(
   slot: Pick<CounselingSlot, "professorId" | "start" | "end">,
 ) {
-  return JSON.stringify([slot.professorId, slot.start, slot.end]);
+  return JSON.stringify([
+    slot.professorId,
+    normalizeInstantString(slot.start),
+    normalizeInstantString(slot.end),
+  ]);
+}
+
+// Slot instants arrive both as Date#toISOString() output ("...000Z") and as
+// PostgREST timestamptz serializations ("...+00:00"); ids must not depend on
+// which form produced them.
+function normalizeInstantString(value: string) {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? value : new Date(timestamp).toISOString();
 }
 
 export function resolveSelectedCounselingSlot(
