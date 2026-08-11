@@ -395,6 +395,7 @@ export function ProfessorWorkspace({
       case "calendar":
         return (
           <ScheduleCalendarSub
+            professorId={professor.id}
             adminStats={adminStats}
             adminTasks={adminTasks}
             academicEvents={academicEvents}
@@ -700,6 +701,7 @@ export function ProfessorWorkspace({
 // --- ScheduleCalendarSub ---
 function ScheduleCalendarSub({
   adminStats,
+  professorId,
   adminTasks,
   academicEvents,
   dashboardTasks,
@@ -714,6 +716,7 @@ function ScheduleCalendarSub({
   onUpdateCounseling,
   onCancelCounseling,
 }: {
+  professorId: string;
   adminStats: ProfessorAdminStat[];
   adminTasks: ProfessorAdminTaskRecord[];
   academicEvents: AcademicEvent[];
@@ -827,6 +830,7 @@ function ScheduleCalendarSub({
         {showCalendar ? (
           <section className="professor-panel">
             <ProfessorCalendar
+              professorId={professorId}
               teachingSlots={teachingSlots}
               counselingRequests={counselingRequests}
               adminTasks={adminTasks}
