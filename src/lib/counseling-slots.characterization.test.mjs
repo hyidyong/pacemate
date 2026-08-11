@@ -5,6 +5,8 @@ import {
   PACEMATE_TIME_ZONE,
   buildAvailableCounselingSlots,
   getCounselingLocalDateKey,
+  parsePacemateWallClock,
+  timeRangeEndsByStudentCutoff,
 } from "./counseling-slots.ts";
 
 // Characterization suite: freezes the canonical engine's CURRENT semantics before the
@@ -322,4 +324,22 @@ test("slot_minutes drives chunk size and drops a trailing partial chunk", () => 
 test("getCounselingLocalDateKey resolves the KST calendar day, not the UTC one", () => {
   // 15:30Z on 7/13 is already 00:30 KST on 7/14.
   assert.equal(getCounselingLocalDateKey("2026-07-13T15:30:00.000Z"), "2026-07-14");
+});
+
+test("parsePacemateWallClock reads KST wall time on any host timezone", () => {
+  assert.equal(
+    parsePacemateWallClock("2026-07-14 11:00")?.toISOString(),
+    "2026-07-14T02:00:00.000Z",
+  );
+  assert.equal(
+    parsePacemateWallClock("2026-07-14T11:00")?.toISOString(),
+    "2026-07-14T02:00:00.000Z",
+  );
+  assert.equal(parsePacemateWallClock("2026-07-14"), null);
+  assert.equal(parsePacemateWallClock("내일 11시"), null);
+});
+
+test("student cutoff accepts ranges ending at 18:00 and rejects later ends", () => {
+  assert.equal(timeRangeEndsByStudentCutoff("17:00", "18:00"), true);
+  assert.equal(timeRangeEndsByStudentCutoff("17:00", "18:01"), false);
 });

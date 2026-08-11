@@ -327,6 +327,23 @@ export function timeRangeEndsByStudentCutoff(startTime: string, endTime: string)
   return timeToMinutes(endTime) <= STUDENT_BOOKING_END_HOUR * 60;
 }
 
+// Parses a KST wall-clock string ("YYYY-MM-DD HH:MM" or "YYYY-MM-DDTHH:MM")
+// into the instant it denotes in Asia/Seoul, regardless of the host timezone.
+export function parsePacemateWallClock(value: string): Date | null {
+  const match = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})$/.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+
+  const date = dateKeyToLocalDate(match[1]);
+  if (!date) {
+    return null;
+  }
+
+  const minutes = Number(match[2]) * 60 + Number(match[3]);
+  return localDateTimeToInstant(date, minutes, PACEMATE_TIME_ZONE);
+}
+
 function overlapsMinutes(start: number, end: number, busyStart: string, busyEnd: string) {
   const otherStart = timeToMinutes(busyStart);
   const otherEnd = timeToMinutes(busyEnd);

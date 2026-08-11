@@ -10,9 +10,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createUserNotification } from "@/services/notifications.create.service";
 import {
-  isWeekday,
+  dateKeyToLocalDate,
+  getDayOfWeek,
   timeRangeEndsByStudentCutoff,
-} from "@/lib/scheduling-policy";
+} from "@/lib/counseling-slots";
 import { textareaToList } from "@/services/roadmap-revisions.service";
 import { getDemoProfile } from "@/services/session.service";
 
@@ -130,8 +131,9 @@ export async function addProfessorAvailability(formData: FormData) {
     }
 
     if (specificDate) {
-      const date = new Date(`${specificDate}T00:00:00`);
-      if (!isWeekday(date)) {
+      const date = dateKeyToLocalDate(specificDate);
+      const dayOfWeek = date ? getDayOfWeek(date) : -1;
+      if (dayOfWeek < 1 || dayOfWeek > 5) {
         return { ok: false, message: "상담 가능 시간은 평일에만 등록할 수 있습니다." };
       }
     } else if (day < 1 || day > 5) {
@@ -478,7 +480,6 @@ export async function addProfessorAdminTask(formData: FormData) {
       return { ok: false, message: "본인의 일정만 관리할 수 있습니다." };
     }
 
-    const { timeRangeEndsByStudentCutoff } = await import("@/lib/scheduling-policy");
     if (title.startsWith("__BLACKOUT__") && !timeRangeEndsByStudentCutoff(startTime, endTime)) {
       return { ok: false, message: "상담 차단은 18:00 이전 시간대에만 적용할 수 있습니다." };
     }

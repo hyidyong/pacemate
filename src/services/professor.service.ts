@@ -62,7 +62,7 @@ export type ProfessorCounselingRequest = {
   requested_end: string;
   topic: string;
   location: string | null;
-  status: "pending" | "approved" | "rejected" | "cancelled" | "answered" | "ANSWERED" | "PENDING";
+  status: "pending" | "approved" | "rejected" | "cancelled";
   professor_note: string | null;
   suggested_start: string | null;
   suggested_end: string | null;

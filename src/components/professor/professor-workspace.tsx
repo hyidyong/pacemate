@@ -63,6 +63,7 @@ import {
   professorCourseManagementItems,
   professorWeeklyPlanPreviewLink,
 } from "@/lib/professor-navigation";
+import { parsePacemateWallClock } from "@/lib/counseling-slots";
 import { markNotificationsReadByCategory } from "@/services/notifications.actions";
 import { saveProfessorRoadmapPersonalization } from "@/services/personalized-weekly-roadmap.actions";
 
@@ -157,14 +158,11 @@ const sidebarMenus: Record<ProfessorTab, Array<{ id: SubMenu; label: string; ico
   ],
 };
 
-const counselingStatusLabels: Record<ProfessorCounselingRequest["status"] | "ANSWERED" | "PENDING", string> = {
+const counselingStatusLabels: Record<ProfessorCounselingRequest["status"], string> = {
   pending: "\uc2b9\uc778 \ub300\uae30",
   approved: "\uc2b9\uc778 \uc644\ub8cc",
   rejected: "\uc2dc\uac04 \uc870\uc815",
   cancelled: "\ucde8\uc18c\ub428",
-  answered: "\ub2f5\ubcc0 \uc644\ub8cc",
-  ANSWERED: "\ub2f5\ubcc0 \uc644\ub8cc",
-  PENDING: "\uc2b9\uc778 \ub300\uae30",
 };
 
 function courseValue(course?: ProfessorCourse) {
@@ -1474,8 +1472,10 @@ function PendingCounselingSub({
     formData.set("professorNote", rejectNote);
 
     if (suggestedTime) {
-      const suggestedDate = new Date(suggestedTime.replace(" ", "T"));
-      if (!Number.isNaN(suggestedDate.getTime())) {
+      // The professor types a KST wall-clock time; parse it as such no matter
+      // what timezone the browser runs in.
+      const suggestedDate = parsePacemateWallClock(suggestedTime);
+      if (suggestedDate) {
         formData.set("suggestedStart", suggestedDate.toISOString());
         const endDate = new Date(suggestedDate);
         endDate.setMinutes(endDate.getMinutes() + 30);

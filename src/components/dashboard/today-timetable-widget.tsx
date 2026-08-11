@@ -4,19 +4,19 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Clock, MapPin, Calendar as CalendarIcon } from "lucide-react";
 import { useStudentTimetable } from "@/lib/student-timetable";
+import { PACEMATE_TIME_ZONE, getDayOfWeek, getLocalDate } from "@/lib/counseling-slots";
 import type { StudentCourseRecord } from "@/services/student-community.service";
 
 const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
 
 export function TodayTimetableWidget({ myCourses }: { myCourses: StudentCourseRecord[] }) {
   const { timetableItems } = useStudentTimetable(myCourses);
-  // The server (Vercel) and the visitor can be in different time zones. Wait
-  // until hydration before deriving a local weekday so their first renders
-  // always match.
+  // "Today" is the KST school day, not the visitor's local day. Still deferred
+  // to post-hydration so the server and client first renders always match.
   const [today, setToday] = useState<string | null>(null);
 
   useEffect(() => {
-    setToday(dayNames[new Date().getDay()]);
+    setToday(dayNames[getDayOfWeek(getLocalDate(new Date(), PACEMATE_TIME_ZONE))]);
   }, []);
 
   const todayCourses = timetableItems
