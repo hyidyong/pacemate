@@ -3,6 +3,58 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-013 — Professor workspace intermittently never leaves its lazy-load fallback
+
+Status: OPEN (pre-existing; reproduced on `main` production build 2026-08-12 — NOT a
+Stage 2 regression; Stage 3 candidate, it stems from the "[Opt 4]" lazy-load of
+ProfessorWorkspace in src/app/professor/page.tsx:17-28).
+Symptom: /professor renders the SSR'd workspace, then hydration replaces it with the
+"워크스페이스 불러오는 중..." fallback which never resolves; the SSR'd workspace HTML
+remains orphaned in the DOM (nested `<main>`, width 0). All JS chunks return 200; no
+console/server errors. Flaky: loads arriving via the login POST redirect reliably
+hydrated during QA; direct GET navigations frequently stuck. Reproduced identically on
+`main` (d922b34) and `upgrade/stage-2` production builds, same machine/browser.
+Impact: professor calendar/workspace unusable on affected loads until a lucky reload.
+Note: Stage 2 QA also hit a SEPARATE, Stage-2-caused variant (relative .ts-extension
+import broke webpack dev's client graph) — that one was fixed on the branch
+(calendar-utils imports via the @/ alias again; tests use a transpile loader).
+
+## KI-014 — Availability writes lack ownership/role guards; counseling status updates lack ownership checks
+
+Status: OPEN (security hardening — fold into the KI-006/KI-011 RLS migration family,
+Stage 9). Evidence from the Stage 2 discovery sweep (2026-08-12):
+- `addProfessorAvailability` / `toggleProfessorAvailability`
+  (professor.actions.ts:118,528) have NO role or ownership check and write via the anon
+  client under the permissive `demo anon manage professor availability` policy
+  (schema.sql:501, `using (professor_id is not null)`) — any caller can open/block any
+  professor's availability.
+- `updateCounselingStatus` (professor.actions.ts:198) checks role only, not ownership,
+  and has no from-state check: any professor/assistant can move any request to any
+  status via the service-role client.
+- anon retains an UPDATE grant on counseling_requests plus a hardcoded-demo-email anon
+  UPDATE policy (schema.sql:507-523) never dropped by migration 20260713090000.
+
+## KI-015 — Assorted counseling-domain paper cuts (documented during Stage 2, out of scope)
+
+Status: OPEN.
+- Cancel notification text bug: professor cancel sends title "상담 시간이 조정
+  필요합니다" with an empty-note body implying a suggested time exists
+  (professor.actions.ts:238-247); approve/cancel also null out professor_note and
+  suggested_* unconditionally (:224-229).
+- `suggested_start/end` are advisory only (not constrained, not busy) yet the reject
+  flow hard-codes end = start + 30 min (professor-workspace.tsx:1468-1470) regardless
+  of the professor's slot_minutes.
+- Dead component `professor-admin-summary.tsx` (exported, imported nowhere).
+- Professor stat tile "상담 슬롯" counts availability ROWS including inactive blackout
+  rows (professor-workspace.tsx adminStats) — inflated number (Stage 4 label/logic).
+- Schema drift: `suggested_start`/`suggested_end`/`location` exist only in schema.sql
+  (no migration adds them); `offering_id` exists only in migration 20260712000000 (not
+  in schema.sql's table body). Reconcile with the migration-history cleanup (KI-006
+  note, Stage 10).
+- Three test files under supabase/migrations/*.test.mjs are never run by the canonical
+  `node --test "src/**/*.test.mjs"` glob; no `test` script exists in package.json
+  (Stage 10 CI).
+
 ## KI-012 — Dashboard ownership gates errored on duplicate student_courses rows
 
 Status: FIXED 2026-08-12 (Red → Green; latent — no live occurrence at fix time).
@@ -58,7 +110,17 @@ becomes structurally impossible instead of process-dependent.
 
 ## KI-001 — Professor calendar availability engine diverges from canonical student engine
 
-Status: PARTIALLY FIXED in Stage 1 (2026-08-11); remainder deferred to Stage 2.
+Status: RESOLVED in Stage 2 (2026-08-12). The duplicate engine was deleted; the
+professor calendar consumes `buildProfessorWeekAvailability`, whose bookable claim
+derives exclusively from the canonical per-date primitive. Undeclared free time now
+renders as "상담 미개방" (not student-bookable); declared bookable time keeps
+"상담 가능" and matches the student engine exactly (identity-level regression test in
+src/lib/availability-consistency.test.mjs; live QA 2026-08-12: 김재두 zero-declaration
+baseline 0 상담 가능 / 82 미개방 chunks; declared Mon 10:00-11:00 window → 2 상담 가능
+chunks == student side 2개 on both horizon Mondays). Timezone handling is Asia/Seoul
+throughout (D-006). Historical text below kept for context.
+
+Previous status: PARTIALLY FIXED in Stage 1 (2026-08-11); remainder deferred to Stage 2.
 Evidence: docs/upgrade/stage-01/SLOT_BUG_REPRODUCTION.md (0 vs ~85 slot mismatch reproduced live).
 
 `calculateRecommendedAvailability` (src/lib/calendar-utils.ts) is a second availability
