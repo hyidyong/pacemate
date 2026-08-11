@@ -134,11 +134,14 @@ export async function getCourseTermCompletionEligibility(
   // This app-side check replaces the student RLS policy on course_offerings,
   // which currently fails with 42P17 (its subquery on student_weekly_progress
   // meets the professor policy that subqueries course_offerings back).
+  // limit(1): student_courses is unique on (student_id, course_id, status), so
+  // the same offering can be owned via several rows — existence is enough here.
   const { data: ownedOffering, error: ownedOfferingError } = await supabase
     .from("student_courses")
     .select("offering_id")
     .eq("student_id", profileRow.id)
     .eq("offering_id", normalizedOfferingId)
+    .limit(1)
     .maybeSingle();
 
   if (ownedOfferingError) {

@@ -3,6 +3,37 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-012 — Dashboard ownership gates errored on duplicate student_courses rows
+
+Status: FIXED 2026-08-12 (Red → Green; latent — no live occurrence at fix time).
+The KI-006 app-level ownership gates in course-term-completion-eligibility.server.ts and
+student-learning-recommendations.server.ts used a bare `.maybeSingle()` on
+`student_courses (student_id, offering_id)`. The table is unique on (student_id, course_id,
+STATUS), so one student can own the same offering via several rows (e.g. an "interested"
+registration next to a "completed" row linked by the roadmap repair flow,
+personalized-weekly-roadmap.server.ts:175). supabase-js `maybeSingle()` errors on >1 row,
+which would have broken the dashboard cards for exactly those students. Live check
+2026-08-12: 0 duplicate (student, offering) pairs today (7 offering-linked rows, all
+`interested`) — latent, one flow away, so no runtime repro was manufactured.
+Fix: `.limit(1).maybeSingle()`, the same idiom the roadmap server's authorization check
+already uses (frozen by student-roadmap-workspace.test.mjs). RED:
+src/services/offering-ownership-gate.test.mjs 2/2 fail for the intended reason → GREEN 2/2
+pass; full suite 150/147 pass/3 fail (same KI-002 trio); typecheck clean.
+Found by external real-time review (P2); premise verified against schema and live data.
+
+## KI-011 — SECURITY DEFINER RLS helpers live in the exposed public schema
+
+Status: OPEN (hardening; fold into Stage 2 RLS work — flagged by external review 2026-08-12).
+is_professor_of_offering / is_student_of_offering (migration 20260812000000) are SECURITY
+DEFINER functions in `public`, so PostgREST exposes them as RPC endpoints to the
+authenticated role. Mitigations already in the migration: EXECUTE revoked from public/anon
+(authenticated only), both predicates answer only about the caller (auth.uid() is evaluated
+inside — no cross-user disclosure), and search_path is pinned to `public` (not mutable).
+Residual risk is low: an authenticated user can merely probe their own membership of
+arbitrary offering ids. Supabase guidance still prefers a non-exposed schema (e.g.
+`private`) and `set search_path = ''` with fully qualified names. Do that in the Stage 2
+RLS unification (same migration family as KI-006/KI-007) instead of churning the live DB now.
+
 ## KI-010 — Vercel build failed: pnpm-lock.yaml out of sync (ERR_PNPM_OUTDATED_LOCKFILE)
 
 Status: FIXED 2026-08-12.
@@ -78,7 +109,7 @@ Status: OPEN.
   professors (counseling-workspace.tsx:190) — second professor reachable only via 교수별 검색.
 - Demo student login lands on /onboarding although onboarding data exists (cause UNVERIFIED).
 
-## KI-006 — RLS policy recursion (42P17) on course_offerings; migration written but NOT applied
+## KI-006 — RLS policy recursion (42P17) on course_offerings
 
 Status: DB FIX APPLIED 2026-08-12 — the owner ran
 20260812000000_fix_offering_policy_recursion.sql in the SQL editor; verified via PostgREST
@@ -90,18 +121,20 @@ Root cause: mutually recursive authenticated policies — "students read own cou
 evidence" (20260713013521, subqueries course_offerings). Every authenticated SELECT on
 course_offerings fails with 42P17. Reproduced live with a student JWT via PostgREST.
 
-Consequences and current state:
+Consequences and current state (reconciled 2026-08-12 after the DB fix):
 - Student dashboard 학기 완료 근거/다음 학습 추천 cards were dead → FIXED at app level
   (ownership gate via own student_courses row + server-only admin-client reads scoped to the
   verified ids) in course-term-completion-eligibility.server.ts,
-  student-learning-recommendations.server.ts, company-law-offering.server.ts.
-- Professor 과목 진행 현황 report + 익명 주간 집계 remain BROKEN (error panel) — NOT
-  worked around because professor-anonymous-weekly-aggregate-security.test.mjs deliberately
-  forbids the service-role client there (RLS must gate sensitive columns).
-- Real fix: supabase/migrations/20260812000000_fix_offering_policy_recursion.sql
-  (security definer helpers break the cycle). UNAPPLIED — the QA session had no DB
-  credentials/CLI auth. Apply with `supabase db push`, verify professor report tabs, then the
-  app-level admin-client workarounds can be reverted to session reads.
+  student-learning-recommendations.server.ts, company-law-offering.server.ts. With the DB
+  fix applied these workarounds are redundant; revert to session reads in Stage 2.
+- Professor 과목 진행 현황 report: was broken (error panel) while the recursion existed;
+  confirmed rendering real data live after the DB fix (commit f2f490d). The 익명 주간 집계
+  view is expected fixed by the same policy change but was not separately re-verified —
+  UNVERIFIED. professor-anonymous-weekly-aggregate-security.test.mjs still (correctly)
+  forbids service-role reads there.
+- supabase/migrations/20260812000000_fix_offering_policy_recursion.sql was applied manually
+  via the SQL editor, NOT `supabase db push` — the CLI migration history table may not list
+  it as applied. Reconcile migration history before the next `db push` (Stage 2/10).
 
 ## KI-007 — student_profiles/student_courses authenticated policies use pre-mapping identity
 

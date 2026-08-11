@@ -1,7 +1,10 @@
--- NOT YET APPLIED to the hosted project (no CLI/DB credentials in the QA
--- session that authored this). Apply with `supabase db push` or the SQL
--- editor, then re-test the professor report tabs and remove the app-level
--- admin-client workarounds noted in docs/upgrade/KNOWN_ISSUES.md (KI-006).
+-- APPLIED 2026-08-12 by the project owner via the Supabase SQL editor (NOT
+-- `supabase db push`, so the CLI migration history may not list it — see
+-- docs/upgrade/KNOWN_ISSUES.md KI-006 before the next push). Verified via
+-- PostgREST: authenticated reads of course_offerings / student_weekly_progress
+-- / student_course_progress no longer return 42P17, and the professor
+-- 과목 진행 현황 report renders live. The app-level admin-client workarounds
+-- (KI-006) are now redundant; revert them to session reads in Stage 2.
 --
 -- Root cause: two mutually recursive RLS policies make EVERY authenticated
 -- SELECT on public.course_offerings fail with 42P17 "infinite recursion":

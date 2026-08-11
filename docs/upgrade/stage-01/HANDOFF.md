@@ -4,6 +4,41 @@
 
 COMPLETE — 2026-08-11. Exit gate satisfied (see checklist at bottom).
 
+## Post-handoff addendum (2026-08-12, re-verified at HEAD 91851cd)
+
+Three QA commits landed on upgrade/stage-1 after this handoff was written; the baseline
+below is unchanged except as noted here:
+
+- 1b5a3f2 — login /onboarding redirect fixed at app level (KI-007); dashboard-card RLS
+  failures worked around at app level; addCourseToSchedule now links offering_id (+ tests).
+  This resolves the "Demo login for student lands on /onboarding" risk listed below.
+- f2f490d — all 6 external i.ibb.co images vendored into public/images/ (KI-008 RESOLVED);
+  owner applied the KI-006 recursion-fix migration via the Supabase SQL editor, verified via
+  PostgREST (no more 42P17) and the professor 과목 진행 현황 report confirmed rendering live.
+  Note: applied via SQL editor, not `supabase db push` — CLI migration history may need
+  reconciling before the next push.
+- 91851cd — pnpm-lock.yaml resynced with package.json (KI-010; unblocks Vercel deploy).
+
+Fresh verification at HEAD 91851cd (2026-08-12):
+
+- `node --test "src/**/*.test.mjs"`: 148 tests / 145 pass / 3 fail — the same 3 pre-existing
+  KI-002 stale source-regex tests as the baseline run (admin-notifications ×2,
+  question-notice-workflow ×1); no new failures. (+4 tests vs baseline, added by QA commits.)
+- `npm run typecheck`: PASS (clean).
+- `npm run lint`: PASS with the same 1 pre-existing warning (no-img-element,
+  student-hero-carousel.tsx:67).
+- `npm run build`: PASS (First Load JS shared 102 kB — unchanged).
+
+External real-time review response (2026-08-12, later the same day):
+
+- P2 `.maybeSingle()` ownership gates → CONFIRMED latent defect, fixed Red → Green
+  (KI-012; src/services/offering-ownership-gate.test.mjs; suite now 150/147/3).
+- P2 SECURITY DEFINER helpers in public schema → verified partially mitigated already
+  (revoke + authenticated-only + pinned search_path; caller-scoped predicates); residual
+  hardening documented as KI-011 for Stage 2, no live-DB churn now.
+- P3 stale "NOT YET APPLIED" header in migration 20260812000000 → CONFIRMED, header
+  rewritten to the applied/verified state.
+
 ## Work completed
 
 1. Repository state verified; branch `upgrade/stage-1` created from `codex/mobile-student-timetable-fix` @ bbd3aa3.
