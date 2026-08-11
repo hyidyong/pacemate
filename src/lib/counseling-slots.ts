@@ -1,5 +1,5 @@
 export const PACEMATE_TIME_ZONE = "Asia/Seoul";
-const STUDENT_BOOKING_END_HOUR = 18;
+export const STUDENT_BOOKING_END_HOUR = 18;
 
 import type { CounselingSlot } from "@/types/counseling";
 
@@ -31,8 +31,7 @@ type BusyRequest = {
   end: string;
 };
 
-type BuildAvailableCounselingSlotsInput = {
-  now: Date;
+export type CounselingScheduleContext = {
   timeZone: string;
   availability: Availability[];
   teachingSlots: RecurringBusyTime[];
@@ -40,7 +39,11 @@ type BuildAvailableCounselingSlotsInput = {
   adminTasks: AdminTask[];
 };
 
-type LocalDate = { year: number; month: number; day: number };
+type BuildAvailableCounselingSlotsInput = CounselingScheduleContext & {
+  now: Date;
+};
+
+export type LocalDate = { year: number; month: number; day: number };
 
 export function getCounselingSlotId(
   slot: Pick<CounselingSlot, "professorId" | "start" | "end">,
@@ -93,82 +96,19 @@ export function buildAvailableCounselingSlots({
 }: BuildAvailableCounselingSlotsInput) {
   const slots = new Map<string, CounselingSlot>();
   const today = getLocalDate(now, timeZone);
-  const activeAvailability = availability.filter((item) => item.isActive);
-  const blackouts = availability.filter((item) => !item.isActive);
+  const context: CounselingScheduleContext = {
+    timeZone,
+    availability,
+    teachingSlots,
+    busyRequests,
+    adminTasks,
+  };
 
-  for (const item of activeAvailability) {
-    for (let offset = 1; offset <= 14; offset += 1) {
-      const date = addLocalDays(today, offset);
-      const dateKey = formatLocalDate(date);
-      const dayOfWeek = getDayOfWeek(date);
-
-      if (dayOfWeek < 1 || dayOfWeek > 5 || !matchesDate(item, dateKey, dayOfWeek)) {
-        continue;
-      }
-
-      const availabilityStart = timeToMinutes(item.startTime);
-      const availabilityEnd = Math.min(
-        timeToMinutes(item.endTime),
-        STUDENT_BOOKING_END_HOUR * 60,
-      );
-
-      for (
-        let startMinutes = availabilityStart;
-        startMinutes + item.slotMinutes <= availabilityEnd;
-        startMinutes += item.slotMinutes
-      ) {
-        const endMinutes = startMinutes + item.slotMinutes;
-        const start = localDateTimeToInstant(date, startMinutes, timeZone);
-        const end = localDateTimeToInstant(date, endMinutes, timeZone);
-
-        const conflictsWithTeaching = teachingSlots.some(
-          (busy) =>
-            busy.professorId === item.professorId &&
-            busy.dayOfWeek === dayOfWeek &&
-            overlapsMinutes(startMinutes, endMinutes, busy.startTime, busy.endTime),
-        );
-        const conflictsWithAdmin = adminTasks.some((busy) => {
-          if (busy.professorId !== item.professorId) {
-            return false;
-          }
-
-          const blackoutDate = getAdminBlackoutDate(busy.title);
-          if (blackoutDate ? blackoutDate !== dateKey : busy.dayOfWeek !== dayOfWeek) {
-            return false;
-          }
-
-          return overlapsMinutes(startMinutes, endMinutes, busy.startTime, busy.endTime);
-        });
-        const conflictsWithRequest = busyRequests.some(
-          (busy) =>
-            busy.professorId === item.professorId &&
-            overlaps(start, end, new Date(busy.start), new Date(busy.end)),
-        );
-        const conflictsWithBlackout = blackouts.some(
-          (blackout) =>
-            blackout.professorId === item.professorId &&
-            matchesDate(blackout, dateKey, dayOfWeek) &&
-            overlapsMinutes(startMinutes, endMinutes, blackout.startTime, blackout.endTime),
-        );
-
-        if (
-          conflictsWithTeaching ||
-          conflictsWithAdmin ||
-          conflictsWithRequest ||
-          conflictsWithBlackout
-        ) {
-          continue;
-        }
-
-        const slot: CounselingSlot = {
-          professorId: item.professorId,
-          professorName: item.professorName,
-          professorOffice: item.professorOffice,
-          professorEmail: item.professorEmail,
-          start: start.toISOString(),
-          end: end.toISOString(),
-        };
-        slots.set(getCounselingSlotId(slot), slot);
+  for (let offset = 1; offset <= 14; offset += 1) {
+    for (const slot of buildBookableSlotsForLocalDate(addLocalDays(today, offset), context)) {
+      const id = getCounselingSlotId(slot);
+      if (!slots.has(id)) {
+        slots.set(id, slot);
       }
     }
   }
@@ -178,7 +118,97 @@ export function buildAvailableCounselingSlots({
     .slice(0, 48);
 }
 
-function getLocalDate(date: Date, timeZone: string): LocalDate {
+// The canonical per-date primitive: every consumer that claims a time is
+// student-bookable must derive that claim from this function.
+export function buildBookableSlotsForLocalDate(
+  date: LocalDate,
+  { timeZone, availability, teachingSlots, busyRequests, adminTasks }: CounselingScheduleContext,
+): CounselingSlot[] {
+  const result: CounselingSlot[] = [];
+  const dateKey = formatLocalDate(date);
+  const dayOfWeek = getDayOfWeek(date);
+
+  if (dayOfWeek < 1 || dayOfWeek > 5) {
+    return result;
+  }
+
+  const activeAvailability = availability.filter((item) => item.isActive);
+  const blackouts = availability.filter((item) => !item.isActive);
+
+  for (const item of activeAvailability) {
+    if (!matchesDate(item, dateKey, dayOfWeek)) {
+      continue;
+    }
+
+    const availabilityStart = timeToMinutes(item.startTime);
+    const availabilityEnd = Math.min(
+      timeToMinutes(item.endTime),
+      STUDENT_BOOKING_END_HOUR * 60,
+    );
+
+    for (
+      let startMinutes = availabilityStart;
+      startMinutes + item.slotMinutes <= availabilityEnd;
+      startMinutes += item.slotMinutes
+    ) {
+      const endMinutes = startMinutes + item.slotMinutes;
+      const start = localDateTimeToInstant(date, startMinutes, timeZone);
+      const end = localDateTimeToInstant(date, endMinutes, timeZone);
+
+      const conflictsWithTeaching = teachingSlots.some(
+        (busy) =>
+          busy.professorId === item.professorId &&
+          busy.dayOfWeek === dayOfWeek &&
+          overlapsMinutes(startMinutes, endMinutes, busy.startTime, busy.endTime),
+      );
+      const conflictsWithAdmin = adminTasks.some((busy) => {
+        if (busy.professorId !== item.professorId) {
+          return false;
+        }
+
+        const blackoutDate = parseAdminBlackoutDate(busy.title);
+        if (blackoutDate ? blackoutDate !== dateKey : busy.dayOfWeek !== dayOfWeek) {
+          return false;
+        }
+
+        return overlapsMinutes(startMinutes, endMinutes, busy.startTime, busy.endTime);
+      });
+      const conflictsWithRequest = busyRequests.some(
+        (busy) =>
+          busy.professorId === item.professorId &&
+          overlaps(start, end, new Date(busy.start), new Date(busy.end)),
+      );
+      const conflictsWithBlackout = blackouts.some(
+        (blackout) =>
+          blackout.professorId === item.professorId &&
+          matchesDate(blackout, dateKey, dayOfWeek) &&
+          overlapsMinutes(startMinutes, endMinutes, blackout.startTime, blackout.endTime),
+      );
+
+      if (
+        conflictsWithTeaching ||
+        conflictsWithAdmin ||
+        conflictsWithRequest ||
+        conflictsWithBlackout
+      ) {
+        continue;
+      }
+
+      result.push({
+        professorId: item.professorId,
+        professorName: item.professorName,
+        professorOffice: item.professorOffice,
+        professorEmail: item.professorEmail,
+        start: start.toISOString(),
+        end: end.toISOString(),
+      });
+    }
+  }
+
+  return result;
+}
+
+export function getLocalDate(date: Date, timeZone: string): LocalDate {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -197,7 +227,7 @@ function getLocalDateKey(date: Date, timeZone: string) {
   return formatLocalDate(getLocalDate(date, timeZone));
 }
 
-function addLocalDays(date: LocalDate, days: number): LocalDate {
+export function addLocalDays(date: LocalDate, days: number): LocalDate {
   const next = new Date(Date.UTC(date.year, date.month - 1, date.day + days));
   return {
     year: next.getUTCFullYear(),
@@ -206,15 +236,24 @@ function addLocalDays(date: LocalDate, days: number): LocalDate {
   };
 }
 
-function getDayOfWeek(date: LocalDate) {
+export function getDayOfWeek(date: LocalDate) {
   return new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay();
 }
 
-function formatLocalDate(date: LocalDate) {
+export function formatLocalDate(date: LocalDate) {
   return `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
 }
 
-function localDateTimeToInstant(date: LocalDate, minutes: number, timeZone: string) {
+export function dateKeyToLocalDate(dateKey: string): LocalDate | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!match) {
+    return null;
+  }
+
+  return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+}
+
+export function localDateTimeToInstant(date: LocalDate, minutes: number, timeZone: string) {
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
   const wallClockAsUtc = Date.UTC(date.year, date.month - 1, date.day, hour, minute);
@@ -234,6 +273,17 @@ function localDateTimeToInstant(date: LocalDate, minutes: number, timeZone: stri
   }
 
   return new Date(instant);
+}
+
+export function instantToLocalParts(value: string | Date, timeZone: string) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  const parts = getZonedDateTimeParts(date, timeZone);
+
+  return {
+    ...parts,
+    dateKey: formatLocalDate(parts),
+    minutesOfDay: parts.hour * 60 + parts.minute,
+  };
 }
 
 function getZonedDateTimeParts(date: Date, timeZone: string) {
@@ -262,9 +312,19 @@ function matchesDate(item: Availability, dateKey: string, dayOfWeek: number) {
   return item.specificDate ? item.specificDate === dateKey : item.dayOfWeek === dayOfWeek;
 }
 
-function timeToMinutes(time: string) {
+export function timeToMinutes(time: string) {
   const [hour = "0", minute = "0"] = time.split(":");
   return Number(hour) * 60 + Number(minute);
+}
+
+export function minutesToTime(minutes: number) {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+export function timeRangeEndsByStudentCutoff(startTime: string, endTime: string) {
+  return timeToMinutes(endTime) <= STUDENT_BOOKING_END_HOUR * 60;
 }
 
 function overlapsMinutes(start: number, end: number, busyStart: string, busyEnd: string) {
@@ -277,7 +337,7 @@ function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
   return aStart < bEnd && bStart < aEnd;
 }
 
-function getAdminBlackoutDate(title: string) {
+export function parseAdminBlackoutDate(title: string) {
   const match = /^__BLACKOUT__(\d{4}-\d{2}-\d{2})$/.exec(title);
   return match?.[1] ?? null;
 }
