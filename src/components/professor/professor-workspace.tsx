@@ -347,7 +347,7 @@ export function ProfessorWorkspace({
     const formData = new FormData();
     formData.set("requestId", requestId);
     formData.set("status", "cancelled");
-    runAction((fd) => import("@/services/professor.actions").then(m => m.updateCounselingStatus(fd)), formData);
+    runAction(updateCounselingStatus, formData);
   }
 
   // Dashboard stats
@@ -604,8 +604,8 @@ export function ProfessorWorkspace({
         </nav>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="min-w-0 flex-1 w-full p-4 lg:p-6 xl:p-8">
+      {/* Main Content Area — div: AppShell already renders the page's single main landmark */}
+      <div className="min-w-0 flex-1 w-full p-4 lg:p-6 xl:p-8">
         {/* Content Header */}
         <header className="mb-5 lg:mb-8">
           <div>
@@ -681,7 +681,7 @@ export function ProfessorWorkspace({
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-4 lg:p-6 min-h-[600px]">
           {renderSubContent()}
         </div>
-      </main>
+      </div>
 
       {/* Toast */}
       {toast ? (
