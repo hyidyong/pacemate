@@ -107,6 +107,32 @@ test("duplicate availability rows produce one stable slot", () => {
   assert.equal(ids.length, new Set(ids).size);
 });
 
+test("slot ids match across timestamp serializations of the same instant", () => {
+  // Engine slots carry Date#toISOString() form; PostgREST returns timestamptz
+  // as +00:00 form. Both must produce the same booking id.
+  const fromEngine = getCounselingSlotId({
+    professorId: professor.professorId,
+    start: "2026-07-14T02:00:00.000Z",
+    end: "2026-07-14T02:30:00.000Z",
+  });
+  const fromDatabase = getCounselingSlotId({
+    professorId: professor.professorId,
+    start: "2026-07-14T02:00:00+00:00",
+    end: "2026-07-14T02:30:00+00:00",
+  });
+
+  assert.equal(fromDatabase, fromEngine);
+});
+
+test("selection ignores a valid slot id paired with a different date", () => {
+  const slots = buildAvailableCounselingSlots(baseInput());
+
+  assert.equal(
+    resolveSelectedCounselingSlot(slots, "2026-07-20", getCounselingSlotId(slots[0])),
+    null,
+  );
+});
+
 test("selection never falls back to the first slot when the selected id is empty or stale", () => {
   const slots = buildAvailableCounselingSlots(baseInput());
   const selectedDate = "2026-07-13";

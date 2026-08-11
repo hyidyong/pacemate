@@ -2,41 +2,39 @@
 
 ## Current Stage
 
-Stage 1 / 10
-Baseline / Contract Freeze / Correctness Investigation
-Status: COMPLETE (2026-08-11) — see docs/upgrade/stage-01/HANDOFF.md
+Stage 2 / 10
+Availability Domain / Single Source of Truth
+Status: COMPLETE on branch `upgrade/stage-2` (2026-08-12) — awaiting PR review/merge.
+See docs/upgrade/stage-02/HANDOFF.md.
 
-Next stage: Stage 2 (Availability Domain / Single Source of Truth) — NOT started.
-Stage 2 must begin from the HANDOFF's "Exact next action" section.
+Next stage: Stage 3 (Loading Performance / Critical Path Optimization) — NOT started.
+Stage 3 must begin from the Stage 2 HANDOFF's "Stage 3 inputs" section after the PR
+merges.
 
-## Current Objective
+## Primary Objective (achieved)
 
-Understand the existing application before major modification.
-
-Primary goals:
-
-1. Map the real system architecture.
-2. Establish current functional and UI/UX baseline.
-3. Identify actual user types.
-4. Measure loading/performance baseline.
-5. Trace timetable and counseling availability end-to-end.
-6. Detect and reproduce remaining correctness inconsistencies.
-7. Establish regression protection before structural changes.
+Canonical scheduling-availability semantics established in
+`src/lib/counseling-slots.ts` (D-004); professor calendar, booking path, and related
+consumers migrated; cross-consumer identity regression protection added; KI-001
+resolved.
 
 ## Non-goals
 
 Do not begin:
 
-- Stage 2 availability redesign
-- major performance optimization
-- general UI redesign
-- multi-tenancy
-- SSO
-- production scaling architecture
+- Stage 3 broad performance optimization
+- Stage 4 UI/UX redesign
+- Stage 5 full concurrency/transaction architecture
+- Stage 6 multi-tenancy
+- Stage 7 SSO
+- Stage 8 scaling infrastructure
+- Stage 9 broad security redesign
+- Stage 10 CI/CD redesign
 
-unless required solely to investigate Stage 1.
+Small changes required to safely implement Stage 2 were allowed; out-of-scope findings
+are recorded in KNOWN_ISSUES.md (KI-013..KI-015) instead of being fixed.
 
 ## Completion rule
 
-Stage 1 is complete only when evidence and documentation exist.
-Do not advance automatically to Stage 2.
+Stage 2 work is complete on the branch only; merging requires external review and
+human approval (see HANDOFF "Exact next action").

@@ -96,6 +96,7 @@ export default async function ProfessorPage({
             academicEvents={academicEvents}
             availability={data.availability}
             counselingRequests={data.counselingRequests}
+            calendarRequests={data.calendarRequests}
             courses={data.courses}
             faqs={data.faqs}
             initialTab={initialTab}

@@ -212,7 +212,7 @@ export default async function DashboardPage() {
       .filter(Boolean) as StudentTodoItem[];
 
     const counselingTodoItems = (counselingRows ?? [])
-      .filter((row: any) => ["pending", "scheduled", "approved"].includes(row.status))
+      .filter((row: any) => ["pending", "approved"].includes(row.status))
       .map((row: any) => ({
         id: `counseling-${row.id}`,
         title: row.topic ?? "상담 요청",

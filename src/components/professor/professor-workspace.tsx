@@ -63,6 +63,7 @@ import {
   professorCourseManagementItems,
   professorWeeklyPlanPreviewLink,
 } from "@/lib/professor-navigation";
+import { parsePacemateWallClock } from "@/lib/counseling-slots";
 import { markNotificationsReadByCategory } from "@/services/notifications.actions";
 import { saveProfessorRoadmapPersonalization } from "@/services/personalized-weekly-roadmap.actions";
 
@@ -87,6 +88,7 @@ type ProfessorWorkspaceProps = {
   availability: ProfessorAvailability[];
   faqs: ProfessorFaq[];
   counselingRequests: ProfessorCounselingRequest[];
+  calendarRequests: ProfessorCounselingRequest[];
   roadmapRequests: RoadmapRevisionRequest[];
   adminTasks: ProfessorAdminTaskRecord[];
   notificationCounts: {
@@ -156,14 +158,11 @@ const sidebarMenus: Record<ProfessorTab, Array<{ id: SubMenu; label: string; ico
   ],
 };
 
-const counselingStatusLabels: Record<ProfessorCounselingRequest["status"] | "ANSWERED" | "PENDING", string> = {
+const counselingStatusLabels: Record<ProfessorCounselingRequest["status"], string> = {
   pending: "\uc2b9\uc778 \ub300\uae30",
   approved: "\uc2b9\uc778 \uc644\ub8cc",
   rejected: "\uc2dc\uac04 \uc870\uc815",
   cancelled: "\ucde8\uc18c\ub428",
-  answered: "\ub2f5\ubcc0 \uc644\ub8cc",
-  ANSWERED: "\ub2f5\ubcc0 \uc644\ub8cc",
-  PENDING: "\uc2b9\uc778 \ub300\uae30",
 };
 
 function courseValue(course?: ProfessorCourse) {
@@ -184,6 +183,7 @@ export function ProfessorWorkspace({
   availability,
   faqs,
   counselingRequests,
+  calendarRequests,
   roadmapRequests,
   adminTasks,
   professorCourseProgressReport,
@@ -205,6 +205,7 @@ export function ProfessorWorkspace({
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState("");
   const [currentCounselingRequests, setCurrentCounselingRequests] = useState<ProfessorCounselingRequest[]>(counselingRequests);
+  const [currentCalendarRequests, setCurrentCalendarRequests] = useState<ProfessorCounselingRequest[]>(calendarRequests);
   const [currentNotificationCounts, setCurrentNotificationCounts] = useState(notificationCounts);
   const [announcements] = useState<Array<{ question: string; answer: string; courseName: string }>>([]);
 
@@ -228,6 +229,10 @@ export function ProfessorWorkspace({
   useEffect(() => {
     setCurrentCounselingRequests(counselingRequests);
   }, [counselingRequests]);
+
+  useEffect(() => {
+    setCurrentCalendarRequests(calendarRequests);
+  }, [calendarRequests]);
 
   useEffect(() => {
     setCurrentNotificationCounts(notificationCounts);
@@ -388,12 +393,13 @@ export function ProfessorWorkspace({
       case "calendar":
         return (
           <ScheduleCalendarSub
+            professorId={professor.id}
             adminStats={adminStats}
             adminTasks={adminTasks}
             academicEvents={academicEvents}
             dashboardTasks={dashboardTasks}
             availability={availability}
-            counselingRequests={currentCounselingRequests}
+            counselingRequests={currentCalendarRequests}
             teachingSlots={teachingSlots}
             notificationCounts={currentNotificationCounts}
             pendingQuestionCount={pendingQuestionCount}
@@ -507,6 +513,7 @@ export function ProfessorWorkspace({
             showToast={showToast}
             onRequestStatusChange={(updated) => {
               setCurrentCounselingRequests((prev) => prev.map((request) => (request.id === updated.id ? updated : request)));
+              setCurrentCalendarRequests((prev) => prev.map((request) => (request.id === updated.id ? updated : request)));
               setCurrentNotificationCounts((prev) => ({ ...prev, counseling: 0 }));
             }}
           />
@@ -692,6 +699,7 @@ export function ProfessorWorkspace({
 // --- ScheduleCalendarSub ---
 function ScheduleCalendarSub({
   adminStats,
+  professorId,
   adminTasks,
   academicEvents,
   dashboardTasks,
@@ -706,6 +714,7 @@ function ScheduleCalendarSub({
   onUpdateCounseling,
   onCancelCounseling,
 }: {
+  professorId: string;
   adminStats: ProfessorAdminStat[];
   adminTasks: ProfessorAdminTaskRecord[];
   academicEvents: AcademicEvent[];
@@ -819,6 +828,7 @@ function ScheduleCalendarSub({
         {showCalendar ? (
           <section className="professor-panel">
             <ProfessorCalendar
+              professorId={professorId}
               teachingSlots={teachingSlots}
               counselingRequests={counselingRequests}
               adminTasks={adminTasks}
@@ -921,7 +931,7 @@ function ScheduleManualSub({
       <div className="professor-slot-list">
         {availability.map((item) => (
           <span key={item.id}>
-            {weekDays[item.day_of_week]} {item.start_time.slice(0, 5)}-
+            {item.specific_date ?? weekDays[item.day_of_week ?? 0]} {item.start_time.slice(0, 5)}-
             {item.end_time.slice(0, 5)} · {item.slot_minutes}분
             {item.is_active ? "" : " (비활성)"}
           </span>
@@ -1462,8 +1472,10 @@ function PendingCounselingSub({
     formData.set("professorNote", rejectNote);
 
     if (suggestedTime) {
-      const suggestedDate = new Date(suggestedTime.replace(" ", "T"));
-      if (!Number.isNaN(suggestedDate.getTime())) {
+      // The professor types a KST wall-clock time; parse it as such no matter
+      // what timezone the browser runs in.
+      const suggestedDate = parsePacemateWallClock(suggestedTime);
+      if (suggestedDate) {
         formData.set("suggestedStart", suggestedDate.toISOString());
         const endDate = new Date(suggestedDate);
         endDate.setMinutes(endDate.getMinutes() + 30);

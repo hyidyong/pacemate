@@ -3,7 +3,17 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, Ban, CalendarPlus, CheckCircle2 } from "lucide-react";
 import type { ProfessorTeachingSlot, ProfessorCounselingRequest, ProfessorAdminTaskRecord, ProfessorAvailability } from "@/services/professor.service";
-import { calculateRecommendedAvailability } from "@/lib/calendar-utils";
+import { buildProfessorWeekAvailability } from "@/lib/calendar-utils";
+import {
+  PACEMATE_TIME_ZONE,
+  addLocalDays,
+  dateKeyToLocalDate,
+  formatLocalDate,
+  getDayOfWeek,
+  getLocalDate,
+  instantToLocalParts,
+  parseAdminBlackoutDate,
+} from "@/lib/counseling-slots";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -13,6 +23,7 @@ import { Label } from "@/components/ui/label";
 const WEEKDAYS = ["월", "화", "수", "목", "금"];
 
 type ProfessorCalendarProps = {
+  professorId: string;
   teachingSlots: ProfessorTeachingSlot[];
   counselingRequests: ProfessorCounselingRequest[];
   adminTasks: ProfessorAdminTaskRecord[];
@@ -24,6 +35,7 @@ type ProfessorCalendarProps = {
 };
 
 export function ProfessorCalendar({
+  professorId,
   teachingSlots,
   counselingRequests,
   adminTasks,
@@ -47,24 +59,28 @@ export function ProfessorCalendar({
   const endHour = 18;
 
 
-  // Generate week dates based on currentDate
+  // KST parts of the navigated instant drive the header and the week grid.
+  const currentLocal = useMemo(
+    () => getLocalDate(currentDate, PACEMATE_TIME_ZONE),
+    [currentDate],
+  );
+
+  // Generate week dates (KST) based on currentDate
   const weekDates = useMemo(() => {
-    const dayOfWeek = currentDate.getDay(); // 0 is Sunday, 1 is Monday
+    const dayOfWeek = getDayOfWeek(currentLocal); // 0 is Sunday, 1 is Monday
     const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(currentDate);
-    monday.setDate(currentDate.getDate() + diffToMonday);
+    const monday = addLocalDays(currentLocal, diffToMonday);
 
     return WEEKDAYS.map((day, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
+      const d = addLocalDays(monday, i);
       return {
         label: day,
-        date: d.getDate(),
-        fullDate: d,
+        date: d.day,
+        dateKey: formatLocalDate(d),
         dayIndex: i + 1, // 1 to 5
       };
     });
-  }, [currentDate]);
+  }, [currentLocal]);
 
   function prevWeek() {
     setCurrentDate((prev) => {
@@ -107,108 +123,108 @@ export function ProfessorCalendar({
 
     // 2. Admin Tasks (Light Purple) & Specific Date Blackouts
     adminTasks.forEach((task) => {
-      if (task.day_of_week >= 1 && task.day_of_week <= 5) {
-        if (task.title.startsWith("__BLACKOUT__")) {
-          const blackoutDate = task.title.split("__")[2];
-          // Only show on the matching specific date
-          const targetDayDateObj = weekDates[task.day_of_week - 1]?.fullDate;
-          if (targetDayDateObj) {
-             const localDateStr = `${targetDayDateObj.getFullYear()}-${String(targetDayDateObj.getMonth() + 1).padStart(2, '0')}-${String(targetDayDateObj.getDate()).padStart(2, '0')}`;
-             if (localDateStr === blackoutDate) {
-               list.push({
-                 id: `admin-blackout-${task.id}`,
-                 type: "recommended", // use recommended type to allow toggle
-                 title: "상담 불가 (특정일 차단)",
-                 day: task.day_of_week,
-                 startTime: task.start_time.slice(0, 5),
-                 endTime: task.end_time.slice(0, 5),
-                 color: "bg-gray-100",
-                 textColor: "text-gray-500",
-                 borderColor: "border-transparent",
-                 details: "특정 날짜 수동 차단",
-                 isBlackout: true,
-                 rawSlot: { type: "admin_blackout", id: task.id },
-               });
-             }
-          }
-        } else {
+      const blackoutDate = parseAdminBlackoutDate(task.title);
+      if (blackoutDate) {
+        // A dated blackout renders on its date's column; the embedded date
+        // governs (stored day_of_week is not trusted).
+        const target = weekDates.find((wd) => wd.dateKey === blackoutDate);
+        if (target) {
           list.push({
-            id: `admin-${task.id}`,
-            type: "admin",
-            title: task.title,
-            day: task.day_of_week,
+            id: `admin-blackout-${task.id}`,
+            type: "recommended", // use recommended type to allow toggle
+            title: "상담 불가 (특정일 차단)",
+            day: target.dayIndex,
             startTime: task.start_time.slice(0, 5),
             endTime: task.end_time.slice(0, 5),
-            color: "bg-purple-50",
-            textColor: "text-purple-950",
+            color: "bg-gray-100",
+            textColor: "text-gray-500",
             borderColor: "border-transparent",
-            details: "행정 업무",
+            details: "특정 날짜 수동 차단",
+            isBlackout: true,
+            rawSlot: { type: "admin_blackout", id: task.id },
           });
         }
+      } else if (task.day_of_week >= 1 && task.day_of_week <= 5) {
+        list.push({
+          id: `admin-${task.id}`,
+          type: "admin",
+          title: task.title,
+          day: task.day_of_week,
+          startTime: task.start_time.slice(0, 5),
+          endTime: task.end_time.slice(0, 5),
+          color: "bg-purple-50",
+          textColor: "text-purple-950",
+          borderColor: "border-transparent",
+          details: "행정 업무",
+        });
       }
     });
 
-    // 3. Counseling (Confirmed)
+    // 3. Counseling (Confirmed) — requested_* is the reserved time (the DB
+    // exclusion constraint holds it); rendered in KST.
     counselingRequests
       .filter((req) => req.status === "approved")
       .forEach((req) => {
-        const startDate = new Date(req.suggested_start || req.requested_start);
-        const endDate = new Date(req.suggested_end || req.requested_end);
-        const day = startDate.getDay();
-        if (day >= 1 && day <= 5) {
-          const reqDateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
-          const targetDayDateObj = weekDates[day - 1]?.fullDate;
-          if (targetDayDateObj) {
-            const localDateStr = `${targetDayDateObj.getFullYear()}-${String(targetDayDateObj.getMonth() + 1).padStart(2, '0')}-${String(targetDayDateObj.getDate()).padStart(2, '0')}`;
-            if (localDateStr === reqDateStr) {
-              const startTime = `${startDate.getHours().toString().padStart(2, "0")}:${startDate.getMinutes().toString().padStart(2, "0")}`;
-              const endTime = `${endDate.getHours().toString().padStart(2, "0")}:${endDate.getMinutes().toString().padStart(2, "0")}`;
-              list.push({
-                id: req.id, // Keep the raw request ID
-                type: "counseling",
-                title: req.student?.name ? `${req.student.name} 학생 상담` : "학생 상담",
-                day: day,
-                startTime,
-                endTime,
-                color: "bg-emerald-100/80 shadow-sm", // Distinct styling
-                textColor: "text-emerald-950 font-semibold",
-                borderColor: "border-transparent",
-                details: req.topic,
-                rawReq: req, // Store the raw request object for the modal
-              });
-            }
-          }
+        const startParts = instantToLocalParts(req.requested_start, PACEMATE_TIME_ZONE);
+        const endParts = instantToLocalParts(req.requested_end, PACEMATE_TIME_ZONE);
+        const target = weekDates.find((wd) => wd.dateKey === startParts.dateKey);
+        if (target) {
+          const pad = (value: number) => String(value).padStart(2, "0");
+          list.push({
+            id: req.id, // Keep the raw request ID
+            type: "counseling",
+            title: req.student?.name ? `${req.student.name} 학생 상담` : "학생 상담",
+            day: target.dayIndex,
+            startTime: `${pad(startParts.hour)}:${pad(startParts.minute)}`,
+            endTime: `${pad(endParts.hour)}:${pad(endParts.minute)}`,
+            color: "bg-emerald-100/80 shadow-sm", // Distinct styling
+            textColor: "text-emerald-950 font-semibold",
+            borderColor: "border-transparent",
+            details: req.topic,
+            rawReq: req, // Store the raw request object for the modal
+          });
         }
       });
 
-    // 4. Recommended Available Times (Dashed Green)
-    const recommended = calculateRecommendedAvailability(
+    // 4. Canonical week availability: bookable (declared, students can book),
+    // blocked (professor blackout), free (undeclared — NOT open to students).
+    const { chunks } = buildProfessorWeekAvailability({
+      professorId,
+      weekDateKeys: weekDates.map((wd) => wd.dateKey),
       teachingSlots,
       adminTasks,
       counselingRequests,
       availability,
-      weekDates
-    );
-    
-    recommended.forEach((rec) => {
+    });
+
+    chunks.forEach((chunk) => {
+      const isFree = chunk.kind === "free";
       list.push({
-        id: `rec-${rec.day}-${rec.start}`,
+        id: `rec-${chunk.day}-${chunk.start}`,
         type: "recommended",
-        title: rec.isBlackout ? "상담 불가" : "상담 가능",
-        day: rec.day,
-        startTime: rec.start,
-        endTime: rec.end,
-        color: rec.isBlackout ? "bg-gray-100" : "bg-emerald-50/40 hover:bg-emerald-50/80 transition-colors",
-        textColor: rec.isBlackout ? "text-gray-500" : "text-emerald-900/70",
-        borderColor: rec.isBlackout ? "border-transparent" : "border-transparent",
-        details: rec.isBlackout ? "교수가 수동으로 상담을 차단한 시간입니다." : "상담 예약이 가능한 시간입니다.",
-        isBlackout: rec.isBlackout,
-        rawSlot: rec,
+        title: chunk.isBlackout ? "상담 불가" : isFree ? "상담 미개방" : "상담 가능",
+        day: chunk.day,
+        startTime: chunk.start,
+        endTime: chunk.end,
+        color: chunk.isBlackout
+          ? "bg-gray-100"
+          : isFree
+            ? "bg-slate-50/60 hover:bg-slate-100/70 transition-colors"
+            : "bg-emerald-50/40 hover:bg-emerald-50/80 transition-colors",
+        textColor: chunk.isBlackout ? "text-gray-500" : isFree ? "text-slate-500" : "text-emerald-900/70",
+        borderColor: "border-transparent",
+        details: chunk.isBlackout
+          ? "교수가 수동으로 상담을 차단한 시간입니다."
+          : isFree
+            ? "학생에게 예약 가능으로 공개되지 않은 시간입니다."
+            : "상담 예약이 가능한 시간입니다.",
+        isBlackout: chunk.isBlackout,
+        rawSlot: chunk,
       });
     });
 
     return list;
-  }, [teachingSlots, adminTasks, counselingRequests, availability, weekDates]);
+  }, [professorId, teachingSlots, adminTasks, counselingRequests, availability, weekDates]);
 
   const dynamicEndHour = useMemo(() => {
     let max = endHour;
@@ -235,16 +251,18 @@ export function ProfessorCalendar({
   function handleSlotClick(dayIndex: number, hourIndex: number, isBlackout: boolean = false, rawSlot?: any) {
     const startHourStr = (startHour + hourIndex).toString().padStart(2, '0');
     const endHourStr = (startHour + hourIndex + 1).toString().padStart(2, '0');
-    const clickedDate = weekDates[dayIndex].fullDate;
-    const specificDateStr = `${clickedDate.getFullYear()}-${String(clickedDate.getMonth() + 1).padStart(2, '0')}-${String(clickedDate.getDate()).padStart(2, '0')}`;
-    
+    const specificDateStr = weekDates[dayIndex].dateKey;
+    const clickedLocal = dateKeyToLocalDate(specificDateStr);
+
     setActiveSlotAction({
       day: dayIndex + 1, // 1 to 5
       specificDate: specificDateStr,
       start: `${startHourStr}:00`,
       end: `${endHourStr}:00`,
       isBlackout,
-      dateStr: `${clickedDate.getFullYear()}년 ${clickedDate.getMonth() + 1}월 ${clickedDate.getDate()}일`,
+      dateStr: clickedLocal
+        ? `${clickedLocal.year}년 ${clickedLocal.month}월 ${clickedLocal.day}일`
+        : specificDateStr,
       startHourStr,
       endHourStr,
       rawSlot: rawSlot || {
@@ -309,7 +327,7 @@ export function ProfessorCalendar({
               <ChevronLeft size={18} />
             </Button>
             <span className="font-semibold text-[15px] px-2 text-gray-800">
-              {currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월
+              {currentLocal.year}년 {currentLocal.month}월
             </span>
             <Button variant="ghost" size="icon" onClick={nextWeek} className="h-8 w-8 rounded-lg hover:bg-white/80">
               <ChevronRight size={18} />
@@ -328,6 +346,9 @@ export function ProfessorCalendar({
             </span>
             <span className="flex items-center gap-1.5 text-emerald-950">
               <span className="w-2.5 h-2.5 rounded-sm bg-emerald-50/80 shadow-sm"></span> 상담 가능
+            </span>
+            <span className="flex items-center gap-1.5 text-emerald-950">
+              <span className="w-2.5 h-2.5 rounded-sm bg-slate-100 shadow-sm"></span> 상담 미개방
             </span>
           </div>
         </div>
