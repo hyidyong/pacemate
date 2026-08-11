@@ -9,6 +9,7 @@ import {
   type EligibilityWeeklyProgressRow,
 } from "@/services/course-term-completion-eligibility-read";
 import type { CourseTermCompletionEligibilityResult } from "@/types/course-term-completion-eligibility";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
 
@@ -129,7 +130,29 @@ export async function getCourseTermCompletionEligibility(
     return failure("forbidden");
   }
 
-  const { data: offering, error: offeringError } = await supabase
+  // Ownership gate: the offering must belong to this student's own courses.
+  // This app-side check replaces the student RLS policy on course_offerings,
+  // which currently fails with 42P17 (its subquery on student_weekly_progress
+  // meets the professor policy that subqueries course_offerings back).
+  const { data: ownedOffering, error: ownedOfferingError } = await supabase
+    .from("student_courses")
+    .select("offering_id")
+    .eq("student_id", profileRow.id)
+    .eq("offering_id", normalizedOfferingId)
+    .maybeSingle();
+
+  if (ownedOfferingError) {
+    return failure(classifyReadError(ownedOfferingError));
+  }
+
+  if (!ownedOffering) {
+    return failure("offering_not_found");
+  }
+
+  // Recursion-affected tables are read with the server-only admin client,
+  // scoped to the verified student id and owned offering id.
+  const admin = createSupabaseAdminClient();
+  const { data: offering, error: offeringError } = await admin
     .from("course_offerings")
     .select(ELIGIBILITY_SELECT.offering)
     .eq("id", normalizedOfferingId)
@@ -144,7 +167,7 @@ export async function getCourseTermCompletionEligibility(
   }
 
   const offeringRow = offering as EligibilityOfferingRow;
-  const { data: term, error: termError } = await supabase
+  const { data: term, error: termError } = await admin
     .from("academic_terms")
     .select(ELIGIBILITY_SELECT.term)
     .eq("id", offeringRow.term_id)
@@ -159,12 +182,12 @@ export async function getCourseTermCompletionEligibility(
   }
 
   const [plansResult, progressResult] = await Promise.all([
-    supabase
+    admin
       .from("course_weekly_plans")
       .select(ELIGIBILITY_SELECT.weeklyPlan)
       .eq("offering_id", offeringRow.id)
       .order("week_number", { ascending: true }),
-    supabase
+    admin
       .from("student_weekly_progress")
       .select(ELIGIBILITY_SELECT.weeklyProgress)
       .eq("student_id", profileRow.id)

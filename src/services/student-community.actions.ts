@@ -13,6 +13,7 @@ import {
 } from "@/services/student-timetable.service";
 import {
   findScheduleConflicts,
+  selectOfferingIdForCourse,
   validateScheduleSlots,
   type ScheduleConflict,
   type ScheduleSlot,
@@ -235,6 +236,22 @@ export async function addCourseToSchedule(formData: FormData) {
     semester_label: semesterLabel,
     source_text: "mypage",
   };
+  // Dashboard eligibility/recommendation cards resolve through
+  // student_courses.offering_id, so registration must link the offering when
+  // it can be determined unambiguously. Left untouched when unresolvable so
+  // an existing link is never wiped by a re-registration.
+  const { data: offeringRows, error: offeringLookupError } = await supabase
+    .from("course_offerings")
+    .select("id, academic_term:academic_terms!inner(semester_label)")
+    .eq("course_id", courseId)
+    .eq("academic_term.semester_label", semesterLabel);
+  if (offeringLookupError) {
+    console.error("addCourseToSchedule offering lookup failed:", offeringLookupError.message);
+  }
+  const offeringId = selectOfferingIdForCourse(offeringRows ?? []);
+  if (offeringId) {
+    payload.offering_id = offeringId;
+  }
   // Only touch is_favorite when the caller explicitly says so — registering
   // a course is not the same action as favoriting it.
   if (formData.has("isFavorite")) {

@@ -6,6 +6,7 @@ import {
   createDemoSession as createSignedDemoSession,
   destroyDemoSession,
 } from "@/lib/auth/demo-session";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getRoleHomePath, type DemoProfile } from "@/services/session.service";
 
@@ -102,7 +103,12 @@ export async function createDemoSession(formData: FormData) {
   cookieStore.delete("pacemate_pending_student_types");
 
   if (role === "student") {
-    const { data: studentData } = await supabase
+    // The authenticated RLS policy on student_profiles still compares
+    // auth.uid() to profile_id (profiles.id), which never matches after the
+    // auth_user_id mapping migrations, so the session client reads 0 rows and
+    // every student would be sent back to onboarding. Read the flag with the
+    // server-only admin client using the profile id verified just above.
+    const { data: studentData } = await createSupabaseAdminClient()
       .from("student_profiles")
       .select("is_onboarded")
       .eq("profile_id", profile.id)

@@ -77,6 +77,18 @@ export function resolveScheduleSource(
   return { source, slots: validateScheduleSlots(slots) };
 }
 
+// Registration links student_courses.offering_id only when the course has
+// exactly one offering in the semester — an ambiguous or missing offering
+// must stay null rather than guessing a section.
+export function selectOfferingIdForCourse(
+  offerings: Array<{ id: string | null }>,
+): string | null {
+  const ids = offerings
+    .map((offering) => offering.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  return ids.length === 1 ? ids[0] : null;
+}
+
 // A slot already known to belong to some parent (a registered course or a
 // custom schedule entry) that a new slot can be checked for overlap against.
 export type ExistingScheduleEntry = {

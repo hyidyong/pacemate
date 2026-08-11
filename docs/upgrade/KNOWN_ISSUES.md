@@ -56,6 +56,55 @@ Status: OPEN.
   professors (counseling-workspace.tsx:190) — second professor reachable only via 교수별 검색.
 - Demo student login lands on /onboarding although onboarding data exists (cause UNVERIFIED).
 
+## KI-006 — RLS policy recursion (42P17) on course_offerings; migration written but NOT applied
+
+Status: PARTIALLY MITIGATED in app code (2026-08-12 QA session); DB fix pending.
+Root cause: mutually recursive authenticated policies — "students read own course offerings"
+(20260712183907, subqueries student_weekly_progress) ⇄ "professors read own weekly aggregate
+evidence" (20260713013521, subqueries course_offerings). Every authenticated SELECT on
+course_offerings fails with 42P17. Reproduced live with a student JWT via PostgREST.
+
+Consequences and current state:
+- Student dashboard 학기 완료 근거/다음 학습 추천 cards were dead → FIXED at app level
+  (ownership gate via own student_courses row + server-only admin-client reads scoped to the
+  verified ids) in course-term-completion-eligibility.server.ts,
+  student-learning-recommendations.server.ts, company-law-offering.server.ts.
+- Professor 과목 진행 현황 report + 익명 주간 집계 remain BROKEN (error panel) — NOT
+  worked around because professor-anonymous-weekly-aggregate-security.test.mjs deliberately
+  forbids the service-role client there (RLS must gate sensitive columns).
+- Real fix: supabase/migrations/20260812000000_fix_offering_policy_recursion.sql
+  (security definer helpers break the cycle). UNAPPLIED — the QA session had no DB
+  credentials/CLI auth. Apply with `supabase db push`, verify professor report tabs, then the
+  app-level admin-client workarounds can be reverted to session reads.
+
+## KI-007 — student_profiles/student_courses authenticated policies use pre-mapping identity
+
+Status: OPEN (app-level workaround in place for login).
+Authenticated policies still compare `auth.uid()` to `profile_id`/`student_id` (= profiles.id),
+which never matches after the auth_user_id mapping (20260712183855/183907 fixed only
+`profiles`). Effect observed: login's is_onboarded read returned 0 rows → every student was
+redirected to /onboarding despite is_onboarded=true. FIXED at app level in
+demo-auth.service.ts (admin-client read of the just-verified profile id). DB-layer policy
+update belongs with KI-006's migration family (Stage 2/9).
+
+## KI-008 — External images on i.ibb.co are slow (5–12 s, 0.9–1.3 MB each)
+
+Status: OPEN — decision needed (vendor locally vs keep external).
+Header logo (app-header-professor-safe.tsx:217,359) renders through /_next/image whose
+upstream fetch times out on the slow host → intermittent 500 → broken logo. Carousel
+(student-hero-carousel.tsx) uses plain <img> so it renders but ships ~4 MB slowly on every
+dashboard visit. All 6 URLs verified reachable-but-slow via curl on 2026-08-11. Options:
+vendor the images into public/ (repo +~6.6 MB, or downscale first), or keep external and
+accept intermittent logo 500s. Owner decision pending.
+
+## KI-009 — Mobile touch-target sizes below guideline
+
+Status: OPEN (Stage 4 candidate; no functional blocker found).
+375px audit on 2026-08-12: carousel dots 10×10 px, 공지 닫기 24×24 px, "마이페이지에서 관리"
+links ~17–20 px tall (guideline ≈44 px). elementFromPoint interception audit at scroll-top
+found zero blocked targets on dashboard/mypage; the only interceptions occur when content
+scrolls under the sticky header (normal behavior).
+
 ## KI-005 — supabase/schema.sql snapshot has a duplicate column line
 
 Status: OPEN (latent). `professor_admin_tasks` in supabase/schema.sql (~:910-911) repeats
