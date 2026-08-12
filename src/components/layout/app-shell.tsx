@@ -17,6 +17,11 @@ type AppShellProps = {
   children: React.ReactNode;
   showAiTutorFab?: boolean;
   showSiteFooter?: boolean;
+  /** Pages that render the professor workspace pass true so ASSISTANTS get
+      the professor chrome there (mobile bottom nav + workspace drawer) —
+      without it they had no way to navigate the workspace on a phone
+      (Stage 4, audit B-18). */
+  professorSurface?: boolean;
   profile?: DemoProfile | null;
   notifications?: UserNotification[];
   unreadCount?: number;
@@ -26,6 +31,7 @@ export async function AppShell({
   children,
   showAiTutorFab = true,
   showSiteFooter = true,
+  professorSurface = false,
   profile,
   notifications,
   unreadCount,
@@ -43,7 +49,9 @@ export async function AppShell({
   ]);
 
   const isAuthenticated = Boolean(resolvedProfile);
-  const isProfessor = resolvedProfile?.role === "professor";
+  const isProfessor =
+    resolvedProfile?.role === "professor" ||
+    (professorSurface && resolvedProfile?.role === "assistant");
   const isOperator = resolvedProfile?.role === "assistant" || resolvedProfile?.role === "admin";
   const isStudent = isAuthenticated && !isProfessor && !isOperator;
   const homeHref = resolvedProfile ? getRoleHomePath(resolvedProfile.role) : "/";
@@ -62,7 +70,7 @@ export async function AppShell({
         />
 
         <main
-          className={`app-shell-main${isStudent || isProfessor ? " app-shell-main--with-mobile-nav" : ""}`}
+          className={`app-shell-main${isStudent || isProfessor || isOperator ? " app-shell-main--with-mobile-nav" : ""}`}
         >
           {children}
         </main>

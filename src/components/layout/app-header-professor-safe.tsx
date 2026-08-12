@@ -112,6 +112,7 @@ const desktopRoutes: HeaderRoute[] = [
   { href: "/courses", label: "과목" },
   { href: "/counseling", label: "상담" },
   { href: "/reviews", label: "수강 후기" },
+  { href: "/ask", label: "질문하기" },
 ];
 
 const mobileRoutes = desktopRoutes;
@@ -121,6 +122,8 @@ const mobileRouteIcons = {
   "/courses": LibraryBig,
   "/counseling": CalendarDays,
   "/reviews": Star,
+  "/ask": CircleHelp,
+  "/community": MessageSquareText,
 } as const;
 
 interface AppHeaderProps {
@@ -189,20 +192,41 @@ export function AppHeader({
     setIsMobileMenuOpen(previous => !previous);
   };
 
+  // Drawer dialog mechanics: Escape closes, background does not scroll.
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMobileMenuOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileMenuOpen]);
+
   const isMobileMenuVisible = isProfessor ? isProfessorMenuOpen : isMobileMenuOpen;
   const isStudentRoadmap = isAuthenticated && !isProfessor && !isOperator && pathname.startsWith("/roadmap");
   const roadmapMenuLinks: MobileHeaderRoute[] = [
-    { href: "/roadmap", label: "내 로드맵", icon: Route },
     { href: "/roadmap#course-roadmap", label: "과목별 로드맵", icon: LibraryBig },
     { href: "/roadmap#learning-progress", label: "학습 기록", icon: CalendarDays },
-    { href: "/notices", label: "공지사항", icon: MessageSquareText },
+  ];
+  // Every site route stays reachable from the drawer on every page: the
+  // roadmap shortcuts are PREPENDED, not swapped in for the whole menu, and
+  // 커뮤니티 (previously desktop-only) is included (Stage 4, audit C-1/C-2).
+  const baseMobileMenuRoutes: MobileHeaderRoute[] = [
+    ...mobileRoutes.map((route) => ({
+      ...route,
+      icon: mobileRouteIcons[route.href as keyof typeof mobileRouteIcons],
+    })),
+    { href: "/community", label: "커뮤니티", icon: MessageSquareText },
   ];
   const mobileMenuRoutes: MobileHeaderRoute[] = isStudentRoadmap
-    ? roadmapMenuLinks
-    : mobileRoutes.map((route) => ({
-        ...route,
-        icon: mobileRouteIcons[route.href as keyof typeof mobileRouteIcons],
-      }));
+    ? [...roadmapMenuLinks, ...baseMobileMenuRoutes]
+    : baseMobileMenuRoutes;
 
   return (
     <>
@@ -367,6 +391,7 @@ export function AppHeader({
           ) : null}
 
           <button
+            aria-controls={isProfessor ? undefined : "mobile-menu-drawer"}
             aria-expanded={isMobileMenuVisible}
             aria-label={isMobileMenuVisible ? "메뉴 닫기" : "메뉴 열기"}
             onClick={handleMobileMenuToggle}
@@ -386,7 +411,11 @@ export function AppHeader({
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-40 bg-white md:hidden pt-24 px-6 pb-6 flex flex-col gap-6 overflow-y-auto"
+            className="fixed inset-0 z-40 bg-white md:hidden pt-24 px-6 pb-24 flex flex-col gap-6 overflow-y-auto"
+            id="mobile-menu-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="메뉴"
           >
             <div className="flex flex-col gap-4">
               <h2 className="text-xl font-bold text-gray-900 border-b pb-2">메뉴</h2>

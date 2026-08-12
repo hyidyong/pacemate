@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
+import { PendingSubmitButton } from "@/components/ui/pending-submit-button";
 import { StudentOnboardingWorkspace } from "@/components/onboarding/student-onboarding-workspace";
 import { getDraftCurriculumByDepartment } from "@/services/curriculum-query.server";
 import type { CurriculumPreview } from "@/types/curriculum";
@@ -15,6 +15,16 @@ type OnboardingPageProps = {
     error?: string;
   }>;
 };
+
+// The error redirect used to surface its raw code (the literal string
+// "required") or raw DB text to the student (Stage 4, audit A-8). Map to
+// Korean, mirroring the login page.
+const errorMessages: Record<string, string> = {
+  required: "필수 항목을 모두 선택해 주세요.",
+  professor_required: "지도 교수님을 선택해 주세요.",
+};
+
+const fallbackErrorMessage = "요청을 처리하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +53,9 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       curriculumPreviews["electronic-engineering"] = electronicEngineeringDemoCurriculum;
     }
   }
-  const error = params?.error ? decodeURIComponent(params.error) : null;
+  const error = params?.error
+    ? errorMessages[decodeURIComponent(params.error)] ?? fallbackErrorMessage
+    : null;
 
   return (
     <AppShell>
@@ -61,7 +73,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
       <section className="section onboarding-layout">
         {isAssistant ? (
           <form action={saveAssistantOnboarding} className="onboarding-form">
-            {error ? <p className="form-error">{error}</p> : null}
+            {error ? <p className="form-error" role="alert">{error}</p> : null}
             <section className="onboarding-panel">
               <div className="community-section-heading">
                 <h2>지도 교수 및 연구실 선택</h2>
@@ -79,10 +91,10 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
               </div>
             </section>
             <div className="onboarding-submit-bar">
-              <Button type="submit">
+              <PendingSubmitButton pendingLabel="저장 중…">
                 저장하고 대시보드 보기
                 <ArrowRight size={16} aria-hidden="true" />
-              </Button>
+              </PendingSubmitButton>
             </div>
           </form>
         ) : (

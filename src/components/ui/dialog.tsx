@@ -55,14 +55,18 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-white p-6 shadow-lg sm:rounded-lg",
+          // max-height + internal scroll: a transform-centered fixed dialog
+          // taller than the viewport clips BOTH edges unreachably, worst with
+          // the mobile soft keyboard open (Stage 4, audit C-24). The width
+          // keeps a gutter at 320px instead of running edge-to-edge.
+          "fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-white p-6 shadow-lg",
           className
         )}
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
-          <X className="h-4 w-4" />
+        <DialogPrimitive.Close aria-label="닫기" className="absolute right-2 top-2 rounded-sm p-2 opacity-70 hover:opacity-100">
+          <X aria-hidden="true" className="h-4 w-4" />
           <span className="sr-only">Close</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>

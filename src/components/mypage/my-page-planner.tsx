@@ -38,6 +38,13 @@ import {
   type ExistingScheduleEntry,
 } from "@/services/student-timetable.rules";
 import { ScheduleConflictDialog } from "@/components/schedule/schedule-conflict-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { ScheduleConflictInfo } from "@/components/schedule/schedule-conflict-list";
 import type {
   CommunityPostRecord,
@@ -97,16 +104,18 @@ function TimetableCourseCell({
       <span className="mt-0.5 flex w-full min-w-0 flex-col gap-0.5 truncate text-[9px] font-medium leading-none opacity-70">
         <span className="w-full truncate">{item.classroom ?? "강의실 미정"}</span>
       </span>
-      <div className="absolute inset-0 flex items-center justify-center rounded-sm bg-slate-950/35 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          onClick={() => onRemove(item.id)}
-          className="rounded-full bg-white p-1.5 text-red-500 shadow-md transition-colors hover:bg-red-50"
-          title="과목 삭제"
-          type="button"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
+      {/* Delete affordance: a corner button, never an invisible full-cell
+          overlay — a center tap must not remove the course. Always visible on
+          touch (no hover); revealed on hover/focus for pointer devices. */}
+      <button
+        onClick={() => onRemove(item.id)}
+        className="absolute right-0.5 top-0.5 rounded-full bg-white/95 p-1.5 text-red-500 shadow-sm transition-opacity hover:bg-red-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+        aria-label={`${item.course.name} 시간표에서 삭제`}
+        title="과목 삭제"
+        type="button"
+      >
+        <Trash2 size={12} aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -121,6 +130,7 @@ export function MyPagePlanner({
 }: MyPagePlannerProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [pendingRemoval, setPendingRemoval] = useState<{ id: string; name: string } | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0]?.id ?? "");
   const [day, setDay] = useState("월");
   const [startTime, setStartTime] = useState("09:00");
@@ -646,6 +656,21 @@ export function MyPagePlanner({
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-8 pb-20 md:pb-8">
       <MyPageSectionTabs activeTab={activeTab} onChange={setActiveTab} />
+      {/* Feedback renders ABOVE the tab sections: actions on the 찜/투두/
+          커뮤니티 tabs write to it too, and it used to be invisible there
+          (Stage 4, audit A-6). */}
+      {feedback ? (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+            feedback.ok
+              ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+              : "border-red-100 bg-red-50 text-red-600"
+          }`}
+          role={feedback.ok ? "status" : "alert"}
+        >
+          {feedback.message}
+        </div>
+      ) : null}
       {/* SECTION 1: 2D Timetable */}
       <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "all" || activeTab === "timetable" ? "" : "hidden"}`}>
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
@@ -654,22 +679,12 @@ export function MyPagePlanner({
             <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{scheduledCourseIds.size}과목</span>
           </h2>
         </div>
-        {feedback ? (
+
+        {/* Below sm the 7-day grid scrolls horizontally instead of squeezing
+            each day column to ~39px (Stage 4, audit C-7). */}
+        <div className="w-full min-w-0 overflow-x-auto p-2 sm:p-5">
           <div
-            className={`mx-5 mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${
-              feedback.ok
-                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                : "border-red-100 bg-red-50 text-red-600"
-            }`}
-            role="status"
-          >
-            {feedback.message}
-          </div>
-        ) : null}
-        
-        <div className="w-full min-w-0 overflow-hidden p-2 sm:p-5">
-          <div
-            className="relative w-full min-w-0 overflow-hidden rounded-lg bg-gray-50/30 shadow-inner"
+            className="relative w-full min-w-[560px] overflow-hidden rounded-lg bg-gray-50/30 shadow-inner sm:min-w-0"
             style={{ contain: "layout paint" }}
           >
             {/* Header Row */}
@@ -720,7 +735,7 @@ export function MyPagePlanner({
                     <TimetableCourseCell
                       item={item}
                       colorClass={colorClass}
-                      onRemove={() => handleRemove(item.parentId)}
+                      onRemove={() => setPendingRemoval({ id: item.parentId, name: item.course.name })}
                     />
                   </div>
                 );
@@ -741,6 +756,7 @@ export function MyPagePlanner({
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
+              aria-label="과목 검색"
               type="text"
               placeholder="과목명, 코드, 분류 검색"
               className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
@@ -1020,7 +1036,7 @@ export function MyPagePlanner({
 
       {/* SECTION 4: Community Tabs */}
       <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "all" || activeTab === "community" ? "" : "hidden"}`}>
-        <div className="border-b border-gray-100 px-2 pt-2 flex overflow-x-auto hide-scrollbar">
+        <div className="border-b border-gray-100 px-2 pt-2 flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button 
             onClick={() => setActiveCommunityTab("my")}
             className={`px-4 py-3 text-sm font-bold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${activeCommunityTab === "my" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}
@@ -1133,6 +1149,37 @@ export function MyPagePlanner({
         onEditTime={handleEditConflictingTime}
         isPending={isPending}
       />
+
+      <Dialog open={pendingRemoval !== null} onOpenChange={(open) => { if (!open) setPendingRemoval(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>과목 삭제</DialogTitle>
+          <DialogDescription>
+            {pendingRemoval ? `${pendingRemoval.name} 과목을 시간표에서 삭제할까요?` : ""}
+          </DialogDescription>
+          <DialogFooter>
+            <button
+              type="button"
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+              onClick={() => setPendingRemoval(null)}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              disabled={isPending}
+              onClick={() => {
+                if (pendingRemoval) {
+                  handleRemove(pendingRemoval.id);
+                  setPendingRemoval(null);
+                }
+              }}
+            >
+              삭제
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

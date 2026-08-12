@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { addCourseToSchedule } from "@/services/student-community.actions";
 import { Plus } from "lucide-react";
@@ -8,20 +9,26 @@ import { RegisterCourseDialog, type EditableScheduleSlot } from "@/components/co
 import type { ScheduleConflictInfo } from "@/components/schedule/schedule-conflict-list";
 
 export function RegisterCourseButton({ courseId }: { courseId: string }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [conflict, setConflict] = useState<ScheduleConflictInfo | null>(null);
   const [lastFormData, setLastFormData] = useState<FormData | null>(null);
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
   function submit(formData: FormData) {
     setLastFormData(formData);
+    setMessage(null);
     startTransition(async () => {
       const result = await addCourseToSchedule(formData);
 
       if (result.ok) {
         setDialogOpen(false);
         setConflict(null);
-        alert("내 시간표에 추가되었습니다!");
+        // Refresh so the card reflects the registration instead of inviting
+        // a second click (audit A-15); inline message replaces alert().
+        setMessage({ text: "내 시간표에 추가되었습니다.", ok: true });
+        router.refresh();
         return;
       }
 
@@ -37,7 +44,7 @@ export function RegisterCourseButton({ courseId }: { courseId: string }) {
         return;
       }
 
-      alert(result.message);
+      setMessage({ text: result.message, ok: false });
     });
   }
 
@@ -83,6 +90,14 @@ export function RegisterCourseButton({ courseId }: { courseId: string }) {
         <Plus size={16} className="mr-1" />
         {isPending ? "등록 중..." : "내 시간표에 추가"}
       </Button>
+      {message ? (
+        <span
+          className={`mt-1 block text-xs font-medium ${message.ok ? "text-emerald-700" : "text-red-600"}`}
+          role={message.ok ? "status" : "alert"}
+        >
+          {message.text}
+        </span>
+      ) : null}
       <RegisterCourseDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}

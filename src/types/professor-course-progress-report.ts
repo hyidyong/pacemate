@@ -18,6 +18,9 @@ export type ProfessorCourseProgressRow = {
 
 export type ProfessorCourseProgressOfferingReport = {
   offeringId: string;
+  /** Course display name; null when the offering has no joined course row.
+      Students stay anonymous by design — only the course is labeled. */
+  courseName: string | null;
   totalStudentCount: number;
   statusCounts: ProfessorCourseProgressStatusCounts;
   students: ProfessorCourseProgressRow[];

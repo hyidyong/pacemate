@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,16 +43,26 @@ export function AskProfessorForm({
       if (result.ok) {
         setQuestion("");
         submissionKeyRef.current = "";
+        // The 내 질문과 답변 list on this page is server data — without a
+        // refresh the just-submitted question never appeared (audit A-13).
+        router.refresh();
       }
     });
   }
+
+  // The toast used to sit permanently over the mobile bottom nav.
+  useEffect(() => {
+    if (!resultMessage) return;
+    const timer = setTimeout(() => setResultMessage(null), 5000);
+    return () => clearTimeout(timer);
+  }, [resultMessage]);
 
   return (
     <>
       {resultMessage ? (
         <div
           aria-live="polite"
-          className={`fixed bottom-10 left-1/2 z-50 -translate-x-1/2 rounded-full px-6 py-3 font-medium text-white shadow-xl ${resultMessage.ok ? "bg-emerald-600" : "bg-destructive"}`}
+          className={`fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-[60] -translate-x-1/2 rounded-full px-6 py-3 font-medium text-white shadow-xl md:bottom-10 ${resultMessage.ok ? "bg-emerald-600" : "bg-destructive"}`}
         >
           {resultMessage.text}
         </div>

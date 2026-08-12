@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { redirectNonStudent } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 import { getStudentRoadmapWorkspaceForSession } from "@/services/personalized-weekly-roadmap.server";
+import { DataErrorNotice } from "@/components/ui/data-error-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +19,11 @@ export default async function RoadmapPage({
   redirectNonStudent(profile);
 
   const { offering, refresh } = await searchParams;
+  // KI-003: a failed read must not render as "no courses registered".
+  let loadFailed = false;
   const roadmapWorkspace = await getStudentRoadmapWorkspaceForSession(offering).catch((error) => {
     console.error("Roadmap page could not be loaded", error);
+    loadFailed = true;
     return {
       offerings: [],
       selectedOfferingId: "",
@@ -53,6 +57,7 @@ export default async function RoadmapPage({
         </div>
       </section>
 
+      {loadFailed ? <DataErrorNotice label="로드맵 데이터를 불러오지 못했습니다." /> : null}
       <StudentRoadmapWorkspace
         completedWeeks={roadmapWorkspace.completedWeeks}
         courseGuide={roadmapWorkspace.courseGuide}

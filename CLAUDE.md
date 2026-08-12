@@ -12,7 +12,34 @@ This is an existing university timetable and counseling-reservation application 
 * Never claim success without fresh verification evidence.
 * Prefer root-cause fixes over UI-level patches.
 * Treat scheduling availability as correctness-critical data.
+* Do not introduce unnecessary dependencies; justify any new package (need, alternatives, bundle impact, maintenance, accessibility).
 * Repository state, Git history, tests, and project documentation are more authoritative than conversational memory.
+
+## Stage Workflow
+
+For every University Platform Upgrade stage:
+
+1. Reconstruct state from repository evidence.
+2. Work only on `upgrade/stage-N`.
+3. Do not work directly on `main`.
+4. Read `CURRENT_STAGE.md`, the previous HANDOFF, relevant decisions, known issues, tests, and recent Git history.
+5. Preserve completed work and do not repeat verified investigation unnecessarily.
+6. Use Red → Green → Refactor for correctness changes.
+7. Do not claim completion without fresh verification evidence.
+8. Update `CURRENT_STAGE.md` and the current stage `HANDOFF.md`.
+9. Record meaningful architectural decisions in `DECISIONS.md`.
+10. Record out-of-scope issues in `KNOWN_ISSUES.md`.
+11. Run applicable tests/typecheck/lint/build before completion.
+12. Commit meaningful changes.
+13. Push the stage branch.
+14. Create or update a Pull Request.
+15. STOP.
+
+Never merge the PR automatically.
+Never begin the next stage automatically.
+The user performs external review and approves the merge.
+Repository state, Git history, tests, and project documentation are the source of truth.
+Conversational memory is not authoritative.
 
 ## Project workflow
 

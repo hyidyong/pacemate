@@ -100,7 +100,7 @@ export default async function RoadmapCoursePage({
       <section className="screen-hero roadmap-course-hero">
         <Link href="/roadmap" className="status-line">
           <ArrowLeft size={15} aria-hidden="true" />
-          시간표로 돌아가기
+          로드맵으로 돌아가기
         </Link>
         <h1>{course.name}</h1>
         <p>

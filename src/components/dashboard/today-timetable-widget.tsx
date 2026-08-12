@@ -35,7 +35,7 @@ export function TodayTimetableWidget({ myCourses }: { myCourses: StudentCourseRe
             <p className="text-[11px] text-gray-400">{today}요일</p>
           </div>
         </div>
-        <Link href="/mypage" className="shrink-0 text-sm font-semibold text-emerald-600 hover:text-emerald-700">
+        <Link href="/mypage" className="-my-2 inline-flex min-h-11 shrink-0 items-center px-2 text-sm font-semibold text-emerald-600 hover:text-emerald-700">
           마이페이지에서 관리
         </Link>
       </div>

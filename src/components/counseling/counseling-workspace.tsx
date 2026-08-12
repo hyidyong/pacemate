@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { BookOpen, CalendarCheck, Search, Send, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BookOpen, CalendarCheck, ChevronLeft, ChevronRight, Search, Send, UserRound } from "lucide-react";
 import {
   createCounselingRequest,
   reserveSuggestedCounseling,
@@ -76,8 +77,9 @@ function formatTime(value: string) {
   }).format(new Date(value));
 }
 
-function formatMonth(date: Date) {
-  return `${date.getUTCFullYear()}년 ${date.getUTCMonth() + 1}월`;
+function formatMonthKey(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return `${year}년 ${month}월`;
 }
 
 function formatSelectedDate(dateKey: string) {
@@ -85,12 +87,15 @@ function formatSelectedDate(dateKey: string) {
   return `${date.getUTCMonth() + 1}월 ${date.getUTCDate()}일 ${weekLabels[date.getUTCDay()]}요일`;
 }
 
-function buildCalendarDays(slots: CounselingSlot[]) {
-  if (!slots.length) {
+function buildCalendarDays(slots: CounselingSlot[], monthKey: string) {
+  if (!slots.length || !monthKey) {
     return [];
   }
 
-  const [year, month] = getCounselingLocalDateKey(slots[0].start).split("-").map(Number);
+  // The grid renders the requested month; the month list comes from the
+  // actual slot range so a booking horizon that straddles a month boundary
+  // stays reachable (Stage 4, audit A-3 / KI-004).
+  const [year, month] = monthKey.split("-").map(Number);
   const firstOfMonth = new Date(Date.UTC(year, month - 1, 1));
   const calendarStart = new Date(firstOfMonth);
   calendarStart.setUTCDate(firstOfMonth.getUTCDate() - firstOfMonth.getUTCDay());
@@ -124,6 +129,7 @@ export function CounselingWorkspace({
   professors,
   requests,
 }: CounselingWorkspaceProps) {
+  const router = useRouter();
   const [mode, setMode] = useState<"course" | "professor">("course");
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0]?.id ?? "");
   const [selectedProfessorId, setSelectedProfessorId] = useState(
@@ -154,33 +160,80 @@ export function CounselingWorkspace({
         .sort((a, b) => a.start.localeCompare(b.start)),
     [availableSlots, selectedProfessor],
   );
-  const calendarDays = useMemo(() => buildCalendarDays(sortedSlots), [sortedSlots]);
+  const monthsWithSlots = useMemo(() => {
+    const keys = new Set<string>();
+    for (const slot of sortedSlots) {
+      keys.add(toDateKey(slot.start).slice(0, 7));
+    }
+    return [...keys].sort();
+  }, [sortedSlots]);
   const firstAvailableDate = sortedSlots[0] ? toDateKey(sortedSlots[0].start) : "";
   const [selectedDate, setSelectedDate] = useState(firstAvailableDate);
+  const [viewMonthOverride, setViewMonthOverride] = useState<string | null>(null);
+  const viewMonth =
+    viewMonthOverride && monthsWithSlots.includes(viewMonthOverride)
+      ? viewMonthOverride
+      : selectedDate
+        ? selectedDate.slice(0, 7)
+        : monthsWithSlots[0] ?? "";
+  const viewMonthIndex = monthsWithSlots.indexOf(viewMonth);
+  const calendarDays = useMemo(
+    () => buildCalendarDays(sortedSlots, viewMonth),
+    [sortedSlots, viewMonth],
+  );
   const [selectedSlotId, setSelectedSlotId] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; ok: boolean; context: "booking" | "requests" } | null>(null);
   const [topic, setTopic] = useState("");
   const [isPending, startTransition] = useTransition();
   const selectedDaySlots = sortedSlots.filter((slot) => toDateKey(slot.start) === selectedDate);
   const selectedSlot = resolveSelectedCounselingSlot(sortedSlots, selectedDate, selectedSlotId);
-  const calendarMonth = calendarDays[14]?.date ?? new Date();
   const reservedSuggestedStarts = new Set(
     requests
       .filter((request) => request.status === "pending" || request.status === "approved")
       .map((request) => request.requested_start),
   );
 
-  function runAction(action: (formData: FormData) => Promise<{ message: string }>, formData: FormData) {
-    setMessage("");
+  function runAction(
+    action: (formData: FormData) => Promise<{ ok: boolean; message: string }>,
+    formData: FormData,
+    context: "booking" | "requests" = "booking",
+  ) {
+    setMessage(null);
     startTransition(async () => {
       const result = await action(formData);
-      setMessage(result.message);
+      setMessage({ text: result.message, ok: result.ok, context });
+      if (result.ok) {
+        // A successful booking consumes the slot; refresh so the slot list
+        // and the request panel reflect it without navigating away (KI-004).
+        setSelectedSlotId("");
+        router.refresh();
+      }
     });
+  }
+
+  function renderMessage(context: "booking" | "requests") {
+    if (!message || message.context !== context) {
+      return null;
+    }
+
+    return (
+      <p
+        className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+          message.ok
+            ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+            : "border-red-100 bg-red-50 text-red-600"
+        }`}
+        role={message.ok ? "status" : "alert"}
+      >
+        {message.text}
+      </p>
+    );
   }
 
   function selectDate(dateKey: string) {
     setSelectedDate(dateKey);
     setSelectedSlotId("");
+    setViewMonthOverride(null);
   }
 
   function chooseCourse(courseId: string) {
@@ -188,6 +241,7 @@ export function CounselingWorkspace({
     setSelectedCourseId(courseId);
     const course = courses.find((item) => item.id === courseId);
     const professor = course?.professors[0];
+    setViewMonthOverride(null);
     if (professor) {
       setSelectedProfessorId(professor.id);
       const firstSlot = availableSlots.find((slot) => slot.professorId === professor.id);
@@ -204,11 +258,12 @@ export function CounselingWorkspace({
     const firstSlot = availableSlots.find((slot) => slot.professorId === professorId);
     setSelectedDate(firstSlot ? toDateKey(firstSlot.start) : "");
     setSelectedSlotId("");
+    setViewMonthOverride(null);
   }
 
   function requestSelectedSlot() {
     if (!selectedSlot) {
-      setMessage("상담 시간을 먼저 선택해 주세요.");
+      setMessage({ text: "상담 시간을 먼저 선택해 주세요.", ok: false, context: "booking" });
       return;
     }
 
@@ -221,7 +276,7 @@ export function CounselingWorkspace({
   function reserveSuggestion(request: StudentCounselingRequest) {
     const formData = new FormData();
     formData.set("requestId", request.id);
-    runAction(reserveSuggestedCounseling, formData);
+    runAction(reserveSuggestedCounseling, formData, "requests");
   }
 
   return (
@@ -233,11 +288,23 @@ export function CounselingWorkspace({
         </div>
 
         <div className="counseling-mode-tabs" role="tablist" aria-label="상담 예약 방식">
-          <button data-active={mode === "course"} onClick={() => setMode("course")} type="button">
+          <button
+            aria-selected={mode === "course"}
+            data-active={mode === "course"}
+            onClick={() => setMode("course")}
+            role="tab"
+            type="button"
+          >
             <BookOpen size={16} aria-hidden="true" />
             과목별 예약
           </button>
-          <button data-active={mode === "professor"} onClick={() => setMode("professor")} type="button">
+          <button
+            aria-selected={mode === "professor"}
+            data-active={mode === "professor"}
+            onClick={() => setMode("professor")}
+            role="tab"
+            type="button"
+          >
             <Search size={16} aria-hidden="true" />
             교수별 검색
           </button>
@@ -280,6 +347,7 @@ export function CounselingWorkspace({
               <label className="community-search">
                 <Search size={17} aria-hidden="true" />
                 <input
+                  aria-label="교수 검색"
                   value={professorQuery}
                   onChange={(event) => setProfessorQuery(event.target.value)}
                   placeholder="교수 이름, 학부, 이메일 검색"
@@ -309,6 +377,25 @@ export function CounselingWorkspace({
               <span>2단계</span>
               <strong>상담 대상 확인</strong>
             </div>
+            {mode === "course" && courseProfessors.length > 1 ? (
+              <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="담당 교수 선택">
+                {courseProfessors.map((professor) => (
+                  <button
+                    aria-pressed={selectedProfessor?.id === professor.id}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                      selectedProfessor?.id === professor.id
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                    key={professor.id}
+                    onClick={() => chooseProfessor(professor.id)}
+                    type="button"
+                  >
+                    {professor.name} 교수
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {selectedProfessor ? (
               <article>
                 <span className="icon-box">
@@ -333,7 +420,27 @@ export function CounselingWorkspace({
           <div className="counseling-booking-layout">
             <div className="counseling-calendar" aria-label={`${selectedProfessor.name} 교수 상담 가능 날짜`}>
               <div className="counseling-calendar-heading">
-                <strong>{formatMonth(calendarMonth)}</strong>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    aria-label="이전 달"
+                    className="rounded-lg border border-gray-200 p-1.5 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-default disabled:opacity-35"
+                    disabled={viewMonthIndex <= 0}
+                    onClick={() => setViewMonthOverride(monthsWithSlots[viewMonthIndex - 1])}
+                    type="button"
+                  >
+                    <ChevronLeft size={16} aria-hidden="true" />
+                  </button>
+                  <strong>{formatMonthKey(viewMonth)}</strong>
+                  <button
+                    aria-label="다음 달"
+                    className="rounded-lg border border-gray-200 p-1.5 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-default disabled:opacity-35"
+                    disabled={viewMonthIndex < 0 || viewMonthIndex >= monthsWithSlots.length - 1}
+                    onClick={() => setViewMonthOverride(monthsWithSlots[viewMonthIndex + 1])}
+                    type="button"
+                  >
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
+                </div>
                 <span>{selectedProfessor.name} 교수님의 가능한 날짜만 선택할 수 있어요</span>
               </div>
               <div className="counseling-weekdays">
@@ -346,8 +453,11 @@ export function CounselingWorkspace({
                   const hasSlots = day.slots.length > 0;
                   const isSelected = day.dateKey === selectedDate;
 
+                  const [, labelMonth] = day.dateKey.split("-").map(Number);
+
                   return (
                     <button
+                      aria-label={`${labelMonth}월 ${day.dayNumber}일${hasSlots ? `, 예약 가능 ${day.slots.length}개` : ", 예약 불가"}`}
                       aria-pressed={isSelected}
                       className="counseling-date-button"
                       data-current-month={day.isCurrentMonth}
@@ -357,8 +467,8 @@ export function CounselingWorkspace({
                       onClick={() => selectDate(day.dateKey)}
                       type="button"
                     >
-                      <span>{day.dayNumber}</span>
-                      {hasSlots ? <small>{day.slots.length}개</small> : null}
+                      <span aria-hidden="true">{day.dayNumber}</span>
+                      {hasSlots ? <small aria-hidden="true">{day.slots.length}개</small> : null}
                     </button>
                   );
                 })}
@@ -406,9 +516,13 @@ export function CounselingWorkspace({
                 onClick={requestSelectedSlot}
                 type="button"
               >
-                선택한 시간으로 신청
+                {isPending ? "신청 중…" : "선택한 시간으로 신청"}
                 <Send size={16} aria-hidden="true" />
               </button>
+              {!selectedSlot && (!message || message.context !== "booking") ? (
+                <p className="text-xs text-gray-400">시간을 선택하면 신청 버튼이 활성화됩니다.</p>
+              ) : null}
+              {renderMessage("booking")}
             </div>
           </div>
         ) : (
@@ -427,6 +541,7 @@ export function CounselingWorkspace({
           <h2>내 상담 요청</h2>
           <span>{requests.length}건</span>
         </div>
+        {renderMessage("requests")}
         {requests.length ? (
           <div className="professor-request-list">
             {requests.map((request) => (
@@ -467,7 +582,6 @@ export function CounselingWorkspace({
         )}
       </section>
 
-      {message ? <p className="mypage-message">{message}</p> : null}
     </section>
   );
 }

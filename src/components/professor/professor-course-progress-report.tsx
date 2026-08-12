@@ -174,22 +174,33 @@ function AnonymousAggregateSection({
         </div>
       ) : null}
 
+      {/* Fabricated fallback numbers must be labeled on the tiles themselves,
+          not only on the chart panel below the fold (audit B-33). */}
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="rounded-2xl bg-rose-50 p-4 shadow-sm">
           <BarChart3 className="text-rose-500" size={20} aria-hidden="true" />
-          <p className="mt-3 text-xs font-semibold text-rose-700">가장 어려웠던 개념</p>
+          <p className="mt-3 text-xs font-semibold text-rose-700">
+            가장 어려웠던 개념
+            {!hasRealDifficulty ? <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-600 shadow-sm">DEMO</span> : null}
+          </p>
           <p className="mt-1 line-clamp-2 font-bold text-slate-900">{hardest?.concept ?? "응답 대기 중"}</p>
           <p className="mt-1 text-xs text-slate-500">어려움 {hardest?.high ?? 0}%</p>
         </article>
         <article className="rounded-2xl bg-blue-50 p-4 shadow-sm">
           <MessageSquareText className="text-blue-500" size={20} aria-hidden="true" />
-          <p className="mt-3 text-xs font-semibold text-blue-700">교수님 전달 질문 수</p>
+          <p className="mt-3 text-xs font-semibold text-blue-700">
+            교수님 전달 질문 수
+            {!hasRealFeedback ? <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-600 shadow-sm">DEMO</span> : null}
+          </p>
           <p className="mt-1 text-2xl font-bold text-slate-900">{professorMemos.length}건</p>
           <p className="mt-1 text-xs text-slate-500">개인 메모는 포함하지 않음</p>
         </article>
         <article className="rounded-2xl bg-emerald-50 p-4 shadow-sm">
           <UsersRound className="text-emerald-500" size={20} aria-hidden="true" />
-          <p className="mt-3 text-xs font-semibold text-emerald-700">난이도 응답</p>
+          <p className="mt-3 text-xs font-semibold text-emerald-700">
+            난이도 응답
+            {!hasRealFeedback ? <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-blue-600 shadow-sm">DEMO</span> : null}
+          </p>
           <p className="mt-1 text-2xl font-bold text-slate-900">{responseCount}건</p>
           <p className="mt-1 text-xs text-slate-500">주차별 응답 누적</p>
         </article>
@@ -332,9 +343,11 @@ export function ProfessorCourseProgressReportView({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
-                    담당 강의 {offeringIndex + 1}
+                    강의 {offeringIndex + 1}
                   </p>
-                  <h3 className="mt-1 text-lg font-bold text-slate-900">강의 {offeringIndex + 1}</h3>
+                  <h3 className="mt-1 text-lg font-bold text-slate-900">
+                    {offering.courseName ?? `강의 ${offeringIndex + 1}`}
+                  </h3>
                 </div>
                 <div className="rounded-xl bg-white px-3 py-2 text-right shadow-sm ring-1 ring-slate-200/70">
                   <p className="text-xs text-slate-500">전체 학생 수</p>

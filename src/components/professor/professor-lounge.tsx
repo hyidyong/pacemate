@@ -18,7 +18,7 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
   const [displayMode, setDisplayMode] = useState("anonymous");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filteredPosts = useMemo(
@@ -36,10 +36,10 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
     formData.set("title", title);
     formData.set("content", content);
 
-    setMessage("");
+    setMessage(null);
     startTransition(async () => {
       const result = await createProfessorLoungePost(formData);
-      setMessage(result.message);
+      setMessage({ text: result.message, ok: result.ok });
       if (result.ok) {
         setTitle("");
         setContent("");
@@ -55,24 +55,26 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
           <span>교수 전용</span>
         </div>
         <div className="professor-lounge-options">
-          <select value={category} onChange={(event) => setCategory(event.target.value)}>
+          <select aria-label="게시글 분류" value={category} onChange={(event) => setCategory(event.target.value)}>
             {loungeCategories.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>
             ))}
           </select>
-          <select value={displayMode} onChange={(event) => setDisplayMode(event.target.value)}>
+          <select aria-label="표시 방식" value={displayMode} onChange={(event) => setDisplayMode(event.target.value)}>
             <option value="anonymous">익명</option>
             <option value="realname">실명</option>
           </select>
         </div>
         <input
+          aria-label="제목"
           onChange={(event) => setTitle(event.target.value)}
           placeholder="제목"
           value={title}
         />
         <textarea
+          aria-label="내용"
           onChange={(event) => setContent(event.target.value)}
           placeholder="교수님들끼리 공유할 수업 운영, 상담, 행정 팁을 남겨보세요."
           rows={7}
@@ -87,10 +89,21 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
           {isPending ? "등록 중" : "등록"}
           <Send size={15} aria-hidden="true" />
         </button>
-        {message ? <p className="support-result">{message}</p> : null}
+        {message ? (
+          <p
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+              message.ok
+                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                : "border-red-100 bg-red-50 text-red-600"
+            }`}
+            role={message.ok ? "status" : "alert"}
+          >
+            {message.text}
+          </p>
+        ) : null}
       </aside>
 
-      <main className="professor-lounge-feed">
+      <section className="professor-lounge-feed" aria-label="라운지 게시글">
         <div className="professor-lounge-filter">
           <button
             data-active={selectedCategory === "all"}
@@ -131,7 +144,7 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
             </div>
           )}
         </div>
-      </main>
+      </section>
     </section>
   );
 }

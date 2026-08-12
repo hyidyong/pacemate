@@ -224,7 +224,7 @@ export function ProfessorWorkspace({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [currentCounselingRequests, setCurrentCounselingRequests] = useState<ProfessorCounselingRequest[]>(counselingRequests);
   const [currentCalendarRequests, setCurrentCalendarRequests] = useState<ProfessorCounselingRequest[]>(calendarRequests);
   const [currentNotificationCounts, setCurrentNotificationCounts] = useState(notificationCounts);
@@ -291,15 +291,32 @@ export function ProfessorWorkspace({
     window.dispatchEvent(new CustomEvent<boolean>("professor-mobile-menu-state", { detail: sidebarOpen }));
   }, [sidebarOpen]);
 
-  // Toast: shows message at top, auto-dismiss after 3s
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
+  // Mobile drawer dialog mechanics: Escape closes, background does not scroll.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSidebarOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
+
+  // Toast: shows message at top, auto-dismiss (failures linger longer)
+  function showToast(msg: string, ok: boolean = true) {
+    setToast({ text: msg, ok });
+    setTimeout(() => setToast(null), ok ? 3000 : 6000);
   }
 
-  // Shared action runner
+  // Shared action runner — afterSuccess (e.g. removing a card from the
+  // pending queue) must only run when the server action actually succeeded.
   function runAction(
-    action: (formData: FormData) => Promise<{ message: string }>,
+    action: (formData: FormData) => Promise<{ ok: boolean; message: string }>,
     formData: FormData,
     afterSuccess?: () => void,
   ) {
@@ -307,8 +324,10 @@ export function ProfessorWorkspace({
     startTransition(async () => {
       const result = await action(formData);
       setMessage(result.message);
-      showToast(result.message);
-      afterSuccess?.();
+      showToast(result.message, result.ok);
+      if (result.ok) {
+        afterSuccess?.();
+      }
     });
   }
 
@@ -581,7 +600,7 @@ export function ProfessorWorkspace({
         </div>
         
         {/* Navigation Menus */}
-        <nav className="flex-1 lg:overflow-y-auto px-4 pb-4 lg:pb-6 flex lg:flex-col gap-3 lg:gap-2 overflow-x-auto scrollbar-hide border-b lg:border-none border-slate-100">
+        <nav className="flex-1 lg:overflow-y-auto px-4 pb-4 lg:pb-6 flex lg:flex-col gap-3 lg:gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b lg:border-none border-slate-100">
           {professorTabs.map((tab) => (
             <div key={tab.id} className="lg:mb-4 flex-shrink-0 flex lg:block items-center gap-2">
               <div className="hidden lg:block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-2">
@@ -639,8 +658,10 @@ export function ProfessorWorkspace({
         {sidebarOpen ? (
           <aside
             aria-label="교수 메뉴"
+            aria-modal="true"
             className="fixed inset-0 z-40 flex h-[100dvh] max-h-[100dvh] flex-col overflow-y-auto overscroll-contain bg-white px-5 pb-24 pt-24 lg:hidden"
             data-testid="professor-mobile-drawer"
+            role="dialog"
             style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}
           >
             <div className="mx-auto w-full max-w-lg space-y-5 pb-8">
@@ -706,9 +727,18 @@ export function ProfessorWorkspace({
 
       {/* Toast */}
       {toast ? (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-800 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 transform translate-y-0 opacity-100">
-          <Check size={18} className="text-emerald-400" />
-          <span className="text-sm font-medium tracking-wide">{toast}</span>
+        <div
+          role="status"
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 transform translate-y-0 opacity-100 ${
+            toast.ok ? "bg-slate-800 text-white" : "bg-red-700 text-white"
+          }`}
+        >
+          {toast.ok ? (
+            <Check size={18} aria-hidden="true" className="text-emerald-400" />
+          ) : (
+            <span aria-hidden="true" className="text-base font-bold text-red-200">!</span>
+          )}
+          <span className="text-sm font-medium tracking-wide">{toast.text}</span>
         </div>
       ) : null}
     </div>
@@ -889,7 +919,7 @@ function ScheduleManualSub({
   professor: { id: string };
   availability: ProfessorAvailability[];
   isPending: boolean;
-  runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
+  runAction: (action: (fd: FormData) => Promise<{ ok: boolean; message: string }>, fd: FormData, cb?: () => void) => void;
   showToast: (msg: string) => void;
 }) {
   const [dayOfWeek, setDayOfWeek] = useState("2");
@@ -978,7 +1008,7 @@ function RoadmapEditSub({
   professor: { id: string };
   courses: ProfessorCourse[];
   isPending: boolean;
-  runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
+  runAction: (action: (fd: FormData) => Promise<{ ok: boolean; message: string }>, fd: FormData, cb?: () => void) => void;
   showToast: (msg: string) => void;
 }) {
   const [directCourse, setDirectCourse] = useState(courseValue(courses[0]));
@@ -1351,7 +1381,7 @@ function ManualFaqSub({
   courses: ProfessorCourse[];
   faqs: ProfessorFaq[];
   isPending: boolean;
-  runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
+  runAction: (action: (fd: FormData) => Promise<{ ok: boolean; message: string }>, fd: FormData, cb?: () => void) => void;
   showToast: (msg: string) => void;
 }) {
   const [faqCourseId, setFaqCourseId] = useState(courses[0]?.id ?? "");
@@ -1442,8 +1472,8 @@ function PendingCounselingSub({
   counselingRequests: ProfessorCounselingRequest[];
   highlightedRequestId?: string;
   isPending: boolean;
-  runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
-  showToast: (msg: string) => void;
+  runAction: (action: (fd: FormData) => Promise<{ ok: boolean; message: string }>, fd: FormData, cb?: () => void) => void;
+  showToast: (msg: string, ok?: boolean) => void;
   onRequestStatusChange: (updatedRequest: ProfessorCounselingRequest) => void;
 }) {
   const pendingRequests = counselingRequests.filter((r) => r.status === "pending");
@@ -1479,30 +1509,38 @@ function PendingCounselingSub({
       setLocalPending((prev) => prev.filter((r) => r.id !== request.id));
       onRequestStatusChange({ ...request, status: "approved" });
     });
-    showToast("일정에 추가 했습니다");
   }
 
   function handleReject(request: ProfessorCounselingRequest) {
-    if (!rejectNote) {
-      showToast("거절 사유를 입력해 주세요.");
+    // The server rejects a reject without BOTH a note and a suggested time
+    // (professor.actions.ts) — surface that before the round trip instead of
+    // silently dropping an unparseable time (audit B-2).
+    if (!rejectNote.trim()) {
+      showToast("거절 사유를 입력해 주세요.", false);
       return;
     }
+    // The datetime-local input yields a KST wall-clock time; parse it as such
+    // no matter what timezone the browser runs in.
+    const suggestedDate = parsePacemateWallClock(suggestedTime);
+    if (!suggestedDate) {
+      showToast("추천 시간을 선택해 주세요.", false);
+      return;
+    }
+
     const formData = new FormData();
     formData.set("requestId", request.id);
     formData.set("status", "rejected");
     formData.set("professorNote", rejectNote);
-
-    if (suggestedTime) {
-      // The professor types a KST wall-clock time; parse it as such no matter
-      // what timezone the browser runs in.
-      const suggestedDate = parsePacemateWallClock(suggestedTime);
-      if (suggestedDate) {
-        formData.set("suggestedStart", suggestedDate.toISOString());
-        const endDate = new Date(suggestedDate);
-        endDate.setMinutes(endDate.getMinutes() + 30);
-        formData.set("suggestedEnd", endDate.toISOString());
-      }
-    }
+    formData.set("suggestedStart", suggestedDate.toISOString());
+    // Suggest a window of the same length the student originally booked —
+    // the hard-coded 30 minutes ignored the professor's slot size (KI-015).
+    const requestedDurationMs =
+      new Date(request.requested_end).getTime() - new Date(request.requested_start).getTime();
+    const durationMs =
+      Number.isFinite(requestedDurationMs) && requestedDurationMs > 0
+        ? requestedDurationMs
+        : 30 * 60 * 1000;
+    formData.set("suggestedEnd", new Date(suggestedDate.getTime() + durationMs).toISOString());
 
     runAction(updateCounselingStatus, formData, () => {
       setLocalPending((prev) => prev.filter((r) => r.id !== request.id));
@@ -1549,25 +1587,27 @@ function PendingCounselingSub({
 
               {rejectingId === request.id ? (
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100 flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-sm font-semibold text-emerald-950">거절 사유</span>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-semibold text-emerald-950">거절 사유 (필수)</span>
                     <textarea
                       rows={2}
+                      required
                       value={rejectNote}
                       onChange={(e) => setRejectNote(e.target.value)}
                       placeholder="거절 사유를 입력하세요"
                       className="w-full border border-gray-200 rounded-md p-2 text-sm text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-sm font-semibold text-emerald-950">추천 시간 제안 (선택)</span>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-semibold text-emerald-950">추천 시간 제안 (필수)</span>
                     <input
-                      placeholder="예: 2026-07-14 11:00"
+                      type="datetime-local"
+                      required
                       value={suggestedTime}
                       onChange={(e) => setSuggestedTime(e.target.value)}
                       className="w-full border border-gray-200 rounded-md p-2 text-sm text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
-                  </div>
+                  </label>
                   <div className="flex justify-end gap-2 mt-2">
                     <button
                       className="px-4 py-2 text-sm font-medium rounded-md border border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
@@ -1582,7 +1622,7 @@ function PendingCounselingSub({
                     </button>
                     <button
                       className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-800 hover:bg-emerald-900 shadow-sm disabled:opacity-50"
-                      disabled={isPending}
+                      disabled={isPending || !rejectNote.trim() || !suggestedTime}
                       onClick={() => handleReject(request)}
                       type="button"
                     >
@@ -1644,7 +1684,7 @@ function CounselingLogSub({
             <div key={entry.id} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
               <div className="flex justify-between items-start mb-2">
                 <strong className="text-emerald-950 font-bold">{entry.topic}</strong>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${entry.status === "approved" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${entry.status === "approved" ? "bg-emerald-100 text-emerald-800" : entry.status === "cancelled" ? "bg-slate-100 text-slate-600" : "bg-red-100 text-red-800"}`}>
                   {counselingStatusLabels[entry.status]}
                 </span>
               </div>

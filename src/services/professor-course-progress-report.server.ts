@@ -92,6 +92,22 @@ function parseOfferingId(value: unknown): string | null {
   return normalizeUuid(value.id);
 }
 
+// The joined course row labels the report card (the view rendered "강의 1"
+// with no course identity — Stage 4, audit B-32). Tolerant of object/array
+// join shapes; absent name degrades to null, never to a failure.
+function parseOfferingCourseName(value: unknown): string | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const course = Array.isArray(value.course) ? value.course[0] : value.course;
+  if (!isRecord(course) || typeof course.name !== "string" || course.name.length === 0) {
+    return null;
+  }
+
+  return course.name;
+}
+
 function parseProgressRow(value: unknown): ParseProgressRowResult {
   if (!isRecord(value)) {
     return { ok: false, code: "invalid_database_row" };
@@ -181,7 +197,7 @@ export async function getProfessorCourseProgressReport(): Promise<ProfessorCours
 
   const { data: offeringData, error: offeringError } = await supabase
     .from("course_offerings")
-    .select("id")
+    .select("id, course:courses(name)")
     .order("id", { ascending: true });
 
   if (offeringError) {
@@ -200,6 +216,7 @@ export async function getProfessorCourseProgressReport(): Promise<ProfessorCours
     offeringIds.push(offeringId);
     reports.set(offeringId, {
       offeringId,
+      courseName: parseOfferingCourseName(rawOffering),
       totalStudentCount: 0,
       statusCounts: createStatusCounts(),
       students: [],

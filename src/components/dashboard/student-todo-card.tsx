@@ -239,7 +239,7 @@ export function StudentTodoCard({ items }: { items: StudentTodoItem[] }) {
             <h3 className="font-bold text-gray-800 text-[15px]">오늘의 To-do</h3>
           </div>
         </div>
-        <Link href="/mypage#todo" className="shrink-0 text-right text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
+        <Link href="/mypage#todo" className="-my-2 inline-flex min-h-11 shrink-0 items-center px-2 text-right text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
           마이페이지에서 관리
         </Link>
       </div>

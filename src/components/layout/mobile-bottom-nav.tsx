@@ -16,10 +16,10 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 h-[64px] bg-white/95 shadow-[0_-14px_34px_rgba(23,32,26,0.09)] backdrop-blur-md"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-14px_34px_rgba(23,32,26,0.09)] backdrop-blur-md"
       aria-label="Mobile primary navigation"
     >
-      <div className="grid grid-cols-4 h-full">
+      <div className="grid grid-cols-4 h-[64px]">
         {tabs.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
           return (

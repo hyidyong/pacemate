@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Send, Star } from "lucide-react";
 import type { CourseSummary } from "@/services/course.service";
 import { createCourseReview } from "@/services/reviews.actions";
@@ -17,6 +18,7 @@ export function ReviewsBoard({
   initialCourseId?: string;
   reviews: CourseReview[];
 }) {
+  const router = useRouter();
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
   const [difficulty, setDifficulty] = useState("3");
   const [workload, setWorkload] = useState("3");
@@ -24,7 +26,7 @@ export function ReviewsBoard({
   const [teamProject, setTeamProject] = useState("false");
   const [content, setContent] = useState("");
   const [filterCourseId, setFilterCourseId] = useState(initialCourseId ?? "all");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filteredReviews = useMemo(
@@ -44,12 +46,15 @@ export function ReviewsBoard({
     formData.set("teamProject", teamProject);
     formData.set("content", content);
 
-    setMessage("");
+    setMessage(null);
     startTransition(async () => {
       const result = await createCourseReview(formData);
-      setMessage(result.message);
+      setMessage({ text: result.message, ok: result.ok });
       if (result.ok) {
         setContent("");
+        // The list is server data; without a refresh the student was told
+        // 등록했습니다 while the feed stayed unchanged (audit A-14).
+        router.refresh();
       }
     });
   }
@@ -130,12 +135,23 @@ export function ReviewsBoard({
           {isPending ? "등록 중" : "후기 등록"}
           <Send size={15} aria-hidden="true" />
         </button>
-        {message ? <p className="support-result">{message}</p> : null}
+        {message ? (
+          <p
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+              message.ok
+                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                : "border-red-100 bg-red-50 text-red-600"
+            }`}
+            role={message.ok ? "status" : "alert"}
+          >
+            {message.text}
+          </p>
+        ) : null}
       </aside>
 
-      <main className="reviews-feed">
+      <section className="reviews-feed" aria-label="후기 목록">
         <div className="reviews-filter">
-          <select value={filterCourseId} onChange={(event) => setFilterCourseId(event.target.value)}>
+          <select aria-label="과목별 후기 필터" value={filterCourseId} onChange={(event) => setFilterCourseId(event.target.value)}>
             <option value="all">전체 과목</option>
             {courses.map((course) => (
               <option key={course.id} value={course.id}>
@@ -167,7 +183,7 @@ export function ReviewsBoard({
             </div>
           )}
         </div>
-      </main>
+      </section>
     </section>
   );
 }

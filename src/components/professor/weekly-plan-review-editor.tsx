@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Check, Pencil, X } from "lucide-react";
 import { approveWeeklyPlan } from "@/services/weekly-plan-approval.actions";
 import type { WeeklyPlanReview, WeeklyPlanWeek } from "@/types/weekly-roadmap";
@@ -117,9 +118,37 @@ function WeekEditor({
   );
 }
 
+function ApproveSubmitButton({ approved, confirming }: { approved: boolean; confirming: boolean }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      className="w-full rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-bold text-white transition-shadow hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:bg-emerald-200 sm:w-auto"
+      disabled={approved || pending}
+      type="submit"
+    >
+      {approved
+        ? "승인 완료"
+        : pending
+          ? "승인 처리 중…"
+          : confirming
+            ? "한 번 더 누르면 학생에게 공개됩니다"
+            : "주간 계획 최종 승인"}
+    </button>
+  );
+}
+
 function DraftReviewCard({ draft }: { draft: WeeklyPlanReview }) {
   const [weeks, setWeeks] = useState(() => draft.weeks.map(toEditableWeek));
   const [editingWeek, setEditingWeek] = useState<number | null>(null);
+  const [confirmingApproval, setConfirmingApproval] = useState(false);
+  const originalWeeks = draft.weeks.map(toEditableWeek);
+  const editedWeekNumbers = weeks
+    .filter((week) => {
+      const original = originalWeeks.find((item) => item.weekNumber === week.weekNumber);
+      return original && (original.title !== week.title || original.content !== week.content);
+    })
+    .map((week) => week.weekNumber);
 
   function updateWeek(weekNumber: number, field: "title" | "content", value: string) {
     setWeeks((current) => current.map((week) => week.weekNumber === weekNumber ? { ...week, [field]: value } : week));
@@ -127,6 +156,16 @@ function DraftReviewCard({ draft }: { draft: WeeklyPlanReview }) {
 
   function saveWeek(weekNumber: number) {
     setWeeks((current) => current.map((week) => week.weekNumber === weekNumber ? { ...week, topics: [week.content] } : week));
+    setEditingWeek(null);
+  }
+
+  // Cancel restores ONLY the week being edited — resetting the whole array
+  // silently destroyed every other week's edits (Stage 4, audit B-35).
+  function cancelWeek(weekNumber: number) {
+    const original = originalWeeks.find((item) => item.weekNumber === weekNumber);
+    if (original) {
+      setWeeks((current) => current.map((week) => (week.weekNumber === weekNumber ? original : week)));
+    }
     setEditingWeek(null);
   }
 
@@ -152,27 +191,34 @@ function DraftReviewCard({ draft }: { draft: WeeklyPlanReview }) {
             week={week}
             isEditing={editingWeek === week.weekNumber}
             onStart={() => setEditingWeek(week.weekNumber)}
-            onCancel={() => {
-              setWeeks(draft.weeks.map(toEditableWeek));
-              setEditingWeek(null);
-            }}
+            onCancel={() => cancelWeek(week.weekNumber)}
             onSave={() => saveWeek(week.weekNumber)}
             onChange={(field, value) => updateWeek(week.weekNumber, field, value)}
           />
         ))}
       </ol>
 
-      <form action={approveWeeklyPlan} className="mt-8 flex justify-end">
+      <form
+        action={approveWeeklyPlan}
+        className="mt-8 flex flex-wrap items-center justify-end gap-3"
+        onSubmit={(event) => {
+          // Publishing 1~15주차 to students is irreversible from here — the
+          // first click arms, the second submits (Stage 4, audit B-36).
+          if (!confirmingApproval) {
+            event.preventDefault();
+            setConfirmingApproval(true);
+          }
+        }}
+      >
+        {editedWeekNumbers.length ? (
+          <p className="text-xs font-semibold text-amber-700">
+            수정된 주차: {editedWeekNumbers.join(", ")}주차 — 승인 시 함께 반영됩니다.
+          </p>
+        ) : null}
         <input name="offeringId" type="hidden" value={draft.offeringId} />
         <input name="courseId" type="hidden" value={draft.courseId} />
         <input name="editedWeeks" type="hidden" value={JSON.stringify(weeks)} readOnly />
-        <button
-          className="w-full rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-bold text-white transition-shadow hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:bg-emerald-200 sm:w-auto"
-          disabled={draft.approvalStatus === "approved"}
-          type="submit"
-        >
-          {draft.approvalStatus === "approved" ? "승인 완료" : "주간 계획 최종 승인"}
-        </button>
+        <ApproveSubmitButton approved={draft.approvalStatus === "approved"} confirming={confirmingApproval} />
       </form>
     </article>
   );

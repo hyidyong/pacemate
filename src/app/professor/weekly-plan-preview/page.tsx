@@ -29,7 +29,7 @@ export default async function WeeklyPlanPreviewPage({
 
   return (
     <AppShell>
-      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
         <section className="mb-8">
           <p className="text-sm font-semibold text-blue-600">교수 검토 공간</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">주간 계획 초안 검토</h1>
@@ -47,7 +47,7 @@ export default async function WeeklyPlanPreviewPage({
         ) : (
           <WeeklyPlanReviewEditor drafts={drafts} approvalState={params?.approval} />
         )}
-      </main>
+      </div>
     </AppShell>
   );
 }

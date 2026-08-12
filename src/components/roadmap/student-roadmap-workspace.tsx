@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   BookOpenCheck,
@@ -169,15 +170,30 @@ export function StudentRoadmapWorkspace({
             ))}
           </select>
         </div>
-        <button
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
-          disabled={isPending || !selectedOfferingId}
-          onClick={generateRoadmap}
-          type="button"
-        >
-          {isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
-          {isPending ? "로드맵 생성 중" : "로드맵 생성 / 업데이트"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedOfferingId ? (
+            (() => {
+              const selectedOffering = offerings.find((item) => item.offeringId === selectedOfferingId);
+              return selectedOffering ? (
+                <Link
+                  className="inline-flex items-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                  href={`/roadmap/${selectedOffering.courseId}`}
+                >
+                  과목 상세 가이드 보기
+                </Link>
+              ) : null;
+            })()
+          ) : null}
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-shadow hover:shadow-md disabled:opacity-60"
+            disabled={isPending || !selectedOfferingId}
+            onClick={generateRoadmap}
+            type="button"
+          >
+            {isPending ? <LoaderCircle className="animate-spin" size={16} /> : <Sparkles size={16} />}
+            {isPending ? "로드맵 생성 중" : "로드맵 생성 / 업데이트"}
+          </button>
+        </div>
       </div>
 
       {message ? <p className="mt-3 text-sm text-slate-600" role="status">{message}</p> : null}
@@ -390,7 +406,7 @@ export function StudentRoadmapWorkspace({
             </article>
           ) : (
             <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
-              강의계획서의 주차별 정보를 불러오지 못했습니다. 과목 정보를 확인한 뒤 다시 시도해 주세요.
+              이 주차의 로드맵이 아직 없습니다. 상단의 로드맵 생성 버튼으로 만들 수 있어요.
             </div>
           )}
         </>

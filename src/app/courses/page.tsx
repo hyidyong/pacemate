@@ -62,9 +62,9 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
   return (
     <AppShell showAiTutorFab={false}>
       <section className="screen-hero">
-        <Link href="/" className="status-line">
+        <Link href="/dashboard" className="status-line">
           <ArrowLeft size={15} aria-hidden="true" />
-          1단계 화면 뼈대
+          과목 정보
         </Link>
         <h1>과목 정보</h1>
         <p>
@@ -77,9 +77,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
               후기 화면 보기
               <ArrowRight size={16} aria-hidden="true" />
             </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/">전체 화면 지도</Link>
           </Button>
         </div>
       </section>
@@ -156,7 +153,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
           </div>
         ) : (
           <div className="course-empty-state">
-            <p>검색 결과가 없어요.</p>
+            <p>{query ? "검색 결과가 없어요." : "아직 등록된 과목이 없습니다."}</p>
           </div>
         )}
       </section>
