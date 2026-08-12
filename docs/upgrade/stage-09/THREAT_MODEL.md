@@ -154,3 +154,29 @@ auditable result            public.security_events for privileged actions
 ```
 
 Frontend visibility is never a boundary. Neither is a page guard.
+
+---
+
+## Codex security review round (2026-08-14) — NOT SAFE TO MERGE verdict addressed
+
+Nine findings. **All nine were verified against the branch before any change and
+all nine were confirmed** — none needed push-back. Four were materially worse
+than reported:
+
+| # | Finding | Verdict |
+|---|---|---|
+| F1 | Probe cleanup can leak fixtures and Auth users | **CONFIRMED.** 6 of 6 injected provisioning failures leaked (2–5 orphaned rows each). Also found: residue verification never affected the exit code, and a live run had already left 4 posts and 2 course_reviews behind while reporting clean |
+| F2 | Foreign-course enrolment is a cross-tenant read primitive | **CONFIRMED and WIDER.** Not one table but five: student_courses, student_mission_progress, study_roadmaps, study_tasks and posts all accepted another tenant's UUID over direct PostgREST |
+| F3 | Direct authenticated UPDATE bypasses Stage 5 counseling protections | **CONFIRMED and WORSE.** Beyond the status transition, a professor could reassign the request to ANOTHER TENANT'S student |
+| F4 | Roadmap workflow is globally cross-tenant | **CONFIRMED.** The table had no tenant column at all; creation, reads, approval and the overlay were all global. The predicted professor regression was real too |
+| F5 | Historically exposed demo credentials unchanged | **CONFIRMED.** Four accounts including professor and admin. **Rotated** — not BLOCKED |
+| F6 | Support category and payload insufficiently bounded | **CONFIRMED** |
+| F7 | service_role ACLs not guaranteed by migrations | **CONFIRMED.** The privileges existed only as Supabase defaults |
+| F8 | Audit attribution can disappear; SSO write is fire-and-forget | **CONFIRMED, and fixing it exposed a second defect I introduced** — the append-only trigger blocked the SET NULL cascade, making profile deletion fail outright |
+| F9 | schema.sql represents pre-Stage-9 state | **CONFIRMED** |
+
+Two probe defects had to be fixed before F2 could even be measured honestly:
+`rawFetch` dropped per-call headers so a successful INSERT read as "denied", and
+requesting a representation made PostgREST re-check the new row against the
+SELECT policy — producing 403s that looked like protection but vanish when an
+attacker omits the header.

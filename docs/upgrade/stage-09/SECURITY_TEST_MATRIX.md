@@ -170,3 +170,114 @@ Test row removed; table left at 0 rows.
   and closed in code; they were not driven as live HTTP POSTs with forged
   `Next-Action` headers. The database-level backstop for each is covered above.
 - Load, stress and soak remain out of scope and unrun (KI-021).
+
+---
+
+## 8. Codex review round (2026-08-14) — added coverage and corrected results
+
+### Probe correctness fixes that changed earlier numbers
+
+Two defects in the harness meant some earlier "PASS" results were not evidence:
+
+1. `rawFetch` did `{ ...init, headers }`, dropping per-call headers, so
+   `Prefer: return=representation` never reached PostgREST. A successful INSERT
+   returned 201 with an empty body and read as "denied". Write outcomes are now
+   confirmed by a **service-role read-back**.
+2. Requesting a representation makes PostgREST re-check the new row against the
+   SELECT policy and roll back if invisible — producing 403s that looked like
+   protection but disappear when an attacker omits the header. Write probes now
+   post **without** it, the weakest attacker path.
+
+Only the newly added write checks were affected. Every earlier check verified
+outcomes by service-role read-back already, so the pre-existing evidence stands.
+
+### Probe cleanup — fault injection (Codex F1)
+
+`scripts/security/lib/probe-cleanup.test.mjs`, 27 tests, offline against
+in-memory fakes.
+
+| Property | Before | After |
+|---|---|---|
+| Failure at any of 11 provisioning boundaries leaves zero rows | **LEAKED 6/6 measured** | PASS |
+| Failure creating the Auth user leaves zero rows | LEAKED | PASS |
+| Failure during the probe itself still cleans up | n/a | PASS |
+| Cleanup runs when the provisioner never returns | **impossible by design** | PASS |
+| A DB deletion failure is reported, not swallowed | swallowed | PASS |
+| An Auth deletion failure is reported, not swallowed | swallowed | PASS |
+| Unverifiable residue fails the run | reported to stdout only | PASS |
+| Every ledger delete is id-scoped | — | PASS |
+| Cleanup is strict reverse creation order | hand-maintained | PASS |
+| The orphan sweep recovers from a killed run | did not exist | PASS |
+
+**NOT claimed:** survival of SIGKILL, OOM kill or power loss. `finally` does not
+run in those cases. The recovery mechanism is the operator-run
+`rls-probe.mjs --sweep`, which is tested and reports its own failures.
+
+### Cross-tenant write primitives (Codex F2)
+
+Signed in as a student of probe tenant A, writing tenant B's UUIDs directly:
+
+| Target | Before | After |
+|---|---|---|
+| `student_courses` foreign course | **201, row created** | 403, 0 rows |
+| `student_mission_progress` foreign course | **201, row created** | 403, 0 rows |
+| `study_roadmaps` foreign course | **201, row created** | 403, 0 rows |
+| `study_tasks` foreign course (own roadmap) | **201, row created** | 403, 0 rows |
+| `posts` foreign tenant | **201, row created** | 403, 0 rows |
+| `course_reviews` foreign course | 403 (already correct) | 403 |
+| Same-tenant equivalents (4) | 201 | **201 — still allowed** |
+
+### Counseling direct writes (Codex F3)
+
+As a signed-in professor of tenant A, PATCHing their own row:
+
+| Field | Before | After |
+|---|---|---|
+| `status` pending → approved | **204, applied** | 403, unchanged |
+| `student_id` → tenant B's student | **204, applied** | 403, unchanged |
+| `suggested_start` | **204, applied** | 403, unchanged |
+| `requested_start` | 400 (a constraint, not a policy) | 403 |
+| Professor reads own caseload | PASS | **PASS — preserved** |
+
+### Roadmap tenant isolation (Codex F4)
+
+| Check | Before | After |
+|---|---|---|
+| Tenant A staff reads tenant B's revision | (no tenant column existed) | 0 rows |
+| Tenant A staff approves tenant B's revision with the exact UUID | (role-only check) | 403, status unchanged |
+| Tenant A staff reads their own tenant's revision | — | **1 row — preserved** |
+
+### Durable audit trail (Codex F7 + F8)
+
+`scripts/security/audit-trail-probe.mjs`, 11 checks, all PASS: service_role can
+append and read; anon cannot read, append, update or delete; an audit record
+cannot be UPDATED even by service_role; the attribution snapshot populates
+automatically; a profile carrying audit history **can still be deleted**; and its
+attribution survives that deletion. Probe rows removed, residue proven clean.
+
+### Support abuse boundary (Codex F6)
+
+`src/services/support-boundary.test.mjs`, 9 tests: normal submission, all six
+allowlisted categories, unknown category rejected, oversized category rejected,
+oversized body rejected, oversized title rejected, an anonymous caller controls
+no routing field, a signed-in submission is tenant-stamped from the session, and
+the central chokepoint bounds what is persisted.
+
+### Schema drift (Codex F9)
+
+`supabase/security-snapshot.json`, generated from the live database, with 11
+offline drift-guard tests and a `--check` mode that fails on any difference.
+
+### Totals after the review round
+
+| Suite | Result |
+|---|---|
+| Live direct Data API probe | **85 checks, 0 failed** |
+| Live durable audit probe | **11 checks, 0 failed** |
+| Probe cleanup fault injection | 27/27 |
+| Probe guard | 9/9 |
+| Migration guards | 27/27 |
+| Security snapshot drift guards | 11/11 |
+| Full app suite | 348 tests, 345 pass, **3 fail — the pre-existing KI-002 trio by name** |
+| Typecheck / lint / build | clean / baseline / PASS, budgets met, shared JS 102 kB |
+| Credential scan of `.next/static/**` | 0 hits |

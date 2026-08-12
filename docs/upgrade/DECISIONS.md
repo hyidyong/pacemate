@@ -1,5 +1,94 @@
 # Architectural Decisions
 
+## D-027 — A test harness that mutates a live project owns a cleanup ledger, and cannot pass without proving it cleaned up
+
+Status: Accepted (Stage 9, Codex review round, 2026-08-14)
+
+Context: the Stage 9 probe built its fixture list locally and only handed it to
+the caller on success, so any mid-provision failure orphaned everything already
+created — including Auth users. Measured with fault injection: 6 of 6 injected
+failures leaked. Cleanup errors were swallowed, residue was printed but never
+affected the exit code, and no network call had a timeout.
+
+Decision: the ledger belongs to the CALLER, not the provisioner. Every resource
+is recorded the instant it exists and before the next operation that can fail;
+the runner's top-level `try` encloses provisioning itself; cleanup is strict LIFO
+(dependency-safe by construction, because children are created after parents);
+nothing is swallowed; and the run exits non-zero on any cleanup failure, any
+residue, or any residue check that could not be PERFORMED. All network calls are
+bounded.
+
+Reason: "we clean up in a finally" is not a safety property when the finally
+cannot see what was created. A probe that cannot prove it cleaned up is not safe
+to point at a live project, whatever its security checks said.
+
+Consequences: fault injection at every provisioning boundary is part of the
+suite (27 tests, offline). NO CRASH SAFETY IS CLAIMED — `finally` does not run on
+SIGKILL; the independent recovery mechanism is the operator-run
+`rls-probe.mjs --sweep`. Any new table the probe can write to must also be added
+to the residue list, which a live leak (4 posts, 2 course_reviews) proved is not
+optional.
+
+## D-028 — Ownership is not authorization for a row that references a tenant resource
+
+Status: Accepted (Stage 9, Codex review round, 2026-08-14)
+
+Context: Stage 9 scoped reads by tenant and writes by ownership. "Is this row
+mine?" is perfectly true of an enrolment in another university's course, and
+every feature that authorizes on "is enrolled" then treats that row as
+permission to read the other tenant's material. Five tables were live-exploitable
+over direct PostgREST: student_courses, student_mission_progress, study_roadmaps,
+study_tasks and posts.
+
+Decision: any caller-owned row that references a tenant resource must carry a
+tenant term in WITH CHECK — `app_private.course_in_current_tenant()` /
+`offering_in_current_tenant()`, SECURITY DEFINER with `search_path = ''`. The
+same rule applies to parent references (a study task must hang off a roadmap the
+caller owns). Server-side validation is an additional layer, never the only one,
+because PostgREST bypasses it.
+
+Reason: the app-layer gate added in the same stage was bypassed by a single curl.
+
+Consequences: `supabase/security-snapshot.test.mjs` fails the build if an owning
+policy loses its tenant term. Probes must post WITHOUT
+`Prefer: return=representation` — asking for a representation makes PostgREST
+re-check the row against the SELECT policy and roll back, which manufactures
+403s that vanish when a real attacker omits the header.
+
+## D-029 — Mutations with a workflow are server-only; audit records reference nothing that can damage them
+
+Status: Accepted (Stage 9, Codex review round, 2026-08-14)
+
+Context (a): Stage 5 built a transition matrix, a compare-and-set and a
+notification fan-out for counseling. Stage 9 then authorized the professor
+UPDATE policy by ownership alone, so a professor could PATCH status, times and
+even reassign the request to another tenant's student — bypassing all of it.
+
+Decision (a): revoke, do not reimplement. Every counseling UPDATE already runs
+through the service role after a server-side check, so no client role needs it.
+Restating the Stage 5 matrix as a column-and-state RLS policy would create two
+implementations of one rule that can drift apart.
+
+Context (b): `security_events` used nullable FKs with ON DELETE SET NULL, so
+deleting a profile erased the attribution of every historical event about it.
+
+Decision (b): attribution is an immutable snapshot (`actor_ref`, `school_ref`,
+`actor_role_ref`) written by a BEFORE INSERT trigger, and the FK CONSTRAINTS are
+dropped. Append-only is enforced by a BEFORE UPDATE trigger. Privileged ACLs are
+granted explicitly rather than inherited from platform defaults, and verified in
+both directions.
+
+Reason (b): a nullable FK is a convenience pointer, not a historical record. The
+first attempt kept the FKs and added the append-only trigger, which made a SET
+NULL cascade fail and turned the audit trail into a LOCK ON USER DELETION —
+worse than the original defect, and directly in the way of the erasure path this
+project still owes.
+
+Consequences: audit history begins 2026-08-14. The SSO audit write is now
+awaited rather than fire-and-forget. DELETE remains available to service_role for
+retention pruning, so a compromised service-role key can still remove history —
+stated, not implied. No tamper-proofing is claimed.
+
 ## D-024 — Identity is `profiles.auth_user_id`, resolved by private SECURITY DEFINER helpers; the anon role is an explicit one-table allowlist
 
 Status: Accepted (Stage 9, 2026-08-14)

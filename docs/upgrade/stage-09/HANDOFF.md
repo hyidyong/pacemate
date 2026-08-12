@@ -2,9 +2,75 @@
 
 ## Status
 
-COMPLETE on `upgrade/stage-9`, from `main` @ `fd44172` (Stage 8 PR #42 merged
-2026-08-12, verified). Not merged — that is the human's call. Stage 10 not
-started.
+COMPLETE on `upgrade/stage-9`, REVISED after an external Codex security review
+that returned **NOT SAFE TO MERGE**. Base `main` @ `fd44172` (Stage 8 PR #42
+merged 2026-08-12, verified). Not merged — that is the human's call. Stage 10
+not started. The next step is another independent Codex review.
+
+## Codex review round (2026-08-14)
+
+Nine findings. **All nine were verified against the branch before any change and
+all nine were confirmed** — none needed push-back. Four were materially worse
+than reported, and verifying the fixes exposed two further defects that Stage 9
+had introduced itself.
+
+| # | Finding | Verdict | Status |
+|---|---|---|---|
+| F1 | Probe cleanup can leak fixtures and Auth users | **CONFIRMED** — 6/6 injected failures leaked; residue never affected the exit code; a live run had already left 4 posts + 2 course_reviews behind while reporting clean | CLOSED |
+| F2 | Foreign-course enrolment is a cross-tenant read primitive | **CONFIRMED, WIDER** — five tables, not one | CLOSED |
+| F3 | Direct UPDATE bypasses Stage 5 counseling protections | **CONFIRMED, WORSE** — a professor could also reassign the request to another tenant's student | CLOSED |
+| F4 | Roadmap workflow is globally cross-tenant | **CONFIRMED** — no tenant column existed at all; the predicted professor regression was real | CLOSED |
+| F5 | Historically exposed demo credentials unchanged | **CONFIRMED** | CLOSED — **rotated**, not BLOCKED |
+| F6 | Support category/payload insufficiently bounded | **CONFIRMED** | CLOSED |
+| F7 | service_role ACLs not guaranteed by migrations | **CONFIRMED** — privileges existed only as platform defaults | CLOSED |
+| F8 | Audit attribution can disappear; SSO write fire-and-forget | **CONFIRMED** | CLOSED |
+| F9 | schema.sql represents pre-Stage-9 state | **CONFIRMED** | CLOSED (regeneration BLOCKED — Docker) |
+
+**Two defects Stage 9 itself introduced, found by verifying the fixes:**
+
+1. Revoking authenticated INSERT on `roadmap_revision_requests` silently broke
+   `updateOwnCourseRoadmap`, which still used the session client. Fixed by
+   moving it to the service role after its existing ownership check — not by
+   restoring the grant.
+2. The append-only audit trigger rejected the `ON DELETE SET NULL` cascade, so
+   deleting a profile with audit history failed outright. The audit trail had
+   become a lock on user deletion. Fixed by dropping the FK constraints and
+   relying on the immutable snapshots.
+
+**Two probe defects had to be fixed before F2 could be measured honestly:**
+`rawFetch` dropped per-call headers so a successful INSERT read as "denied", and
+requesting a representation made PostgREST re-check the new row against the
+SELECT policy — manufacturing 403s that vanish when an attacker omits the
+header. Write outcomes are now confirmed by service-role read-back, posted
+without the header.
+
+**A Stage 9 claim this round invalidated:** "Probe fixtures create and tear down
+deterministically — PASS, twice" was false. Corrected in AUDIT_RECOVERY_DESIGN §6.
+
+### Review-round migrations
+
+`20260814050000` tenant-correlated writes · `20260814060000` counseling write
+boundary · `20260814070000` roadmap tenant scope · `20260814080000` audit
+durability + explicit ACLs · `20260814090000` audit FK detach ·
+`20260814100000` least privilege on `schools`.
+
+### Review-round results
+
+| Check | Result |
+|---|---|
+| Live direct Data API probe | **85 checks, 0 failed** (was 67/26 before Stage 9) |
+| Live durable audit probe | **11 checks, 0 failed** |
+| Probe cleanup fault injection | 27/27 |
+| Probe guard | 9/9 |
+| Migration guards | 27/27 |
+| Security snapshot drift guards | 11/11 |
+| Support abuse boundary | 9/9 |
+| Demo credential regression guard | 6/6 |
+| Full app suite | 348 tests, 345 pass, **3 fail — the pre-existing KI-002 trio by name** |
+| Typecheck / lint / build | clean / baseline / PASS, budgets met, shared JS 102 kB |
+| Credential scan of `.next/static/**` | 0 hits |
+| Rendered QA | login (via the gated demo panel, rotated credential), dashboard, counseling, notifications — **0 console errors, 0 server errors** |
+| Probe residue after every live run | clean, verified |
 
 ## Threat model summary
 
@@ -267,7 +333,7 @@ booking), notifications (12 rows, 5 unread), courses, support (end-to-end
 submission with the correct constrained row shape; QA row deleted).
 **0 browser console errors, 0 server errors.**
 
-## Remaining risks
+## Remaining risks (after the review round)
 
 Ranked. Full detail in KI-022.
 

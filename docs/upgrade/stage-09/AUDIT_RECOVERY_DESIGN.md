@@ -48,7 +48,8 @@ this seam.
 
 ```
 occurred_at, event, outcome, actor_profile_id, actor_role, school_id,
-subject_type, subject_id, request_id, detail
+subject_type, subject_id, request_id, detail,
+actor_ref, school_ref, actor_role_ref          -- immutable snapshots (Codex F8)
 ```
 
 Design decisions and their reasons:
@@ -62,11 +63,30 @@ Design decisions and their reasons:
   migration postcondition. The application writes through the service role.
 - **Privileged read is tenant-scoped**: a tenant admin sees their own tenant's
   events, nothing else.
+- **Attribution is an immutable snapshot, not a nullable pointer (Codex F8).**
+  `actor_profile_id` and `school_id` were ON DELETE SET NULL, so deleting a
+  profile blanked the actor and tenant of every historical event referencing it —
+  exactly the rows an investigation needs after an account is removed.
+  `actor_ref` / `school_ref` / `actor_role_ref` are text copies written by a
+  BEFORE INSERT trigger, so no caller can forget them, and `actor_role_ref`
+  records the role AS IT WAS, which no live join can reconstruct after a role
+  change. The FK CONSTRAINTS were then dropped entirely: with the append-only
+  trigger in place a SET NULL cascade IS an update, so the trigger refused it and
+  deleting a profile with audit history failed outright — turning the audit trail
+  into a lock on user deletion. An audit record now references nothing that can
+  null it, block it or cascade it.
+- **Append-only is enforced by the database.** A BEFORE UPDATE trigger rejects
+  every update, including by the service role.
 - **Best-effort, stated as such.** `recordSecurityEvent` emits the operational
   line first and unconditionally; if the durable insert fails it logs
   `audit.write_failed` and the caller proceeds. Auditing must not break the
   action being audited. That is a deliberate availability-over-completeness
-  trade, so the trail is best-effort rather than guaranteed.
+  trade, so the trail is best-effort rather than guaranteed. The SSO path now
+  AWAITS the write (Codex F8) — a durable write the caller never waits on is not
+  durable.
+- **DELETE remains available to service_role.** Retention pruning is a
+  foreseeable need and no retention policy exists yet. A compromised
+  service-role key can therefore still remove history. Stated, not implied.
 
 **Not claimed: this is not tamper-proof.** There is no hash chain and no
 signature. A compromised service-role key can write false rows; what it cannot
@@ -74,9 +94,17 @@ do is quietly edit or delete true ones through any role the browser can reach.
 
 Wired this stage: all five SSO identity events, `admin.broadcast_sent`,
 `admin.broadcast_failed`, `admin.revision_{assistant_reviewed,approved,rejected}`.
-The table's security properties are verified live (5/5). The three application
-emit paths are code-wired and typechecked but were **not** triggered at runtime
-this session — recorded as UNVERIFIED in the test matrix.
+The table's security properties are verified live by
+`scripts/security/audit-trail-probe.mjs` (11/11): service_role can append and
+read; anon cannot read, append, update or delete; an audit record cannot be
+updated even by service_role; the snapshot populates automatically; a profile
+carrying audit history can still be DELETED; and its attribution survives that
+deletion.
+
+The three application emit paths (`sso.*`, `admin.broadcast_sent`,
+`admin.revision_*`) are code-wired, typechecked and awaited, but no run in this
+session triggered an SSO exchange, a tenant broadcast or a revision approval —
+so the end-to-end write from those call sites remains **UNVERIFIED at runtime**.
 
 ## 5. Recovery capability — what actually exists
 
@@ -104,7 +132,8 @@ Verified with the tooling available, not assumed.
 | A postcondition genuinely fails closed | **PASS, demonstrated** — the first `db push` aborted and rolled back on my own over-strict assertion (`anon still has policies: schools.public read schools`); nothing was applied until it was corrected |
 | Schema drift repair is idempotent against a populated DB | **PASS** — `20260814020000` is a no-op live and asserts all ten columns afterwards |
 | Migration history reconciled | **PASS** — 55/55 local↔remote |
-| Probe fixtures create and tear down deterministically | **PASS** — two full runs, baseline restored exactly both times |
+| Probe fixtures create and tear down deterministically | **CORRECTED — this claim was FALSE when first written.** Fault injection later disproved it: the provisioner only handed its fixture list to the caller on the happy path, so a mid-provision failure orphaned everything created so far, including Auth users; 6 of 6 injected failures leaked. A live run also left 4 posts and 2 course_reviews behind while residue verification reported clean, because those tables were missing from the residue list and their parents are ON DELETE SET NULL. Both are fixed (ledger + expanded coverage) and the property now holds — see the row below |
+| Probe cleanup survives failure (Codex F1) | **PASS** — 27 fault-injection tests: every provisioning boundary, the Auth-user boundary, failure during the probe, a provisioner that never returns, DB and Auth deletion failures, unverifiable residue, delete scoping and LIFO ordering. Cleanup failures and unverifiable residue now fail the run |
 | Audit trail resists client mutation | **PASS** — 5/5 live |
 | **Full-chain rebuild into an empty database** | **BLOCKED — NON-PRODUCTION DATABASE REQUIRED.** Docker is not running, there is no `supabase/config.toml`, and the only Supabase project is live production. The D-1 repair is therefore *reasoned and unit-guarded* (`stage9_rls.test.mjs` asserts the column is added before it is asserted on) but **not proven by execution**. |
 | **Restore from backup** | **BLOCKED — NO BACKUP EXISTS TO RESTORE FROM** (PITR off, backup list empty). Not attempted; no destructive drill was run against production. |

@@ -9,6 +9,80 @@ Status: OPEN (documented 2026-08-14; full evidence in docs/upgrade/stage-09/).
 Stage 9 closed 8 P0 and 12 P1 findings (IMPLEMENTATION_PLAN.md §2). What
 follows is what it did NOT close, with the reason.
 
+### Codex security review round (2026-08-14) — status changes
+
+All nine findings were verified against the branch before any change and **all
+nine were confirmed**. Eight are closed; the corrections they forced to earlier
+Stage 9 claims are recorded here so the history stays honest.
+
+**Closed this round.** F1 probe cleanup (ledger + fault injection, 27 tests),
+F2 cross-tenant write primitives (five tables, not one), F3 counseling direct
+writes (revoked, not reimplemented), F4 roadmap tenant isolation (tenant column
+added end to end), F5 demo credentials (rotated, then removed from the repo),
+F6 support bounds, F7 explicit privileged ACLs, F8 durable audit semantics,
+F9 schema.sql drift (generated live snapshot + drift guard). Plus the
+lower-priority least-privilege item on `schools`.
+
+**Earlier Stage 9 claims this round INVALIDATED, now corrected in place:**
+
+- "Probe fixtures create and tear down deterministically — PASS, twice, baseline
+  restored exactly" was **FALSE**. Fault injection showed 6 of 6 injected
+  provisioning failures leaked, and a live run had already left 4 posts and 2
+  course_reviews behind while residue verification reported clean, because those
+  tables were missing from the residue list and their parents are ON DELETE SET
+  NULL. Corrected in AUDIT_RECOVERY_DESIGN §6.
+- The Stage 9 probe reported several cross-tenant writes as denied when the rows
+  were in fact created: `rawFetch` dropped per-call headers so
+  `Prefer: return=representation` never reached PostgREST, and a 201 with an
+  empty body read as "denied". Separately, asking for a representation makes
+  PostgREST re-check the row against the SELECT policy and roll back, which
+  manufactured 403s for `posts` and `course_reviews` that vanish when an attacker
+  omits the header. Both fixed; write outcomes are now confirmed by service-role
+  read-back and posted without the header.
+- The Stage 9 claim that the demo-credential finding was closed by removing the
+  passwords from the bundle was **incomplete** — a published password stays
+  published. All four accounts are now rotated.
+
+**Two defects Stage 9 itself introduced, found by verifying the fixes:**
+
+- Revoking authenticated INSERT on `roadmap_revision_requests` silently broke
+  `updateOwnCourseRoadmap`, which still used the session client. Fixed (service
+  role after the existing ownership check), not by restoring the grant.
+- The append-only audit trigger rejected the `ON DELETE SET NULL` cascade, so
+  deleting a profile with audit history failed outright — the audit trail had
+  become a lock on user deletion. Fixed by dropping the FK constraints and
+  relying on the immutable snapshots.
+
+### Still open after this round
+
+- **Realtime delivery is UNVERIFIED.** The browser client now uses
+  `createBrowserClient` and calls `realtime.setAuth()` before subscribing and on
+  every auth-state change, and the `sb-<ref>-auth-token` cookie was confirmed
+  present on an authenticated page. But the channel is off by default
+  (`enableRealtime` false, desktop only), so no subscription was opened and
+  end-to-end delivery — own notifications, same-tenant broadcasts, cross-tenant
+  denial — is not demonstrated. **DEFERRED — Stage 10.**
+- **The durable audit emit paths are UNVERIFIED at runtime.** The table's
+  security properties are proven live (11/11) and the three call sites (`sso.*`,
+  `admin.broadcast_sent`, `admin.revision_*`) are code-wired, typechecked and
+  awaited, but no run triggered an SSO exchange, a tenant broadcast or a revision
+  approval.
+- **`schema.sql` is not regenerated.** `supabase db dump` needs Docker, which is
+  unavailable here. **BLOCKED — Docker required.** The file now carries a
+  NON-AUTHORITATIVE header naming each defect, and
+  `supabase/security-snapshot.json` is generated from live state instead.
+- **Audit history begins 2026-08-14.** Nothing before that date is recorded.
+- **`security_events` DELETE remains available to service_role** so retention
+  pruning stays possible. A compromised service-role key can therefore still
+  remove history. No tamper-proofing is claimed.
+- **Composite foreign keys for tenant consistency are still absent.** Stage 9
+  closed every reachable path, but cross-tenant rows remain structurally
+  creatable by a service-role writer.
+- Everything else listed below (erasure path, pdf-parse, `next` patch bump, raw
+  DB error logging, AI prompt payloads, client storage bleed, per-user session
+  revocation) is unchanged by this round.
+
+
 ### BLOCKED on something outside the repository
 
 - **There is no verified recovery point of any kind.** `supabase backups list`
@@ -22,12 +96,15 @@ follows is what it did NOT close, with the reason.
   not running, there is no `supabase/config.toml`, and the only Supabase project
   is live production, so a fresh rebuild has never been executed. Guarded by
   unit assertions only.
-- **Demo account passwords must be rotated.** `src/config/demo-users.json` holds
-  four plaintext passwords including `admin1@pacemate.edu`. The client-bundle
-  exposure is closed and verified absent from `.next/static/**`, but the
-  credentials were public for the lifetime of every prior deployment. Operator
-  action — RECOVERY_RUNBOOK.md §3.4. Consider deleting the `admin1@` demo
-  account outright.
+- **Demo account passwords: RESOLVED 2026-08-14 — rotated, not blocked.** All
+  four (including professor and admin) were rotated through the Supabase Auth
+  admin API and verified in both directions: the new credential signs in, the old
+  one is rejected. They were rotated a second time the same day after an operator
+  transcript exposed the first set. The repository now holds no credential at
+  all — passwords come from `PACEMATE_DEMO_PASSWORDS` at runtime, and a 6-test
+  regression guard fails the build if one reappears. Still worth doing:
+  **deleting the `admin1@` demo account outright**, since a privileged demo
+  account is a standing risk with no product purpose.
 - **SSO end-to-end remains BLOCKED** (KI-020, unchanged): no institution
   configuration exists. The app-side boundary is covered by 43 green tests.
 

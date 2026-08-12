@@ -418,7 +418,7 @@
       "id": "counseling-direct:student",
       "property": "a professor must not reassign a request to another student",
       "pass": true,
-      "detail": "PATCH 403; student_id is now \"465dd896-0a2f-4eb9-8c7c-650147cc5c48\""
+      "detail": "PATCH 403; student_id is now \"664e986e-e3a4-4136-9db8-128dff4a962c\""
     },
     {
       "id": "counseling-direct:suggested",

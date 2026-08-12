@@ -106,21 +106,34 @@ immediately, because verification is a signature check with no server-side store
 Rotate at OpenAI; update `.env.local` + Vercel; redeploy. Five call sites read
 it from the environment; no code change needed.
 
-### 3.4 Demo account passwords — **outstanding action**
+### 3.4 Demo account passwords — **ROTATED 2026-08-14**
 
-`src/config/demo-users.json` holds four plaintext passwords, including
-`admin1@pacemate.edu`. Until Stage 9 they were shipped in the public client
-bundle and were readable by anyone with `curl`. The exposure is closed
-(`import "server-only"` + `PACEMATE_ENABLE_DEMO_LOGIN` gate, verified absent
-from `.next/static/**`), but **the credentials themselves must still be
-rotated** — they were public for the lifetime of every prior deployment.
+`src/config/demo-users.json` used to hold four plaintext passwords, including
+`prof1@` (professor) and `admin1@` (admin). They were compiled into the public
+login page's JavaScript and were readable with `curl` for the lifetime of every
+deployment built from that code.
 
-1. Supabase dashboard → Authentication → Users → reset the password for
-   `student1@`, `prof1@`, `assistant1@`, `admin1@pacemate.edu`.
-2. Update `src/config/demo-users.json` and
-   `scripts/ensure-demo-operator-auth.mjs`.
-3. Consider deleting the `admin1@` demo account outright — a privileged demo
-   account is a standing risk with no product purpose.
+**All four were rotated** through the Supabase Auth admin API, and each rotation
+was verified in both directions: the new credential signs in, the old one is
+rejected. They were rotated a second time the same day after an operator
+transcript exposed the first set.
+
+The repository now contains **no credential at all**. `demo-users.json` keeps
+identifier, name and role; passwords are supplied at runtime through
+`PACEMATE_DEMO_PASSWORDS`, read server-side only and never committed.
+
+If they need rotating again:
+
+1. Supabase dashboard → Authentication → Users → reset each password, or drive
+   `PUT /auth/v1/admin/users/<id>` with the service key.
+2. Update `PACEMATE_DEMO_PASSWORDS` in `.env.local` and in the Vercel
+   environment. Never paste the value into a terminal that is being recorded —
+   that is how the first rotation was burned.
+3. Leave `PACEMATE_ENABLE_DEMO_LOGIN` unset in production. Without BOTH that flag
+   and a matching credential entry, the demo login renders nothing and the sign-in
+   action is inert.
+4. Consider deleting the `admin1@` account outright — a privileged demo account
+   is a standing risk with no product purpose.
 
 ### 3.5 SSO client secrets
 
@@ -164,6 +177,17 @@ revoke all on public.<table> from anon, authenticated;
 
 RLS is already enabled on all 54 tables, so removing the grant is sufficient and
 reversible.
+
+**Clean up after an abnormal probe exit.** `try/finally` does not run on SIGKILL
+or a host OOM kill, so a killed probe can leave marked fixtures behind. The
+independent recovery mechanism is operator-run:
+
+```bash
+node scripts/security/rls-probe.mjs --sweep
+```
+
+It removes every marked row and Auth user, then re-verifies, and exits non-zero
+if anything remains.
 
 **Verify.** Run the probe:
 
