@@ -153,6 +153,27 @@ Scenarios: **S1** N students → 1 slot; **S2** 1 student → 5 duplicate submit
 
 ## 5. Live-database safety protocol
 
+**Now enforced in code, not by convention (review findings 4 and 5).** The
+booking harness refuses to provision or mutate anything unless three explicit
+confirmations are present, and both harnesses default to a loopback application
+target:
+
+```text
+PACEMATE_LOADTEST_ALLOW_MUTATIONS=1            deliberate destructive opt-in
+PACEMATE_LOADTEST_EXPECTED_PROJECT_REF=<ref>   must equal the configured project
+PACEMATE_LOADTEST_TARGET_KIND=non-production   or PACEMATE_LOADTEST_SCHOOL_ID=<uuid>
+```
+
+A non-loopback application target additionally requires
+`PACEMATE_LOADTEST_ALLOW_REMOTE=1`, https, and a matching
+`PACEMATE_LOADTEST_EXPECTED_HOST` before any credential is sent. When an
+isolated tenant is named the harness uses exactly that school rather than "the
+first school", which on a shared project is a real university.
+
+Cleanup is explicitly NOT counted as protection: it does nothing if the process
+is killed, if cleanup itself errors, or if the run was pointed at the wrong
+project. The guards run first; cleanup remains as hygiene.
+
 Mandatory, because production is the only environment:
 
 1. **Bounded volume.** Read tiers capped at c=10 / 200 iterations; mutation

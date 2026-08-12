@@ -113,6 +113,16 @@ present it is reused rather than minting a second id (UNVERIFIED whether it is
 exposed in this runtime — the helper prefers it when present and falls back to
 `crypto.randomUUID()`).
 
+**Trust boundary (review finding 6).** `x-pacemate-request-id` is our header,
+but it also arrives on inbound requests where the client controls it. The first
+implementation adopted it verbatim, which would let a caller choose their own
+correlation id — enough to forge log lines, collide deliberately with another
+request's id, or inject quotes and newlines into the JSON log stream. It is now
+never adopted from a client: middleware always mints (reusing only the
+platform's id, normalised to `[A-Za-z0-9_-]{1,128}`), and readers return
+`undefined` rather than a suspect value. Verified at runtime: a hostile header
+came back as a fresh UUID and the emitted log line carried no injected fields.
+
 **User-facing exposure:** the booking success message already surfaces a
 receipt fragment — `data.id.slice(0, 8)` at `counseling.actions.ts:159` — which
 is a *row* id, not a request id. Stage 8 does not add a user-visible support

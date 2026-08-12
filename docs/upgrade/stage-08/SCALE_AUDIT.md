@@ -144,6 +144,16 @@ same shape. This is simultaneously a correctness bug, a Stage 6 tenant-
 isolation violation on the write path, and — at scale — a row-lock storm whose
 cost grows with platform-wide unread volume.
 
+> **Correction (external review, finding 2).** Deriving `studentId` from the
+> session closed the identity hole but was NOT sufficient. `courseId` and
+> `currentWeek` remained caller-supplied and unvalidated, and `courseId` fed a
+> `courses` read whose syllabus text becomes OpenAI prompt content — so a
+> student could name **another university's course** and have its syllabus
+> exfiltrated through the prompt, plus progress rows written for a course they
+> do not own. Authorization is now derived from the student's own
+> `student_courses` enrollment joined to the course tenant, checked before the
+> syllabus read and before any OpenAI call, with the week bounded to 1..30.
+
 ### P0-2 — two AI server actions have no authorization at all
 `src/services/ai-tutor.actions.ts:24` (`generateWeeklyGuide`) and `:100`
 (`submitProgressFeedback`) are exported server actions that accept
@@ -186,7 +196,23 @@ None of the four factories configures a fetch timeout or `AbortSignal`
 has no default timeout, so a hung PostgREST or GoTrue call occupies the
 serverless invocation until the platform kills it. Under a slow dependency
 this is the mechanism by which one slow query becomes a site-wide outage, and
-it is the app's only missing piece of elementary overload protection. Three of
+it is the app's only missing piece of elementary overload protection.
+
+> **Correction (external review, finding 1).** The first fix here was
+> insufficient and is superseded. A per-call `AbortSignal.timeout` does NOT
+> bound a request at SDK level, for two measured reasons:
+> `AbortSignal.timeout()` rejects with `TimeoutError`, while postgrest-js
+> 2.110.1 decides whether to retry with
+> `err.name === "AbortError" || err.code === "ABORT_ERR"` — so the timeout was
+> treated as a retryable network error (`retryEnabled` defaults true,
+> `DEFAULT_MAX_RETRIES = 3`, backoff 1s/2s/4s on GET/HEAD/OPTIONS); and
+> auth-js `_refreshAccessToken` retries under a 30s window with each attempt
+> receiving a fresh full timeout. **Measured: one hung GET became 4 fetches
+> over 8.3s against a 300ms budget** — the timeout was amplifying load rather
+> than bounding it. The wrapper now aborts with a real `AbortError` and shares
+> one deadline across consecutive attempts to the same endpoint. Any earlier
+> statement in these documents that "a fetch timeout bounds every Supabase
+> request" was true only per attempt and is corrected here. Three of
 five OpenAI calls are likewise unbounded (`ai-tutor.actions.ts:55`,
 `personalized-weekly-roadmap.server.ts:317`,
 `professor-grounded-answer.server.ts:66`); two already have timeouts

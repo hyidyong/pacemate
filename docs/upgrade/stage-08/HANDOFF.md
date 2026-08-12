@@ -2,10 +2,42 @@
 
 ## Status
 
-COMPLETE — 2026-08-13, on `upgrade/stage-8` from `main` @ 9eeaf78 (the Stage 7
-merge, PR #41). Discovery, measurement, Red→Green implementation, regression,
-and before/after verification done. Not merged (per workflow). Stage 9 NOT
-started.
+COMPLETE, revised after external review — 2026-08-13, on `upgrade/stage-8` from
+`main` @ 9eeaf78 (the Stage 7 merge, PR #41). Discovery, measurement, Red→Green
+implementation, regression, and before/after verification done; the six PR #42
+review findings are verified and fixed (see "External review round"). Not
+merged (per workflow). Stage 9 NOT started.
+
+## External review round (PR #42)
+
+Six findings were each verified against the branch and the installed SDKs
+before any change. **All six were confirmed** — none needed push-back — but two
+were materially different from their description:
+
+- **Finding 1 was worse than reported.** The Stage 8 timeout did not merely
+  fail to bound retries; it *caused* them. `AbortSignal.timeout()` rejects with
+  `TimeoutError`, and postgrest-js 2.110.1 suppresses retries only for
+  `AbortError`/`ABORT_ERR`, so a hung GET became **4 fetches over 8.3s against
+  a 300ms budget**, amplifying load on a struggling database. Fixed by aborting
+  with a real `AbortError` and sharing one deadline per endpoint burst.
+- **Finding 3 was wider than reported.** Beyond the bulk path, the two
+  *targeted* by-id writes still used the untenanted predicate, so a known or
+  enumerated UUID from another tenant could be marked read — and
+  `markNotificationReadAndGo` additionally followed that row's `target_href`.
+  One predicate now serves all four writes and all three reads.
+
+**Two claims made in the first round were invalidated and are corrected:**
+
+1. "A fetch timeout bounds every Supabase request" — true only per attempt, and
+   actively counterproductive under postgrest-js retry. Corrected in
+   SCALE_AUDIT §3 (P1-2) and D-022.
+2. "The AI actions are authorized" (P0-2) — identity was fixed, but `courseId`
+   and `currentWeek` stayed caller-supplied, leaving cross-tenant syllabus
+   exfiltration through the OpenAI prompt. Corrected in SCALE_AUDIT §3 (P0-2)
+   and D-023's sibling note.
+
+Review-round commits: `f44e08a` (F1), `064ce21` (F2), `33d1412` (F3),
+`0f27ba0` (F4+F5), `e39529e` (F6).
 
 ## Goal
 
@@ -155,16 +187,34 @@ dependency**; shared JS unchanged at 102 kB.
 
 ## Tests / build results
 
+Post-review figures (the authoritative set):
+
 | Check | Result |
 |---|---|
-| Full suite | 306 tests / 303 pass / **3 fail — the pre-existing KI-002 trio BY NAME** (baseline 289/286/3; +17 Stage 8 tests, all green) |
+| Full suite | 325 tests / 322 pass / **3 fail — the pre-existing KI-002 trio BY NAME** (Stage 8 baseline 289/286/3; +36 Stage 8 tests, all green) |
+| Harness guard suite | 9/9 GREEN (`scripts/loadtest/lib/safety.test.mjs`) |
 | Typecheck | clean |
 | Lint | baseline (1 pre-existing `no-img-element` warning) |
-| Build | PASS — BUILD_ID `4WrGcGd170DNx0xE_GHQf`, all bundle budgets met |
-| Stage 6 tenant isolation | **5/5 GREEN** |
-| Stage 2/5 invariants | 35/35 GREEN |
-| Booking contention | 10/10 PASS (before and after) |
+| Build | PASS — BUILD_ID `nRh8iT37UaF7_Han63b73`, all bundle budgets met |
+| Stage 2 availability invariants | 11/11 GREEN |
+| Stage 5 booking/concurrency (offline) | 26/26 GREEN |
+| Stage 6 tenant isolation | 17/17 GREEN (incl. the notification cross-tenant suite) |
+| Stage 7 auth/SSO | 56/56 GREEN |
+| Booking contention (live, 20 students) | 10/10 PASS — last run BEFORE the review round; **not re-run this round**, see below |
 | Live DB teardown | 0 leftover fixtures; 27 profiles / 3 requests / 1 school |
+
+**Why the live contention harness was not re-run in the review round.** The
+operating instruction for this round forbids destructive or high-volume tests
+against the live Supabase project, and finding 4's own fix now makes that
+harness refuse to run without an explicit destructive opt-in naming a
+non-production project. Booking semantics were not touched by the review-round
+changes: the fetch timeout only alters behaviour when an upstream is already
+hung, the notification predicate governs read/mark-read (booking *creates*
+notifications through a different service), and the request-id propagation adds
+a value to log lines on error paths. The deterministic Stage 5 concurrency
+suites (26/26, including the M1/M2/M3/M9 interleaving tests and the CAS matrix)
+cover those paths and are green. This is recorded as a gap rather than papered
+over: the last live 20-student contention evidence predates commits f44e08a..e39529e.
 
 Environment note: `node_modules` was emptied outside the session mid-stage and a
 plain `npm ci` reinstalled without devDependencies, producing spurious type

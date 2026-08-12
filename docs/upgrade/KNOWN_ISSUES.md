@@ -7,8 +7,39 @@ Historical reports may be investigated but are not automatically considered curr
 
 Status: OPEN (documented 2026-08-13; full evidence in docs/upgrade/stage-08/).
 Stage 8 closed two P0 correctness/security defects and four P1 scale items
-(D-022/D-023). The following are recorded with evidence rather than silently
-carried:
+(D-022/D-023), then a further six defects found by external review of PR #42.
+
+### External review round (PR #42) — resolved, with two corrections
+
+Six review findings were verified against the branch and the installed SDKs;
+all six were confirmed and fixed on this branch. Two invalidated earlier
+Stage 8 claims and are recorded here so the history is honest:
+
+- The Stage 8 fetch timeout bounded each ATTEMPT, not the request, and
+  postgrest-js treated its `TimeoutError` as a retryable network error — one
+  hung GET became 4 fetches over 8.3s against a 300ms budget. Fixed
+  (`AbortError` + shared per-endpoint deadline). Residual: the bound is
+  per-attempt plus a cool-off, so a pathological SDK could still spend up to
+  roughly 2x the budget on one endpoint before failing fast; that is bounded
+  and documented, not unbounded.
+- "The AI actions are authorized" was true for identity only. `courseId` and
+  `currentWeek` were caller-supplied, allowing cross-tenant syllabus
+  exfiltration through the OpenAI prompt. Fixed by deriving authorization from
+  the student's own enrollment joined to the course tenant.
+
+Still open from that round:
+
+- The live 20-student booking-contention evidence predates the review-round
+  commits. It was not re-run because the round's instructions forbid
+  destructive tests against live Supabase and, by design, the harness now
+  refuses to run without an explicit non-production opt-in. The deterministic
+  Stage 5 suites (26/26) cover the affected paths.
+- `student_mission_progress` and `student_courses.current_week` writes are now
+  gated on enrollment, but there is still no product rule for which week a
+  student may advance to; the bound is a sanity range (1..30), not a policy.
+
+
+The following are recorded with evidence rather than silently carried:
 
 - **Rate limiting is NOT implemented** (SCALE_AUDIT P1-4,
   IMPLEMENTATION_PLAN §8). No app-level limiter exists anywhere. Deferred
@@ -38,14 +69,16 @@ carried:
 - **Escalations inbox is unbounded** and, on the assistant/admin branch, has no
   filter at all (professor-questions.server.ts:125-131). Stage 8 added the
   `(professor_id, created_at desc)` index for the professor branch only.
-- **Notification READ path is still untenanted**
-  (notifications.service.ts:63-69,90-93) — the same `OR` shape whose WRITE side
-  Stage 8 fixed. Left to Stage 9 with KI-019, because read isolation is not
-  DB-enforceable until the anon SELECT policy family is overhauled. The KI-016
-  "user_notifications partial unread index" candidate is consequently REFINED,
-  not adopted: one partial index cannot serve an `OR` across two columns, and
-  the `school_id`-leading variant only becomes usable once that tenant filter
-  exists.
+- **Notification read/write scoping — UPDATED by the review round.** The app
+  layer is now tenant-scoped on BOTH sides: reads and writes share one
+  predicate (`notifications.ownership.ts`), so a user is never shown a
+  notification they cannot act on. What remains for Stage 9 is the DB layer —
+  the anon SELECT policy still exposes `user_notifications` to direct PostgREST
+  access regardless of the app filter (KI-019), so this is defence in depth, not
+  enforcement. The KI-016 "user_notifications partial unread index" candidate
+  becomes actionable now that a `school_id` filter exists on the read path, but
+  was still not added: it needs a measurement, and one partial index cannot
+  serve the `recipient_id OR role` disjunction — two would be required.
 - **`user_notifications.school_id` remains nullable** (D-018), so the Stage 8
   tenant-scoped bulk mark-read deliberately does not match untenanted rows.
   Live check at fix time: 0 such rows exist. If ungated writers later create

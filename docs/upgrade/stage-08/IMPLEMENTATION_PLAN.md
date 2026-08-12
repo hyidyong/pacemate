@@ -17,6 +17,36 @@ lands; anything not completed is marked honestly rather than removed.
 Rate limiting (P1-4 in the audit) was **NOT implemented** — see §8 for the
 reasoning, which is a deliberate decision rather than an omission.
 
+## External review round (PR #42) — findings 1–6
+
+All six were verified against the branch and the installed SDKs before any
+change. **All six were confirmed**; none required push-back, though finding 1's
+mechanism turned out to be sharper than reported and finding 3's blast radius
+wider.
+
+| # | Finding | Verdict | Fix | Commit |
+|---|---|---|---|---|
+| 1 | timeout must bound the whole request incl. SDK retries | **CONFIRMED, worse than reported** — the timeout *caused* retries (4 fetches / 8.3s vs a 300ms budget) because `AbortSignal.timeout` yields `TimeoutError` and postgrest-js only recognises `AbortError` | abort with `AbortError`; share one deadline per endpoint burst; SDK-level elapsed + call-count tests | f44e08a |
+| 2 | AI authz beyond `studentId` | **CONFIRMED** — `courseId`/`currentWeek` were trusted; a foreign-tenant syllabus could be exfiltrated through the OpenAI prompt | authorize via owned enrollment joined to course tenant, before the syllabus read; bound the week | 064ce21 |
+| 3 | audit every notification write path | **CONFIRMED** — the two by-id paths kept the untenanted predicate, so a known UUID from another tenant could be marked read and its `target_href` followed | one shared predicate for all 4 writes AND all 3 reads; explicit NULL-school semantics | 33d1412 |
+| 4 | harness must fail closed against live | **CONFIRMED** — cleanup was the only protection | three explicit confirmations required before any provisioning or mutation | 0f27ba0 |
+| 5 | harness target defaults | **CONFIRMED** | loopback default; remote needs opt-in + https + expected-host match | 0f27ba0 |
+| 6 | request-id trust | **CONFIRMED** — inbound `x-pacemate-request-id` was adopted verbatim (log forgery/injection) | never adopt client value; normalise platform id; propagate into Stage 8 events | e39529e |
+
+### A note on the test that hid a bug
+
+Two of the review-round tests initially passed for the wrong reason and had to
+be corrected before they were trustworthy:
+
+- The AI authorization stub bound the fake client once at module-evaluation
+  time, so every test after the first wrote into the first test's recorder — a
+  real vulnerability looked like a pass.
+- The notification fixtures used placeholder ids (`"n1"`), which
+  `normalizeUuid` rejects before any query runs, so the cross-tenant assertions
+  passed without exercising the predicate at all.
+
+Both are now written so that removing the fix makes them fail.
+
 ---
 
 ## 1. P0 — `markAllNotificationsRead` writes across tenants
