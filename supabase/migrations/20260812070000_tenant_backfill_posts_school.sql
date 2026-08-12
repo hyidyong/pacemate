@@ -4,7 +4,19 @@
 -- every legacy post belongs to it. Kept NULLABLE (posts remain anon-readable
 -- until the Stage 9 RLS overhaul); this only backfills provenance so the
 -- app-level tenant filter is complete.
+--
+-- Stage 9 amendment (2026-08-14): `posts.school_id` was created by hand in the
+-- SQL editor and exists in NO migration, so this file — the first one that
+-- depends on the column — aborted any attempt to rebuild the schema from the
+-- chain, making staging and disaster recovery impossible (Stage 9 finding
+-- S9-05 / D-1). The `add column if not exists` below repairs that at the first
+-- point of use. It is a strict no-op on every database where this migration has
+-- already run, and it does not change what this migration does. The nine other
+-- hand-applied columns are repaired in 20260814020000. See DECISIONS.md D-024.
 begin;
+
+alter table public.posts
+  add column if not exists school_id uuid references public.schools(id) on delete set null;
 
 do $$
 begin
