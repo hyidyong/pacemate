@@ -1,5 +1,82 @@
 # Architectural Decisions
 
+## D-019 — SSO uses Supabase Auth as the protocol engine, wrapped in a thin app-owned identity boundary
+
+Status: Accepted (Stage 7, 2026-08-13)
+
+Context: Stage 7 required an SSO architecture for university IdPs (OIDC and
+SAML — the Korean academic federation KAFE is SAML 2.0). The discovery audit
+established that login already runs through real Supabase Auth
+(signInWithPassword → auth.users → profiles.auth_user_id), that GoTrue
+sessions are load-bearing for the seven `resolveAuthenticatedProfile`
+services, and that the installed `@supabase/auth-js` 2.110.1 already ships
+`signInWithSSO` (SAML) and `custom:<slug>` OIDC providers.
+
+Decision: Approach C+ (SSO_DESIGN §2/§3). GoTrue performs the protocol
+cryptography (state/PKCE/nonce/JWKS/issuer/audience, SAML) vendor-side; the
+app owns exactly what no vendor can: the tenant↔provider registry
+(`src/lib/sso/provider-registry.ts`, env-supplied PUBLIC metadata only,
+secrets structurally rejected), the pure login/link decision
+(`src/lib/sso/sso-login-policy.ts`), the callback boundary
+(`src/services/sso-callback.service.ts` + `/auth/callback`), initiation by
+school slug (`/login/sso/[slug]`), and app-session issuance (the existing
+HMAC bridge cookie, minted only after the full decision). Alternatives A
+(openid-client) and B (Auth.js/node-saml dual stack) were rejected: both
+orphan the GoTrue-session-dependent services for SSO users and add
+dependencies; zero new packages were added. Stable identity key =
+(provider, issuer, subject) via auth.identities → auth_user_id →
+profiles.id; tenant NEVER derives from a request value (frozen by
+sso-wiring.test.mjs). Trade-offs accepted: vendor lock-in (SAML config in
+Supabase, Pro-plan gate, no SLO) and no end-to-end protocol exercise without
+a real IdP (BLOCKED, honest in TEST_MATRIX).
+
+## D-020 — Membership is pre-provisioned; JIT is per-tenant opt-in with a hard student-only ceiling; linking trusts institutional email exactly once
+
+Status: Accepted (Stage 7, 2026-08-13)
+
+Context: no signup flow exists (deny-unmapped is the status quo) and the
+institutional rules JIT needs (membership definition, reliable affiliation
+claims, faculty identification) are exactly the BLOCKED external inputs.
+
+Decision: the shipped default is the invite/pre-provisioned model — an SSO
+identity with no membership denies `not_provisioned`. A per-tenant JIT
+policy exists (`policy.jit`) but is default-off, and THREE independent
+layers cap what it can ever create: the affiliation→role map yields
+`student` or nothing; the policy evaluation hard-compares the mapped role to
+"student"; the registry parser rejects any config whose allowedRoles contain
+a privileged role. professor/assistant/admin are always human-provisioned.
+Existing members' roles are never changed by IdP claims (no silent
+escalation or demotion). First-login account linking writes
+`profiles.auth_user_id` once, via CAS (`is auth_user_id null` in the UPDATE),
+only under four conditions: registered provider of the tenant, unlinked
+candidate, exact case-insensitive identifier match, `email_verified = true`;
+after linking, email is never consulted again. A cross-tenant identifier
+collision on the globally-unique `profiles.identifier` denies
+(`identity_conflict`) — it never merges identities; the identifier-namespace
+decision (global vs `unique(school_id, identifier)`) remains a documented
+Stage 7+ external decision (KI-020).
+
+## D-021 — The mock IdP is test-only and in-process; suspension is enforced at the SSO boundary through the widened tenant chokepoint
+
+Status: Accepted (Stage 7, 2026-08-13)
+
+Context: spec §18 requires a deterministic dev/test IdP without weakening
+production; the harness has no HTTP mocking and substitutes modules at
+compile time (tenant-isolation convention). schools.status existed but was
+enforced nowhere (KI-019).
+
+Decision: `src/lib/sso/mock-idp.ts` mints real RS256 tokens (node:crypto
+keypairs, JWKS export, evil-twin signer, injectable clock) but is imported
+ONLY by tests — a structural source-guard (sso-wiring.test.mjs) fails the
+suite if any app module imports it, and no route, env flag, or registry
+entry type can activate it; dev/prod separation is structural, not
+configurational. Suspension: `resolveTenantContext` gained an OPTIONAL
+`school_status` field that fails closed on "suspended" — Stage 6 call sites
+omit the field and stay byte-compatible; the SSO callback always carries it
+(and the policy denies `school_suspended` independently). Request-time
+suspension enforcement for non-SSO sessions still requires the profile
+queries to join schools.status — deferred with the seam in place (KI-020).
+
 ## D-015 — The tenant is the existing `schools` row; membership is `profiles.school_id` (single-tenant), resolved through one chokepoint
 
 Status: Accepted (Stage 6, 2026-08-12)

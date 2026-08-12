@@ -3,6 +3,53 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-020 — Stage 7 SSO readiness: residuals, blocked externals, and findings recorded in passing
+
+Status: OPEN (documented 2026-08-13; evidence in docs/upgrade/stage-07/*).
+Stage 7 shipped the SSO-ready boundary (D-019..D-021) with real-university
+integration BLOCKED. Remaining, honestly scoped:
+
+- BLOCKED external integration: connecting any real university IdP requires
+  institution-supplied OIDC issuer/client/secret or SAML metadata/cert/ACS,
+  claim mappings, test accounts, JIT rule sign-off, a per-university admin,
+  and (for SAML) the Supabase Pro plan. Never fabricate these
+  (PROVIDER_CONTRACT.md §4). The live GoTrue↔IdP exchange is therefore
+  UNVERIFIED end-to-end; the app boundary around it is fully tested.
+- Plaintext demo credentials ship in the client bundle:
+  `src/config/demo-users.json` (4 accounts with passwords) is imported by the
+  client component `src/components/login/demo-login-button.tsx`. Must be
+  removed or build-gated BEFORE any real IdP connects (found by the Stage 7
+  discovery audit; pre-existing).
+- In-session revocation limits (pre-existing, unchanged): the HMAC app
+  session is irrevocable until its 8h expiry (no server-side store), and
+  request-time suspension enforcement for existing sessions needs the
+  profile queries (session.service.ts:51,64) to join schools.status — the
+  fail-closed seam exists in resolveTenantContext (D-021); wiring it is
+  Stage 9's session/RLS overhaul territory. No SLO / provider logout is
+  claimed (Supabase SAML has none).
+- Identifier namespace decision pending: `profiles.identifier` stays
+  GLOBALLY unique and doubles as the auth email; a cross-tenant handle
+  collision denies SSO logins (tested) instead of merging. Moving to
+  `unique(school_id, identifier)` + tenant-qualified login is the documented
+  breaking point (stage-06 HANDOFF, SSO_DESIGN §13).
+- `policy.enforceSsoOnly` is modeled and parsed but no UI/flow consumes it
+  yet (password login remains available to all roles during transition).
+- Professor read-path first-row fallback (KI-017 B-24,
+  professor.service.ts:189-196) is unchanged and remains a MUST-FIX before a
+  second live tenant exists — an SSO professor without a professors row gets
+  empty pages (read) / fail-closed denial (write).
+- Latent, UNVERIFIED (discovery agent finding): `saveAssistantOnboarding`
+  (onboarding.actions.ts:224-228) derives identity via a student-only
+  `getProfileId`, which appears to bounce a logged-in assistant to /login
+  although the assistant login gate depends on the cookie this action sets.
+  Verify and fix in the stage that owns onboarding.
+- Single-tenant fossil: `ensureDefaultSchoolAndDepartment`
+  (onboarding.actions.ts:189-222) still assigns the school hardcoded by name
+  계명대학교 during student onboarding — harmless with one tenant, wrong the
+  moment a second exists; SSO JIT/linking (which sets tenant from the
+  provider) is the replacement path, but the legacy onboarding write must be
+  retired before tenant #2.
+
 ## KI-019 — Stage 6 multi-tenancy: residual cross-tenant surfaces deferred by design
 
 Status: OPEN (documented 2026-08-12; full evidence in

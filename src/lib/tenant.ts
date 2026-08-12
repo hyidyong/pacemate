@@ -26,14 +26,23 @@ export type TenantContext = {
 
 // A structural subset of DemoProfile — kept local so this module has zero
 // imports and can be loaded directly (like the counseling-slots domain).
+//
+// school_status (Stage 7): callers that also fetched the school row may carry
+// schools.status here; "suspended" fails closed. Callers that do not fetch it
+// (all Stage 6 call sites) omit the field and keep their exact behavior — the
+// SSO login boundary always carries it.
 type TenantResolvable = {
   school_id: string | null;
+  school_status?: string | null;
 } | null;
 
 export function resolveTenantContext(profile: TenantResolvable): TenantContext {
   const tenantId = profile?.school_id;
   if (!tenantId) {
     throw new TenantResolutionError();
+  }
+  if (profile?.school_status === "suspended") {
+    throw new TenantResolutionError("Tenant is suspended");
   }
   return { tenantId };
 }

@@ -2,40 +2,47 @@
 
 ## Current Stage
 
-Stage 6 / 10
-University Multi-Tenancy
-Status: COMPLETE on branch `upgrade/stage-6` (2026-08-12) — awaiting PR
-review/merge.
-Base: `main` @ 0b3b88e (Stage 5 merge, PR #39). See
-docs/upgrade/stage-06/HANDOFF.md.
+Stage 7 / 10
+University SSO Readiness
+Status: COMPLETE on branch `upgrade/stage-7` (2026-08-13) — awaiting PR
+review/merge. Base: `main` @ 19a1124 (Stage 6 PR #40 merged 2026-08-12).
+See docs/upgrade/stage-07/HANDOFF.md. Real university integration is
+BLOCKED — requires institution IdP configuration / credentials.
 
-Next stage: Stage 7 (SSO) — NOT started. Stage 7 begins only after the Stage 6
-PR merges, from the HANDOFF "Stage 7 SSO integration points" section.
+Next stage: Stage 8 — NOT started. Stage 8 begins only after the Stage 7 PR
+merges, from the HANDOFF "Stage 8 inputs" section.
 
 ## Primary Objective
 
-One deployed platform serves multiple universities with strictly isolated
-university data. Security invariant: a user acting within University A must
-never be able to read, modify, infer, reserve, administer, or otherwise
-access University B's tenant-scoped data unless an explicitly designed
-platform-level role authorizes it. Isolation is enforced at authoritative
-boundaries (server actions, database, RLS), not in the UI.
+Prepare the platform for university SSO without connecting a real university:
 
-Stage 6 prepares — but does NOT implement — Stage 7 SSO. No SAML/OIDC/IdP
-integration; the tenant model must merely make
-identity → membership → tenant → role mapping possible later.
+```text
+University IdP → OIDC/SAML → platform auth boundary → verified institutional
+identity → tenant membership resolution → role mapping → application session
+```
+
+Deliverables: SSO-ready architecture + provider adapter/interface +
+tenant/provider configuration model + mock/dev IdP integration +
+claim/membership mapping + security tests. Real institution integration is
+BLOCKED (requires institution IdP configuration/credentials) and must never
+be fabricated or claimed complete.
+
+Stage 6 tenant isolation remains the authoritative security boundary. SSO
+authentication must never bypass tenant authorization. Authentication (who
+did the IdP verify) stays separate from authorization (what may this user do
+in this tenant); IdP claims never auto-grant privileged roles without an
+explicit trusted mapping rule.
 
 ## Non-goals
 
-- Stage 7 SSO (SAML/OIDC/JIT provisioning/institution credentials)
-- Stage 8 reliability/scale (KI-018 outbox/bounds)
-- Stage 9 security architecture overhaul (KI-011/KI-014 RLS family) beyond
-  what tenant isolation itself requires
-- Stage 10 CI/CD
-- Subdomain routing / branding redesign / tenant switching UI / university CMS
+- Real university IdP integration (no institution metadata/credentials exist)
+- Fabricated issuers/certs/secrets presented as production-ready
+- Stage 8 reliability/scale, Stage 9 RLS overhaul (KI-011/KI-014 family),
+  Stage 10 CI/CD
+- Broad login-page redesign (Stage 4 UX preserved)
 
 ## Completion rule
 
-Stage 6 work completes on the branch only; merging requires external review
-and human approval (see stage-06/HANDOFF.md when complete). Never merge
-automatically. Never start Stage 7 automatically.
+Stage 7 work completes on the branch only; merging requires external review
+and human approval. Never merge automatically. Never start Stage 8
+automatically. Repository state is the source of truth.
