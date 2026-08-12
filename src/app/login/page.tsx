@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowRight, LogIn } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -10,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PendingSubmitButton } from "@/components/ui/pending-submit-button";
 import { createDemoSession } from "@/services/demo-auth.service";
 import { getRoleHomePath, getSignedDemoProfile } from "@/services/session.service";
 import { DemoLoginButton } from "@/components/login/demo-login-button";
@@ -58,7 +58,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </CardHeader>
           <CardContent>
             <form action={createDemoSession} className="form-stack">
-              {error ? <p className="form-error">{error}</p> : null}
+              {error ? <p className="form-error" role="alert">{error}</p> : null}
 
               <label className="field">
                 <span>이메일</span>
@@ -81,10 +81,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 />
               </label>
 
-              <Button type="submit" data-testid="login-submit">
+              <PendingSubmitButton data-testid="login-submit" pendingLabel="로그인 중…">
                 로그인
                 <ArrowRight size={16} aria-hidden="true" />
-              </Button>
+              </PendingSubmitButton>
             </form>
             
             <DemoLoginButton />
