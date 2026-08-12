@@ -33,32 +33,47 @@ async function resolveActingStudent() {
 // course's tenant. `.limit(1).maybeSingle()` rather than a bare `maybeSingle()`
 // because student_courses is unique on (student_id, course_id, STATUS), so one
 // student legitimately has several rows for the same course (KI-012).
+// Returns the AUTHORITATIVE week for this enrollment, or null when the student
+// may not act on this course at all.
 async function authorizeCourseForStudent(
   studentId: string,
   schoolId: string,
   courseId: string,
-): Promise<boolean> {
-  if (!courseId) return false;
+): Promise<{ currentWeek: number } | null> {
+  if (!courseId) return null;
 
   const { data, error } = await supabase
     .from("student_courses")
-    .select("course_id, course:courses!inner(id, school_id)")
+    .select("course_id, current_week, course:courses!inner(id, school_id)")
     .eq("student_id", studentId)
     .eq("course_id", courseId)
     .eq("course.school_id", schoolId)
     .limit(1)
     .maybeSingle();
 
-  return Boolean(data) && !error;
+  if (error || !data) return null;
+
+  const currentWeek = (data as { current_week?: number }).current_week;
+  return isValidWeek(currentWeek) ? { currentWeek } : null;
 }
 
-// A course week is a small positive integer. The caller supplied it verbatim,
-// so an absurd or fractional value would be written into
-// student_mission_progress and used to advance student_courses.current_week.
+// A course week is a small positive integer, matched by the
+// student_courses_current_week_range CHECK constraint.
 const MAX_COURSE_WEEK = 30;
 
-function isValidWeek(week: number): boolean {
-  return Number.isInteger(week) && week >= 1 && week <= MAX_COURSE_WEEK;
+function isValidWeek(week: unknown): week is number {
+  return typeof week === "number" && Number.isInteger(week) && week >= 1 && week <= MAX_COURSE_WEEK;
+}
+
+// Review round 3, finding 2. Bounding the week to 1..30 only rejects absurd
+// input; a week inside that range is still caller-supplied and proves nothing.
+// The enrollment row holds the authoritative week, so the caller's value is
+// treated purely as an optimistic-concurrency token: it must match, or the
+// request is stale (an out-of-date tab) or forged (an attempt to read/overwrite
+// a week the student has not reached). Either way it is rejected BEFORE the
+// syllabus read, the OpenAI call, any progress write, and any advance.
+function isAuthorizedWeek(claimedWeek: number, authoritativeWeek: number): boolean {
+  return isValidWeek(claimedWeek) && claimedWeek === authoritativeWeek;
 }
 
 // The OpenAI call previously had no timeout, so a slow upstream pinned the
@@ -93,10 +108,8 @@ export async function generateWeeklyGuide(
 
   // Authorize BEFORE reading the syllabus or calling OpenAI: the course text
   // becomes prompt content, so an unauthorized read is already a disclosure.
-  if (!isValidWeek(currentWeek)) {
-    return null;
-  }
-  if (!(await authorizeCourseForStudent(studentId, student.schoolId, courseId))) {
+  const enrollment = await authorizeCourseForStudent(studentId, student.schoolId, courseId);
+  if (!enrollment || !isAuthorizedWeek(currentWeek, enrollment.currentWeek)) {
     return null;
   }
 
@@ -189,20 +202,22 @@ export async function submitProgressFeedback(
   const studentId = student.id;
 
   // Same authorization gate as generateWeeklyGuide: this path writes progress
-  // AND advances student_courses.current_week, so an unowned courseId must not
-  // reach either statement.
-  if (!isValidWeek(currentWeek) || !isValidWeek(currentWeek + 1)) {
+  // AND advances student_courses.current_week, so neither an unowned courseId
+  // nor an unauthorized week may reach either statement.
+  const enrollment = await authorizeCourseForStudent(studentId, student.schoolId, courseId);
+  if (!enrollment || !isAuthorizedWeek(currentWeek, enrollment.currentWeek)) {
     return;
   }
-  if (!(await authorizeCourseForStudent(studentId, student.schoolId, courseId))) {
-    return;
-  }
+
+  // Every week below is the SERVER's value, never the caller's — the caller's
+  // was only ever an equality token checked above.
+  const authorizedWeek = enrollment.currentWeek;
 
   // 1. Save Feedback to current week
   const { error: feedbackError } = await supabase.from("student_mission_progress").upsert({
     student_id: studentId,
     course_id: courseId,
-    week_number: currentWeek,
+    week_number: authorizedWeek,
     actual_progress_feedback: feedback,
   }, { onConflict: "student_id,course_id,week_number" });
 
@@ -210,13 +225,22 @@ export async function submitProgressFeedback(
     console.error("Failed to save progress feedback:", feedbackError);
   }
 
-  // 2. Trigger AI generation for NEXT week (currentWeek + 1)
-  const nextWeek = currentWeek + 1;
+  // 2. Trigger AI generation for NEXT week. The final week of a course has no
+  // next week to advance into; stop rather than writing a value the
+  // student_courses_current_week_range constraint would reject.
+  const nextWeek = authorizedWeek + 1;
+  if (!isValidWeek(nextWeek)) {
+    return;
+  }
+
+  // Compare-and-set on the week we authorized against, so two concurrent
+  // submissions cannot advance the enrollment twice.
   const { error: weekError } = await supabase
     .from("student_courses")
     .update({ current_week: nextWeek })
     .eq("student_id", studentId)
-    .eq("course_id", courseId);
+    .eq("course_id", courseId)
+    .eq("current_week", authorizedWeek);
 
   if (weekError) {
     console.error("Failed to advance current week:", weekError);

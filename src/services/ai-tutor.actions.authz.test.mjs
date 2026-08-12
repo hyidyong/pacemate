@@ -83,7 +83,12 @@ const COURSE_ROWS = {
   },
 };
 
-const ENROLLMENTS = [{ student_id: ATTACKER, course_id: COURSE, status: "interested" }];
+// The enrollment carries the AUTHORITATIVE week. A caller-supplied week that
+// merely falls in 1..30 is not evidence of anything.
+const AUTHORITATIVE_WEEK = 3;
+const ENROLLMENTS = [
+  { student_id: ATTACKER, course_id: COURSE, status: "interested", current_week: AUTHORITATIVE_WEEK },
+];
 
 function makeRecordingClient() {
   const writes = [];
@@ -218,7 +223,7 @@ test("generateWeeklyGuide ignores a caller-supplied studentId that is not the se
 
   try {
     const actions = await loadActions();
-    await actions.generateWeeklyGuide(COURSE, VICTIM, 3);
+    await actions.generateWeeklyGuide(COURSE, VICTIM, AUTHORITATIVE_WEEK);
   } finally {
     spy.restore();
   }
@@ -238,7 +243,7 @@ test("generateWeeklyGuide performs no write and no paid API call without a sessi
 
   try {
     const actions = await loadActions();
-    await actions.generateWeeklyGuide(COURSE, VICTIM, 3);
+    await actions.generateWeeklyGuide(COURSE, VICTIM, AUTHORITATIVE_WEEK);
   } finally {
     spy.restore();
   }
@@ -262,7 +267,7 @@ test("submitProgressFeedback never advances another student's course week", asyn
 
   try {
     const actions = await loadActions();
-    await actions.submitProgressFeedback(COURSE, VICTIM, 3, "피드백");
+    await actions.submitProgressFeedback(COURSE, VICTIM, AUTHORITATIVE_WEEK, "피드백");
   } finally {
     spy.restore();
   }
@@ -298,7 +303,7 @@ test("submitProgressFeedback performs no write without a session", async () => {
 
   try {
     const actions = await loadActions();
-    await actions.submitProgressFeedback(COURSE, VICTIM, 3, "피드백");
+    await actions.submitProgressFeedback(COURSE, VICTIM, AUTHORITATIVE_WEEK, "피드백");
   } finally {
     spy.restore();
   }
@@ -360,7 +365,7 @@ test("generateWeeklyGuide still works for the student's own enrolled course", as
 
   try {
     const actions = await loadActions();
-    await actions.generateWeeklyGuide(COURSE, ATTACKER, 3);
+    await actions.generateWeeklyGuide(COURSE, ATTACKER, AUTHORITATIVE_WEEK);
   } finally {
     spy.restore();
   }
@@ -406,4 +411,94 @@ test("submitProgressFeedback refuses a foreign-tenant course", async () => {
 
   assert.equal(client.writes.length, 0, "must not write or advance week for a foreign-tenant course");
   assert.equal(spy.calls.length, 0, "must not reach OpenAI for a foreign-tenant course");
+});
+
+// --- Review finding 2 (round 2): the week itself must be authorized ---------
+//
+// Bounding the week to 1..30 only rejects absurd input. A week inside that
+// range is still caller-supplied and therefore proves nothing: a student could
+// generate guides for, or overwrite progress at, any week of a course they are
+// legitimately enrolled in — including weeks they have not reached, and stale
+// weeks after their enrollment has moved on. The authoritative week lives on
+// the enrollment row and must be read server-side.
+
+test("a valid-range but unauthorized week is rejected before any side effect", async () => {
+  const client = makeRecordingClient();
+  const spy = installFetchSpy();
+  globalThis.__stage8AiClient = client;
+  globalThis.__stage8AiProfile = actingStudent();
+
+  try {
+    const actions = await loadActions();
+    // In range (1..30), enrolled course, right tenant — but not this student's
+    // current week.
+    await actions.generateWeeklyGuide(COURSE, ATTACKER, AUTHORITATIVE_WEEK + 2);
+  } finally {
+    spy.restore();
+  }
+
+  assert.equal(spy.calls.length, 0, "must not reach OpenAI for a week the student is not on");
+  assert.equal(client.writes.length, 0, "must not write progress for an unauthorized week");
+});
+
+test("a stale week from an out-of-date client is rejected", async () => {
+  const client = makeRecordingClient();
+  const spy = installFetchSpy();
+  globalThis.__stage8AiClient = client;
+  globalThis.__stage8AiProfile = actingStudent();
+
+  try {
+    const actions = await loadActions();
+    await actions.generateWeeklyGuide(COURSE, ATTACKER, AUTHORITATIVE_WEEK - 1);
+  } finally {
+    spy.restore();
+  }
+
+  assert.equal(spy.calls.length, 0, "a stale week must not regenerate content");
+  assert.equal(client.writes.length, 0, "a stale week must not overwrite progress");
+});
+
+test("submitProgressFeedback rejects a valid-range but unauthorized week", async () => {
+  const client = makeRecordingClient();
+  const spy = installFetchSpy();
+  globalThis.__stage8AiClient = client;
+  globalThis.__stage8AiProfile = actingStudent();
+
+  try {
+    const actions = await loadActions();
+    await actions.submitProgressFeedback(COURSE, ATTACKER, AUTHORITATIVE_WEEK + 5, "피드백");
+  } finally {
+    spy.restore();
+  }
+
+  assert.equal(client.writes.length, 0, "must not write feedback for an unauthorized week");
+  assert.equal(
+    client.writes.filter((w) => w.table === "student_courses").length,
+    0,
+    "must not advance enrollment state from an unauthorized week",
+  );
+  assert.equal(spy.calls.length, 0, "must not reach OpenAI");
+});
+
+test("submitProgressFeedback advances the enrollment using the server-derived week", async () => {
+  const client = makeRecordingClient();
+  const spy = installFetchSpy();
+  globalThis.__stage8AiClient = client;
+  globalThis.__stage8AiProfile = actingStudent();
+
+  try {
+    const actions = await loadActions();
+    await actions.submitProgressFeedback(COURSE, ATTACKER, AUTHORITATIVE_WEEK, "피드백");
+  } finally {
+    spy.restore();
+  }
+
+  const advance = client.writes.find((w) => w.table === "student_courses");
+  assert.ok(advance, "the legitimate path must still advance the enrollment");
+  assert.equal(
+    advance.payload.current_week,
+    AUTHORITATIVE_WEEK + 1,
+    "the next week must be derived from the stored week, not from caller input",
+  );
+  assert.equal(advance.filters.student_id, ATTACKER, "the advance must be scoped to the caller");
 });
