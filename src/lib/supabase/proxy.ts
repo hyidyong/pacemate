@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { createTimeoutFetch } from "@/lib/supabase/fetch-timeout";
 
 function getRequiredEnv(name: "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") {
   const value = process.env[name];
@@ -39,6 +40,7 @@ export async function updateSupabaseSession(request: NextRequest) {
           });
         },
       },
+      global: { fetch: createTimeoutFetch() },
     },
   );
 
