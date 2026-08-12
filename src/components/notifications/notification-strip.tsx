@@ -56,6 +56,18 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
     };
   }, [updateScrollControls, visibleNotifications.length]);
 
+  // Modal dialog mechanics: Escape closes (audit D-5). Declared before the
+  // empty-state early return so hook order stays stable.
+  useEffect(() => {
+    if (!selectedNotification) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedNotification(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [selectedNotification]);
+
   const scrollNotifications = (direction: "previous" | "next") => {
     const container = scrollContainerRef.current;
 
@@ -108,17 +120,6 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
       router.push(target);
     }
   };
-
-  // Modal dialog mechanics: Escape closes (audit D-5).
-  useEffect(() => {
-    if (!selectedNotification) return;
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedNotification(null);
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [selectedNotification]);
 
   const showScrollControls = visibleNotifications.length > 1;
 
