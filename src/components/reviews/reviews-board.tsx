@@ -138,7 +138,7 @@ export function ReviewsBoard({
         {message ? <p className="support-result">{message}</p> : null}
       </aside>
 
-      <main className="reviews-feed">
+      <section className="reviews-feed" aria-label="후기 목록">
         <div className="reviews-filter">
           <select value={filterCourseId} onChange={(event) => setFilterCourseId(event.target.value)}>
             <option value="all">전체 과목</option>
@@ -172,7 +172,7 @@ export function ReviewsBoard({
             </div>
           )}
         </div>
-      </main>
+      </section>
     </section>
   );
 }

@@ -422,7 +422,7 @@ export function CommunityBoard({
           </div>
         </aside>
 
-        <main className="community-feed" aria-label="게시글 목록">
+        <section className="community-feed" aria-label="게시글 목록">
           <div className="community-section-heading">
             <h2>{selectedBoard === "all" ? "전체 게시글" : `${boardLabel[selectedBoard]} 게시판`}</h2>
             <span>{filteredPosts.length}개</span>
@@ -458,7 +458,7 @@ export function CommunityBoard({
               <p>조건에 맞는 게시글이 없습니다. 검색어를 줄이거나 전체 과목을 확인해보세요.</p>
             </div>
           )}
-        </main>
+        </section>
 
         <aside className="community-side">
           <PostRail

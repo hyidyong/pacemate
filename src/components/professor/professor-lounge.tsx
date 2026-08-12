@@ -90,7 +90,7 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
         {message ? <p className="support-result">{message}</p> : null}
       </aside>
 
-      <main className="professor-lounge-feed">
+      <section className="professor-lounge-feed" aria-label="라운지 게시글">
         <div className="professor-lounge-filter">
           <button
             data-active={selectedCategory === "all"}
@@ -131,7 +131,7 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
             </div>
           )}
         </div>
-      </main>
+      </section>
     </section>
   );
 }
