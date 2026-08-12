@@ -41,17 +41,20 @@ export async function getCounselingPageData(
   profile: DemoProfile | null,
 ): Promise<CounselingPageData> {
   const supabase = await createSupabaseServerClient();
-  const [requests, availability, teachingSlots, busyRequests, adminTasks] = await Promise.all([
-    getStudentRequests(supabase, profile),
-    getAvailabilityRows(supabase),
-    getTeachingSlots(supabase),
-    getBusyRequests(supabase),
-    getAdminTasksRows(supabase),
-  ]);
-  const [courses, professors] = await Promise.all([
-    getCounselingCourses(supabase, profile),
-    getCounselingProfessors(supabase),
-  ]);
+  // One batch: courses/professors consume nothing from the availability set, so
+  // splitting them into a second await only added a full WAN stage. The real
+  // dependency (student_courses -> course_professors) lives inside
+  // getCounselingCourses.
+  const [requests, availability, teachingSlots, busyRequests, adminTasks, courses, professors] =
+    await Promise.all([
+      getStudentRequests(supabase, profile),
+      getAvailabilityRows(supabase),
+      getTeachingSlots(supabase),
+      getBusyRequests(supabase),
+      getAdminTasksRows(supabase),
+      getCounselingCourses(supabase, profile),
+      getCounselingProfessors(supabase),
+    ]);
 
   return {
     requests,

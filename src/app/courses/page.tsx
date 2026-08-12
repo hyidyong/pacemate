@@ -31,7 +31,13 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
   const params = await searchParams;
   const query = params?.q?.trim() ?? "";
   const normalizedQuery = query.toLowerCase();
-  const courses = await getCourseSummaries();
+  const isStudent = profile?.role === "student";
+  // Favorites depend only on the profile, not on the course list — fetch both
+  // in one round trip instead of serializing them.
+  const [courses, favoriteCourseIds] = await Promise.all([
+    getCourseSummaries(),
+    isStudent && profile ? getFavoriteCourseIds(profile.id) : Promise.resolve(new Set<string>()),
+  ]);
   const sampleCourse = courses.find(
     (course) => course.code === sampleSyllabus.course.code,
   );
@@ -52,11 +58,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
         return searchableText.includes(normalizedQuery);
       })
     : courses;
-
-  const isStudent = profile?.role === "student";
-  const favoriteCourseIds = isStudent && profile
-    ? await getFavoriteCourseIds(profile.id)
-    : new Set<string>();
 
   return (
     <AppShell showAiTutorFab={false}>
