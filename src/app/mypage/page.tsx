@@ -7,14 +7,18 @@ import { clearDemoSession } from "@/services/demo-auth.service";
 import { redirectNonStudent } from "@/services/role-guard.service";
 import { getDemoProfile } from "@/services/session.service";
 import { getMyPageData } from "@/services/student-community.service";
+import { DataErrorNotice } from "@/components/ui/data-error-notice";
 
 export const dynamic = "force-dynamic";
 
 export default async function MyPage() {
   const profile = await getDemoProfile();
   redirectNonStudent(profile);
+  // KI-003: a failed read must not render as a brand-new empty account.
+  let loadFailed = false;
   const data = await getMyPageData(profile).catch((error) => {
     console.error("My page data could not be loaded", error);
+    loadFailed = true;
     return {
       schoolName: "계명대학교",
       profile,
@@ -57,6 +61,7 @@ export default async function MyPage() {
         )}
       </section>
 
+      {loadFailed ? <DataErrorNotice label="마이페이지 데이터를 불러오지 못했습니다." /> : null}
       <MyPagePlanner
         courses={data.courses}
         myCourses={data.myCourses}
