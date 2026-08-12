@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
   createUserNotification,
@@ -19,8 +20,17 @@ export async function updateRoadmapRevisionStatus(formData: FormData) {
   const status = text(formData.get("status"));
   const adminNote = text(formData.get("adminNote"));
 
+  // Every outcome redirects with a result code the board renders — the old
+  // void returns meant approvals and failures were both silent (Stage 4,
+  // audit B-42/B-43).
   if (!requestId || !["assistant_reviewed", "approved", "rejected"].includes(status)) {
-    return;
+    redirect("/admin?result=invalid");
+  }
+
+  // 반려 fans out a student-facing notification; requiring a reason both
+  // informs the student and prevents an accidental one-click rejection.
+  if (status === "rejected" && !adminNote) {
+    redirect(`/admin?result=note_required&request=${requestId}`);
   }
 
   const timestamp = new Date().toISOString();
@@ -56,7 +66,7 @@ export async function updateRoadmapRevisionStatus(formData: FormData) {
     .single();
 
   if (error) {
-    return;
+    redirect("/admin?result=error");
   }
 
   const notification: UserNotificationCreateInput =
@@ -90,5 +100,5 @@ export async function updateRoadmapRevisionStatus(formData: FormData) {
     revalidatePath(`/roadmap/${data.course_id}`);
   }
 
-  return;
+  redirect(`/admin?result=${status}&request=${data.id}`);
 }

@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { NotificationStrip } from "@/components/notifications/notification-strip";
 import { AdminNotificationConsole } from "@/components/admin/admin-notification-console";
 import { Button } from "@/components/ui/button";
+import { PendingSubmitButton } from "@/components/ui/pending-submit-button";
 import { updateRoadmapRevisionStatus } from "@/services/admin-approval.actions";
 import { getAdminApprovalData } from "@/services/admin-approval.service";
 import { getNotificationsForProfile } from "@/services/notifications.service";
@@ -14,15 +15,34 @@ import { clearDemoSession } from "@/services/demo-auth.service";
 
 export const dynamic = "force-dynamic";
 
+// Board actions redirect back with a result code — the old void action gave
+// no feedback for success OR failure (Stage 4, audit B-42).
+const resultMessages: Record<string, { text: string; ok: boolean }> = {
+  assistant_reviewed: { text: "조교 1차 검토를 완료했습니다.", ok: true },
+  approved: { text: "최종 승인했습니다. 학생 로드맵에 반영됩니다.", ok: true },
+  rejected: { text: "요청을 반려하고 요청자에게 알림을 보냈습니다.", ok: true },
+  note_required: { text: "반려하려면 검토 메모에 반려 사유를 입력해 주세요.", ok: false },
+  invalid: { text: "요청을 처리할 수 없습니다. 다시 시도해 주세요.", ok: false },
+  error: { text: "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", ok: false },
+};
+
+const completedStatusLabels: Record<string, string> = {
+  approved: "승인 완료",
+  rejected: "반려",
+  assistant_reviewed: "조교 검토 완료",
+  pending: "대기",
+};
+
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ request?: string }>;
+  searchParams?: Promise<{ request?: string; result?: string }>;
 }) {
   const profile = await getDemoProfile();
   requireRoles(profile, ["assistant", "admin"]);
   const params = await searchParams;
   const selectedRequestId = params?.request;
+  const result = params?.result ? resultMessages[params.result] ?? null : null;
 
   const [data, notifications, supportNotifications] = await Promise.all([
     getAdminApprovalData(),
@@ -75,6 +95,21 @@ export default async function AdminPage({
         )}
       </section>
 
+      {result ? (
+        <section className="section">
+          <p
+            className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+              result.ok
+                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                : "border-red-100 bg-red-50 text-red-600"
+            }`}
+            role={result.ok ? "status" : "alert"}
+          >
+            {result.text}
+          </p>
+        </section>
+      ) : null}
+
       <section className="section admin-approval-board">
         <ApprovalColumn
           actionLabel="조교 1차 검토"
@@ -101,11 +136,16 @@ export default async function AdminPage({
           <div className="admin-request-list">
             {data.completed.map((request) => (
               <article data-selected={selectedRequestId === request.id} key={request.id}>
-                <span>{request.status}</span>
+                <span>{completedStatusLabels[request.status] ?? request.status}</span>
                 <strong>{request.title}</strong>
                 <p>{request.summary}</p>
               </article>
             ))}
+            {data.completed.length === 0 ? (
+              <div className="community-empty">
+                <p>처리 완료된 요청이 없습니다.</p>
+              </div>
+            ) : null}
           </div>
         </section>
       </section>
@@ -161,15 +201,19 @@ function ApprovalColumn({
                 <span>검토 메모</span>
                 <input name="adminNote" placeholder="검토 의견을 남길 수 있어요" />
               </label>
-              <button className="button button-default button-md" type="submit">
+              <PendingSubmitButton pendingLabel="처리 중…">
                 {actionLabel}
                 {icon}
-              </button>
+              </PendingSubmitButton>
             </form>
             {secondaryStatus ? (
-              <form action={updateRoadmapRevisionStatus}>
+              <form action={updateRoadmapRevisionStatus} className="admin-approval-form">
                 <input name="requestId" type="hidden" value={request.id} />
                 <input name="status" type="hidden" value={secondaryStatus} />
+                <label className="field">
+                  <span>반려 사유 (필수 · 요청자에게 전달됩니다)</span>
+                  <input name="adminNote" placeholder="반려 사유를 입력해 주세요" required />
+                </label>
                 <button className="admin-reject-button" type="submit">
                   반려
                   <XCircle size={15} aria-hidden="true" />
@@ -178,6 +222,11 @@ function ApprovalColumn({
             ) : null}
           </article>
         ))}
+        {requests.length === 0 ? (
+          <div className="community-empty">
+            <p>{title} 요청이 없습니다.</p>
+          </div>
+        ) : null}
       </div>
     </section>
   );
