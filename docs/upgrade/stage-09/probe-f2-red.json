@@ -369,32 +369,32 @@
     {
       "id": "cross-write:enrolment-foreign-course",
       "property": "A must not enrol in tenant B's course",
-      "pass": true,
-      "detail": "POST 403; 0 row(s) in the database"
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
     },
     {
       "id": "cross-write:mission-foreign-course",
       "property": "A must not create progress against tenant B's course",
-      "pass": true,
-      "detail": "POST 403; 0 row(s) in the database"
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
     },
     {
       "id": "cross-write:roadmap-foreign-course",
       "property": "A must not create a study roadmap against tenant B's course",
-      "pass": true,
-      "detail": "POST 403; 0 row(s) in the database"
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
     },
     {
       "id": "cross-write:task-foreign-course",
       "property": "A must not create a study task against tenant B's course",
-      "pass": true,
-      "detail": "POST 403; 0 row(s) in the database"
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
     },
     {
       "id": "cross-write:post-foreign-tenant",
       "property": "A must not publish a post into tenant B",
-      "pass": true,
-      "detail": "POST 403; 0 row(s) in the database"
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
     },
     {
       "id": "cross-write:review-foreign-course",

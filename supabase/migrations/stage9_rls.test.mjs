@@ -138,3 +138,62 @@ test("approve_course_weekly_plan binds the named professor to the caller", () =>
     /revoke all on function public\.approve_course_weekly_plan\(uuid, uuid, jsonb\) from public, anon, authenticated/,
   );
 });
+
+const tenantWrites = read("20260814050000_stage9_tenant_correlated_writes.sql");
+
+test("caller-owned rows that reference a tenant resource carry a tenant term", () => {
+  // Ownership alone ("is this row mine?") is true of an enrolment in another
+  // university's course. Every one of these was live-exploitable via direct
+  // PostgREST before this migration.
+  for (const table of [
+    "students manage own student courses",
+    "students manage own mission progress",
+    "students manage own study roadmaps",
+    "students manage own study tasks",
+  ]) {
+    const policy = tenantWrites.slice(tenantWrites.indexOf(`create policy "${table}"`));
+    assert.ok(policy.length > 0, `missing policy: ${table}`);
+    const body = policy.slice(0, policy.indexOf(";"));
+    assert.match(body, /course_in_current_tenant\(course_id\)/, `${table} lacks a course tenant term`);
+  }
+  assert.match(tenantWrites, /offering_in_current_tenant\(offering_id\)/);
+});
+
+test("a study task cannot hang off someone else's roadmap", () => {
+  assert.match(
+    tenantWrites,
+    /roadmap_id is null\s*or exists \([\s\S]*?study_roadmaps r[\s\S]*?r\.student_id = app_private\.current_profile_id\(\)/,
+  );
+});
+
+test("community writes are tenant-scoped without losing the role/community rule", () => {
+  for (const marker of [
+    /create policy "users create posts"[\s\S]*?school_id = app_private\.current_school_id\(\)/,
+    /create policy "users create comments"[\s\S]*?po\.school_id = app_private\.current_school_id\(\)/,
+    /create policy "users create own community reactions"[\s\S]*?po\.school_id = app_private\.current_school_id\(\)/,
+  ]) {
+    assert.match(tenantWrites, marker);
+  }
+  // The Stage 6 role<->community pairing must survive the rewrite.
+  assert.match(tenantWrites, /current_user_role\(\) = 'student' and community_type = 'student'/);
+  assert.match(tenantWrites, /current_user_role\(\) = 'professor' and community_type = 'professor'/);
+});
+
+test("the tenant predicates are SECURITY DEFINER with an empty search_path and no anon EXECUTE", () => {
+  for (const fn of ["course_in_current_tenant", "offering_in_current_tenant"]) {
+    const definition = tenantWrites.slice(
+      tenantWrites.indexOf(`create or replace function app_private.${fn}`),
+    );
+    const body = definition.slice(0, definition.indexOf("$$;"));
+    assert.match(body, /security definer/, `${fn} is not SECURITY DEFINER`);
+    assert.match(body, /set search_path = ''/, `${fn} has a mutable search_path`);
+  }
+  assert.match(tenantWrites, /revoke all on function app_private\.course_in_current_tenant\(uuid\) from public, anon/);
+  assert.match(tenantWrites, /revoke all on function app_private\.offering_in_current_tenant\(uuid\) from public, anon/);
+});
+
+test("the migration proves it is closing a hole rather than hiding rows", () => {
+  assert.match(tenantWrites, /precondition failed: % cross-tenant student_courses row\(s\) already exist/);
+  assert.match(tenantWrites, /precondition failed: % cross-tenant posts row\(s\) already exist/);
+  assert.match(tenantWrites, /postcondition failed: policy without a tenant term/);
+});

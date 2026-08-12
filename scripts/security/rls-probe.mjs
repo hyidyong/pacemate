@@ -76,7 +76,15 @@ function makeReporter() {
 }
 
 async function rawFetch(url, path, headers, init = {}) {
-  const res = await fetch(`${url}/rest/v1/${path}`, { ...init, headers });
+  // `{ ...init, headers }` used to DROP init.headers, so a per-call
+  // `Prefer: return=representation` never reached PostgREST: an INSERT that
+  // succeeded came back 201 with an empty body and read as "denied". That is a
+  // probe that reports safety it has not observed, so the base headers are now
+  // merged UNDER the per-call ones rather than replacing them.
+  const res = await fetch(`${url}/rest/v1/${path}`, {
+    ...init,
+    headers: { ...headers, ...(init.headers ?? {}) },
+  });
   const text = await res.text();
   let body = null;
   try {
@@ -447,6 +455,192 @@ async function main() {
     for (const probe of crossWrites) {
       const { pass, detail } = await probe.run();
       check(probe.id, probe.property, pass, detail);
+    }
+
+    // ------------------------------- cross-tenant WRITE primitives (Codex F2)
+    // A caller-owned row that REFERENCES a tenant resource is a write primitive:
+    // the row itself passes an ownership check, and the foreign reference then
+    // satisfies relationship-based RLS downstream. The app-layer tenant gate is
+    // irrelevant here — these go straight to PostgREST.
+    //
+    // Any row that unexpectedly succeeds is recorded in the ledger immediately,
+    // so a security failure still cleans up.
+    const tag = (suffix) => `${PROBE_MARKER}-${suffix}`;
+
+    // Outcome is read back with the SERVICE ROLE, never inferred from the
+    // response body. PostgREST answers 201 with an empty body when the client
+    // does not ask for a representation, and an earlier version of this probe
+    // read that as "denied" — reporting safety it had not observed, while the
+    // rows really existed. State is the evidence; the status code is a hint.
+    const confirmWrite = async (probe) => {
+      // Deliberately NO `Prefer: return=representation`. Asking for one makes
+      // PostgREST re-check the inserted row against the SELECT policy and roll
+      // back on failure, which produced 403s that looked like protection but
+      // vanish the moment an attacker omits the header. This is the weakest
+      // attacker path, so it is the one worth testing.
+      const res = await asA(probe.table, {
+        method: "POST",
+        headers: headersFor(tokenA),
+        body: JSON.stringify(probe.row),
+      });
+      const rows = await rest
+        .select(probe.table, `select=id&${probe.findColumn}=eq.${encodeURIComponent(probe.findValue)}`)
+        .catch(() => null);
+      if (rows === null) {
+        return { status: res.status, count: null, detail: "read-back FAILED — cannot verify" };
+      }
+      for (const row of rows) ledger.recordRow(probe.table, row.id, probe.id);
+      return { status: res.status, count: rows.length, detail: `${rows.length} row(s) in the database` };
+    };
+
+    // The same writes, same-tenant, must still work. A tenant-consistency rule
+    // that blocks legitimate enrolment is not a fix.
+    const sameTenantWrites = [
+      {
+        id: "allow:A-progress-own-course",
+        property: "A CAN create progress against their own tenant's course",
+        table: "student_mission_progress",
+        findColumn: "actual_progress_feedback",
+        findValue: tag("st-mission"),
+        row: {
+          student_id: A.profile.id,
+          course_id: A.course.id,
+          week_number: 3,
+          is_completed: false,
+          actual_progress_feedback: tag("st-mission"),
+        },
+      },
+      {
+        id: "allow:A-roadmap-own-course",
+        property: "A CAN create a study roadmap for their own tenant's course",
+        table: "study_roadmaps",
+        findColumn: "title",
+        findValue: tag("st-roadmap"),
+        row: { student_id: A.profile.id, course_id: A.course.id, title: tag("st-roadmap") },
+      },
+      {
+        id: "allow:A-post-own-tenant",
+        property: "A CAN publish a post in their own tenant",
+        table: "posts",
+        findColumn: "title",
+        findValue: tag("st-post"),
+        row: {
+          author_id: A.profile.id,
+          school_id: A.school.id,
+          community_type: "student",
+          category: "free",
+          title: tag("st-post"),
+          content: tag("st-post-body"),
+          status: "active",
+        },
+      },
+      {
+        id: "allow:A-review-own-course",
+        property: "A CAN review their own tenant's course",
+        table: "course_reviews",
+        findColumn: "content",
+        findValue: tag("st-review"),
+        row: { author_id: A.profile.id, course_id: A.course.id, content: tag("st-review") },
+      },
+    ];
+
+    for (const probe of sameTenantWrites) {
+      const { status, count, detail } = await confirmWrite(probe);
+      check(probe.id, probe.property, count === 1, `POST ${status}; ${detail}`);
+    }
+
+    // The cross-tenant study task needs a valid OWN parent roadmap, because
+    // study_tasks.roadmap_id is NOT NULL — otherwise the insert fails on the
+    // schema before RLS is ever consulted, and a 400 reads as a denial.
+    const ownRoadmap = await rest
+      .select("study_roadmaps", `select=id&title=eq.${encodeURIComponent(tag("st-roadmap"))}`)
+      .catch(() => []);
+    const ownRoadmapId = ownRoadmap[0]?.id ?? null;
+
+    const tenantWrites = [
+      {
+        id: "cross-write:enrolment-foreign-course",
+        property: "A must not enrol in tenant B's course",
+        table: "student_courses",
+        findColumn: "source_text",
+        findValue: tag("xt-enrol"),
+        row: {
+          student_id: A.profile.id,
+          course_id: B.course.id,
+          status: "interested",
+          semester_label: "2026-2",
+          source_text: tag("xt-enrol"),
+        },
+      },
+      {
+        id: "cross-write:mission-foreign-course",
+        property: "A must not create progress against tenant B's course",
+        table: "student_mission_progress",
+        findColumn: "actual_progress_feedback",
+        findValue: tag("xt-mission"),
+        row: {
+          student_id: A.profile.id,
+          course_id: B.course.id,
+          week_number: 2,
+          is_completed: false,
+          actual_progress_feedback: tag("xt-mission"),
+        },
+      },
+      {
+        id: "cross-write:roadmap-foreign-course",
+        property: "A must not create a study roadmap against tenant B's course",
+        table: "study_roadmaps",
+        findColumn: "title",
+        findValue: tag("xt-roadmap"),
+        row: { student_id: A.profile.id, course_id: B.course.id, title: tag("xt-roadmap") },
+      },
+      {
+        id: "cross-write:task-foreign-course",
+        property: "A must not create a study task against tenant B's course",
+        table: "study_tasks",
+        findColumn: "title",
+        findValue: tag("xt-task"),
+        skipWhen: () => !ownRoadmapId,
+        row: {
+          student_id: A.profile.id,
+          roadmap_id: ownRoadmapId,
+          course_id: B.course.id,
+          title: tag("xt-task"),
+        },
+      },
+      {
+        id: "cross-write:post-foreign-tenant",
+        property: "A must not publish a post into tenant B",
+        table: "posts",
+        findColumn: "title",
+        findValue: tag("xt-post"),
+        row: {
+          author_id: A.profile.id,
+          school_id: B.school.id,
+          community_type: "student",
+          category: "free",
+          title: tag("xt-post"),
+          content: tag("xt-post-body"),
+          status: "active",
+        },
+      },
+      {
+        id: "cross-write:review-foreign-course",
+        property: "A must not review tenant B's course",
+        table: "course_reviews",
+        findColumn: "content",
+        findValue: tag("xt-review"),
+        row: { author_id: A.profile.id, course_id: B.course.id, content: tag("xt-review") },
+      },
+    ];
+
+    for (const probe of tenantWrites) {
+      if (probe.skipWhen?.()) {
+        check(probe.id, probe.property, false, "PREREQUISITE MISSING — check could not run");
+        continue;
+      }
+      const { status, count, detail } = await confirmWrite(probe);
+      check(probe.id, probe.property, count === 0, `POST ${status}; ${detail}`);
     }
 
     // ------------------------------------------------- legitimate paths (allow)

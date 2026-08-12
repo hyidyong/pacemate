@@ -45,6 +45,16 @@ export const MARKED_TABLES = [
   ["student_courses", "source_text", `like.*${PROBE_MARKER}*`],
   ["student_mission_progress", "actual_progress_feedback", `like.*${PROBE_MARKER}*`],
   ["user_notifications", "title", `like.*${PROBE_MARKER}*`],
+  // These four are written by the cross-tenant WRITE probes rather than by
+  // provisioning, and they were missing from this list. That mattered: their
+  // parent foreign keys are ON DELETE SET NULL, so deleting the probe tenant
+  // does NOT remove them — a live run left 4 posts and 2 course_reviews behind
+  // while residue verification reported clean. A table the probe can write to
+  // must be a table residue verification looks at.
+  ["study_roadmaps", "title", `like.*${PROBE_MARKER}*`],
+  ["study_tasks", "title", `like.*${PROBE_MARKER}*`],
+  ["posts", "title", `like.*${PROBE_MARKER}*`],
+  ["course_reviews", "content", `like.*${PROBE_MARKER}*`],
 ];
 
 /**
