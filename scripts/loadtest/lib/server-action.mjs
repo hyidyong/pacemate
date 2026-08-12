@@ -74,22 +74,15 @@ export async function invokeServerAction({
   return { status: res.status, body, ok: res.status >= 200 && res.status < 400 };
 }
 
-// The action's return value is embedded in the RSC Flight payload. The app's
-// actions all return { ok, message }, so the message text is the observable
-// outcome; classify it without needing a Flight parser.
-export function classifyBookingResponse(body) {
-  if (/상담 신청을 보냈습니다/.test(body)) return "booked";
-  if (/이미 신청된 상담 시간입니다/.test(body)) return "duplicate_ack";
-  if (/선택한 상담 시간을 예약할 수 없습니다/.test(body)) return "slot_conflict";
-  if (/상담 신청을 저장하지 못했습니다/.test(body)) return "storage_failure";
-  if (/알림 전송에 실패했습니다/.test(body)) return "booked_notify_failed";
-  if (/로그인한 학생만/.test(body)) return "not_student";
-  return "unknown";
-}
-
-export function classifyCancelResponse(body) {
-  if (/상담 신청을 취소했습니다/.test(body)) return "cancelled";
-  if (/취소할 수 없는 상담 신청입니다/.test(body)) return "cancel_conflict";
-  if (/취소하지 못했습니다/.test(body)) return "cancel_failure";
-  return "unknown";
+// NOTE ON OUTCOME CLASSIFICATION
+//
+// The progressive-enhancement encoding re-renders the page rather than
+// returning the action's { ok, message } result, and the Next-Action header
+// encoding is rejected by this Next build when driven from outside the client
+// runtime (HTTP 500, digest 1795915146). Outcomes are therefore derived from
+// the resulting DATABASE STATE, which is what the Stage 5 invariants are about
+// anyway — an HTTP 200 was never sufficient evidence. These helpers remain for
+// the paths where the rendered page does carry the text.
+export function bodyMentionsStorageFailure(body) {
+  return /상담 신청을 저장하지 못했습니다/.test(body);
 }
