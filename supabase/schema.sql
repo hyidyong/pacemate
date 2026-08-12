@@ -1,3 +1,33 @@
+-- ============================================================================
+-- NON-AUTHORITATIVE. DO NOT APPLY. DO NOT CITE AS THE CURRENT SCHEMA.
+--
+-- Codex F9 / Stage 9 (2026-08-14). This file is a stale, partly corrupt snapshot
+-- kept only for historical reference. It is NOT executable and NOT current:
+--
+--   * it cannot run: `professor_admin_tasks` declares `day_of_week` twice
+--     (KI-005), and the DO block near the end uses `$$$` instead of `$$`
+--   * commit 570d7df injected `day_of_week` into four further tables that do
+--     not have it live (notices, roadmap_revision_requests, user_notifications,
+--     posts)
+--   * it declares `timetables` and `course_weekly_missions`, which do not exist
+--   * it declares `profiles.password_hash`, which does not exist
+--   * it omits 25 tables that do exist
+--   * it still lists `demo anon ...` policies that were dropped in Stage 9, and
+--     a policy predicate containing a hardcoded email address
+--
+-- WHERE TO LOOK INSTEAD:
+--   * supabase/migrations/**            the authoritative history
+--   * supabase/security-snapshot.json   RLS, policies, grants, functions and
+--                                       triggers generated FROM THE LIVE DATABASE
+--                                       by scripts/security/dump-security-snapshot.mjs,
+--                                       guarded by supabase/security-snapshot.test.mjs
+--
+-- It is not regenerated here because `supabase db dump` requires Docker, which
+-- is unavailable in this environment (BLOCKED — see KI-022). Hand-writing a
+-- replacement would invent schema state, which is the failure this file already
+-- demonstrates.
+-- ============================================================================
+
 create extension if not exists pgcrypto;
 
 create type public.user_role as enum ('student', 'professor', 'assistant', 'admin');
