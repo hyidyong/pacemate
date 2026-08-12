@@ -50,7 +50,7 @@ const ALLOWED_FIELDS = [
   "requestId",
 ] as const;
 
-export function emitSsoAuditEvent(event: SsoAuditEvent): void {
+export async function emitSsoAuditEvent(event: SsoAuditEvent): Promise<void> {
   const record: Record<string, string> = {};
   for (const field of ALLOWED_FIELDS) {
     const value = event[field];
@@ -69,12 +69,14 @@ export function emitSsoAuditEvent(event: SsoAuditEvent): void {
     .filter(Boolean)
     .join(" ");
 
-  // Stage 9: the "later durable sink" this comment anticipated. Identity
-  // creation and binding are the events most worth keeping past a log window,
-  // so these go to the append-only table as well as to stdout. The write is
-  // fire-and-forget: an audit failure must not break a login, and
-  // recordSecurityEvent already emits the operational line itself.
-  void recordSecurityEvent({
+  // Stage 9 / Codex F8: AWAITED, not fire-and-forget. A durable write that the
+  // caller never waits on is not durable — the serverless invocation can end
+  // before it lands, and a failure is invisible. Identity creation and binding
+  // are the events most worth keeping past a log window, so the caller waits.
+  // recordSecurityEvent still emits the operational line first and degrades to
+  // `audit.write_failed` rather than throwing, so an audit outage cannot break a
+  // login; what it will never do is silently claim success.
+  await recordSecurityEvent({
     event: `sso.${record.event ?? "unknown"}`,
     outcome,
     actorProfileId: record.profileId ?? null,

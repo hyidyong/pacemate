@@ -268,3 +268,66 @@ test("the professor direct-edit path writes through the service role with a tena
     "the roadmap revision insert must not use the session client",
   );
 });
+
+const auditAcls = read("20260814080000_stage9_audit_durability_and_acls.sql");
+const auditDetach = read("20260814090000_stage9_audit_detach_foreign_keys.sql");
+
+test("privileged ACLs are explicit, never incidental defaults", () => {
+  // Live inspection showed service_role held its audit-table and RPC privileges
+  // only through Supabase's default grants; a rebuild elsewhere could differ.
+  assert.match(auditAcls, /revoke all on public\.security_events from public, anon, authenticated/);
+  assert.match(auditAcls, /grant select on public\.security_events to authenticated/);
+  assert.match(auditAcls, /grant select, insert, delete on public\.security_events to service_role/);
+  assert.match(auditAcls, /grant execute on function public\.approve_course_weekly_plan\(uuid, uuid, jsonb\) to service_role/);
+  // UPDATE is granted to nobody.
+  assert.doesNotMatch(auditAcls, /grant[^;]*update[^;]*on public\.security_events/i);
+});
+
+test("ACL postconditions verify required access AND forbidden access", () => {
+  for (const positive of [
+    /postcondition failed: service_role cannot write the audit trail/,
+    /postcondition failed: service_role cannot read the audit trail/,
+    /postcondition failed: tenant admins cannot read the audit trail/,
+    /postcondition failed: service_role cannot execute the approval RPC/,
+  ]) {
+    assert.match(auditAcls, positive);
+  }
+  for (const negative of [
+    /postcondition failed: forbidden audit privileges/,
+    /postcondition failed: an ordinary user can mutate the audit trail/,
+    /postcondition failed: a client role can execute the approval RPC/,
+  ]) {
+    assert.match(auditAcls, negative);
+  }
+});
+
+test("audit attribution is an immutable snapshot, not a nullable pointer", () => {
+  assert.match(auditAcls, /add column if not exists actor_ref text/);
+  assert.match(auditAcls, /add column if not exists school_ref text/);
+  assert.match(auditAcls, /add column if not exists actor_role_ref text/);
+  // Populated by a trigger, so a caller cannot forget it.
+  assert.match(auditAcls, /create trigger security_events_snapshot_trg\s*\n\s*before insert on public\.security_events/);
+  // Append-only enforced by the database, not by convention.
+  assert.match(auditAcls, /create trigger security_events_no_update_trg\s*\n\s*before update on public\.security_events/);
+});
+
+test("the audit trail cannot block or be damaged by deleting the actor", () => {
+  // The append-only trigger initially rejected the ON DELETE SET NULL cascade,
+  // which turned the audit trail into a lock on user deletion — worse than the
+  // original defect, and directly in the way of the erasure path still owed.
+  assert.match(auditDetach, /drop constraint if exists security_events_actor_profile_id_fkey/);
+  assert.match(auditDetach, /drop constraint if exists security_events_school_id_fkey/);
+  assert.match(auditDetach, /postcondition failed: foreign keys survive on the audit table/);
+  // The migration proves the property with a self-test rather than asserting it.
+  assert.match(auditDetach, /insert into public\.profiles[\s\S]*?delete from public\.profiles where id = v_profile/);
+  assert.match(auditDetach, /postcondition failed: the attribution snapshot did not survive actor deletion/);
+  assert.match(auditDetach, /postcondition failed: the audit row was mutated by the actor deletion/);
+});
+
+test("the SSO audit write is awaited, not fire-and-forget", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../../src/lib/sso/sso-audit.ts", import.meta.url), "utf8");
+  assert.match(source, /export async function emitSsoAuditEvent/);
+  assert.match(source, /await recordSecurityEvent\(/);
+  assert.doesNotMatch(source, /void recordSecurityEvent\(/, "a durable write must not be fire-and-forget");
+});

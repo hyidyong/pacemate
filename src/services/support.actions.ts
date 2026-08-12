@@ -51,19 +51,44 @@ function getAutoReply(message: string) {
  */
 const SUPPORT_TITLE_MAX = 120;
 const SUPPORT_MESSAGE_MAX = 500;
+const SUPPORT_MESSAGE_ACCEPT_MAX = 4000;
+
+/**
+ * Codex F6. `category` was caller-controlled free text that was interpolated
+ * verbatim into the persisted notification body. An anonymous caller could
+ * therefore write an arbitrary (and arbitrarily long) string into an
+ * admin-facing record. It is now an allowlist: anything not on it is REJECTED,
+ * not silently coerced to a default, because quietly accepting an unknown value
+ * hides the attempt.
+ */
+const SUPPORT_CATEGORIES = ["system", "account", "counseling", "roadmap", "course", "other"] as const;
+type SupportCategory = (typeof SUPPORT_CATEGORIES)[number];
+
+function isSupportCategory(value: string): value is SupportCategory {
+  return (SUPPORT_CATEGORIES as readonly string[]).includes(value);
+}
 
 export async function submitSupportInquiry(formData: FormData) {
   const profile = await getDemoProfile();
-  const title = text(formData.get("title")).slice(0, SUPPORT_TITLE_MAX);
+  const title = text(formData.get("title"));
   const message = text(formData.get("message"));
   const category = text(formData.get("category"), "system");
+
+  if (!isSupportCategory(category)) {
+    return { ok: false, message: "문의 유형을 다시 선택해 주세요." };
+  }
 
   if (!title || message.length < 8) {
     return { ok: false, message: "문의 제목과 내용을 조금 더 구체적으로 적어 주세요." };
   }
 
-  if (message.length > 4000) {
-    return { ok: false, message: "문의 내용은 4000자 이내로 작성해 주세요." };
+  // Rejected, not truncated: a title silently cut to fit hides what was sent.
+  if (title.length > SUPPORT_TITLE_MAX) {
+    return { ok: false, message: `문의 제목은 ${SUPPORT_TITLE_MAX}자 이내로 작성해 주세요.` };
+  }
+
+  if (message.length > SUPPORT_MESSAGE_ACCEPT_MAX) {
+    return { ok: false, message: `문의 내용은 ${SUPPORT_MESSAGE_ACCEPT_MAX}자 이내로 작성해 주세요.` };
   }
 
   const autoReply = getAutoReply(`${title} ${message}`);

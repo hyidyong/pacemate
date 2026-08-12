@@ -39,6 +39,24 @@ export type NotificationCreateResult =
   | { ok: true }
   | { ok: false; message: string };
 
+/**
+ * Codex F6 — central bounds on everything that gets PERSISTED.
+ *
+ * This function is the only way a notification can be created (no client role
+ * holds INSERT), and it runs under the service role, so it IS the boundary.
+ * Length limits therefore belong here rather than at each of the eight callers,
+ * where one forgetful caller would reopen the hole.
+ *
+ * These REJECT rather than truncate. Silently storing a shortened version of an
+ * attacker-supplied field hides the attempt and leaves a half-record; the caller
+ * gets a clear failure instead. (Callers that legitimately summarise long user
+ * text — /support quoting an inquiry — do their own explicit, documented
+ * shortening before calling, which is a product decision, not a security one.)
+ */
+export const NOTIFICATION_TITLE_MAX = 200;
+export const NOTIFICATION_BODY_MAX = 2000;
+export const NOTIFICATION_TARGET_HREF_MAX = 512;
+
 const INVALID_NOTIFICATION_MESSAGE = "알림 정보를 확인해 주세요.";
 const NOTIFICATION_CREATE_FAILED_MESSAGE = "알림을 만들지 못했습니다.";
 
@@ -87,6 +105,15 @@ function normalizeNotificationInput(
     !title ||
     !body ||
     !isInternalNotificationPath(targetHref)
+  ) {
+    return null;
+  }
+
+  // Bounded before the privileged insert, and rejected rather than trimmed.
+  if (
+    title.length > NOTIFICATION_TITLE_MAX ||
+    body.length > NOTIFICATION_BODY_MAX ||
+    targetHref.length > NOTIFICATION_TARGET_HREF_MAX
   ) {
     return null;
   }
