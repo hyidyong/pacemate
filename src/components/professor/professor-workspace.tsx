@@ -291,6 +291,22 @@ export function ProfessorWorkspace({
     window.dispatchEvent(new CustomEvent<boolean>("professor-mobile-menu-state", { detail: sidebarOpen }));
   }, [sidebarOpen]);
 
+  // Mobile drawer dialog mechanics: Escape closes, background does not scroll.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSidebarOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
+
   // Toast: shows message at top, auto-dismiss (failures linger longer)
   function showToast(msg: string, ok: boolean = true) {
     setToast({ text: msg, ok });
@@ -642,8 +658,10 @@ export function ProfessorWorkspace({
         {sidebarOpen ? (
           <aside
             aria-label="교수 메뉴"
+            aria-modal="true"
             className="fixed inset-0 z-40 flex h-[100dvh] max-h-[100dvh] flex-col overflow-y-auto overscroll-contain bg-white px-5 pb-24 pt-24 lg:hidden"
             data-testid="professor-mobile-drawer"
+            role="dialog"
             style={{ paddingBottom: "calc(6rem + env(safe-area-inset-bottom))" }}
           >
             <div className="mx-auto w-full max-w-lg space-y-5 pb-8">
