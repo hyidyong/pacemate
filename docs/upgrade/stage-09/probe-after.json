@@ -322,7 +322,7 @@
       "id": "cross-write:counseling",
       "property": "B must not cancel A's counseling request",
       "pass": true,
-      "detail": "PATCH 200; status is now pending"
+      "detail": "PATCH 403; status is now pending"
     },
     {
       "id": "cross-write:availability",
@@ -401,6 +401,36 @@
       "property": "A must not review tenant B's course",
       "pass": true,
       "detail": "POST 403; 0 row(s) in the database"
+    },
+    {
+      "id": "counseling-direct:status",
+      "property": "a professor must not drive a status transition straight through PostgREST",
+      "pass": true,
+      "detail": "PATCH 403; status is now \"pending\""
+    },
+    {
+      "id": "counseling-direct:requested-start",
+      "property": "a professor must not rewrite the requested start time directly",
+      "pass": true,
+      "detail": "PATCH 403; requested_start is now \"2026-08-19T22:00:00+00:00\""
+    },
+    {
+      "id": "counseling-direct:student",
+      "property": "a professor must not reassign a request to another student",
+      "pass": true,
+      "detail": "PATCH 403; student_id is now \"00144ffd-841a-4625-87e3-da327ef06ca4\""
+    },
+    {
+      "id": "counseling-direct:suggested",
+      "property": "a professor must not write suggested times directly",
+      "pass": true,
+      "detail": "PATCH 403; suggested_start is now null"
+    },
+    {
+      "id": "allow:professor-reads-own-caseload",
+      "property": "a professor CAN still read their own counseling request",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
     },
     {
       "id": "allow:A-reads-own-notification",

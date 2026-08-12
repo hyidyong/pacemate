@@ -82,14 +82,35 @@ export async function provisionTenant(ledger, label, runId) {
     `department ${label}`,
   );
 
+  // The professor gets a real identity (auth user + profile + linked professors
+  // row) so `app_private.current_professor_id()` resolves for them. Without it
+  // no probe can exercise a professor-scoped policy at all.
+  const professorEmail = `${PROBE_MARKER}-prof-${label}-${runId}@probe.invalid`;
+  const professorAuthUser = await createAuthUser(ledger, professorEmail, `professor auth user ${label}`);
+
+  const professorProfile = await createRow(
+    ledger,
+    "profiles",
+    {
+      identifier: professorEmail,
+      name: `${PROBE_MARKER} professor profile ${label}`,
+      role: "professor",
+      school_id: school.id,
+      department_id: department.id,
+      auth_user_id: professorAuthUser.id,
+    },
+    `professor profile ${label}`,
+  );
+
   const professor = await createRow(
     ledger,
     "professors",
     {
       school_id: school.id,
       department_id: department.id,
+      profile_id: professorProfile.id,
       name: `${PROBE_MARKER} professor ${label}`,
-      email: `${PROBE_MARKER}-prof-${label}-${runId}@probe.invalid`,
+      email: professorEmail,
     },
     `professor ${label}`,
   );
@@ -222,6 +243,9 @@ export async function provisionTenant(ledger, label, runId) {
     label,
     school,
     department,
+    professorEmail,
+    professorProfile,
+    professorAuthUserId: professorAuthUser.id,
     professor,
     course,
     availability,

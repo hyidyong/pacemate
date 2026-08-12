@@ -147,6 +147,7 @@ async function main() {
 
     const tokenA = await signIn(A.email, PROBE_PASSWORD);
     const tokenB = await signIn(B.email, PROBE_PASSWORD);
+    const tokenProfA = await signIn(A.professorEmail, PROBE_PASSWORD);
     const headersFor = (token) => ({
       apikey: anonKey,
       Authorization: `Bearer ${token}`,
@@ -154,6 +155,7 @@ async function main() {
     });
     const asA = (path, init) => rawFetch(url, path, headersFor(tokenA), init);
     const asB = (path, init) => rawFetch(url, path, headersFor(tokenB), init);
+    const asProfA = (path, init) => rawFetch(url, path, headersFor(tokenProfA), init);
 
     // ---------------------------------------------------------------- anon read
     for (const [table, anonReadIntended, why] of TABLES) {
@@ -641,6 +643,87 @@ async function main() {
       }
       const { status, count, detail } = await confirmWrite(probe);
       check(probe.id, probe.property, count === 0, `POST ${status}; ${detail}`);
+    }
+
+    // ---------------------- Stage 5 counseling invariants at the DB (Codex F3)
+    // The professor's UPDATE policy authorized by ownership only, so a professor
+    // could PATCH their own counseling rows directly and bypass everything
+    // Stage 5 built: the legal-transition compare-and-set, the notification
+    // fan-out, timing validation, and the student-side invariants. Ownership is
+    // not the same question as "is this a legal change".
+    const counselingWrites = [
+      {
+        id: "counseling-direct:status",
+        property: "a professor must not drive a status transition straight through PostgREST",
+        patch: { status: "approved" },
+        column: "status",
+        expected: "pending",
+      },
+      {
+        id: "counseling-direct:requested-start",
+        property: "a professor must not rewrite the requested start time directly",
+        patch: { requested_start: "2030-01-01T09:00:00.000Z" },
+        column: "requested_start",
+        expected: null, // compared against the value captured before the patch
+      },
+      {
+        id: "counseling-direct:student",
+        property: "a professor must not reassign a request to another student",
+        patch: { student_id: B.profile.id },
+        column: "student_id",
+        expected: null,
+      },
+      {
+        id: "counseling-direct:suggested",
+        property: "a professor must not write suggested times directly",
+        patch: { suggested_start: "2030-01-01T10:00:00.000Z" },
+        column: "suggested_start",
+        expected: null,
+      },
+    ];
+
+    for (const probe of counselingWrites) {
+      const [before] = await rest.select(
+        "counseling_requests",
+        `select=${probe.column}&id=eq.${A.counseling.id}`,
+      );
+      const baseline = probe.expected ?? before?.[probe.column] ?? null;
+
+      const res = await asProfA(`counseling_requests?id=eq.${A.counseling.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(probe.patch),
+      });
+
+      const [after] = await rest.select(
+        "counseling_requests",
+        `select=${probe.column}&id=eq.${A.counseling.id}`,
+      );
+      const unchanged = String(after?.[probe.column] ?? null) === String(baseline);
+      if (!unchanged) {
+        await rest.update("counseling_requests", `id=eq.${A.counseling.id}`, {
+          [probe.column]: baseline,
+        });
+      }
+      check(
+        probe.id,
+        probe.property,
+        unchanged,
+        `PATCH ${res.status}; ${probe.column} is now ${JSON.stringify(after?.[probe.column] ?? null)}`,
+      );
+    }
+
+    // The professor must still be able to READ their own caseload — the server
+    // action path depends on it, and denying everyone is not a fix.
+    {
+      const { status, body } = await asProfA(
+        `counseling_requests?select=id,topic&id=eq.${A.counseling.id}`,
+      );
+      check(
+        "allow:professor-reads-own-caseload",
+        "a professor CAN still read their own counseling request",
+        status === 200 && rowCount(body) === 1,
+        `status ${status}, ${rowCount(body) ?? "?"} row(s)`,
+      );
     }
 
     // ------------------------------------------------- legitimate paths (allow)

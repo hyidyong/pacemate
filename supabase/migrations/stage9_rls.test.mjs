@@ -197,3 +197,29 @@ test("the migration proves it is closing a hole rather than hiding rows", () => 
   assert.match(tenantWrites, /precondition failed: % cross-tenant posts row\(s\) already exist/);
   assert.match(tenantWrites, /postcondition failed: policy without a tenant term/);
 });
+
+const counselingBoundary = read("20260814060000_stage9_counseling_write_boundary.sql");
+
+test("counseling mutations are server-only, so Stage 5's transition engine is not bypassable", () => {
+  assert.match(counselingBoundary, /drop policy if exists "professors update own counseling requests"/);
+  assert.match(counselingBoundary, /revoke update, delete on public\.counseling_requests from authenticated/);
+  assert.match(counselingBoundary, /revoke update, delete on public\.counseling_requests from anon/);
+  // The legitimate paths must survive: students still book, participants still read.
+  assert.match(counselingBoundary, /grant select, insert on public\.counseling_requests to authenticated/);
+  assert.match(counselingBoundary, /grant select, insert, update, delete on public\.counseling_requests to service_role/);
+  assert.match(counselingBoundary, /postcondition failed: a client role can still mutate counseling rows/);
+  assert.match(counselingBoundary, /postcondition failed: an UPDATE\/DELETE policy survives/);
+  assert.match(counselingBoundary, /postcondition failed: authenticated lost SELECT/);
+  assert.match(counselingBoundary, /postcondition failed: service_role cannot perform the server-side transition/);
+});
+
+test("the Stage 5 transition rules are not duplicated into RLS", () => {
+  // Two implementations of the same rule drift apart. The DB boundary removes
+  // the bypass; it does not restate the matrix. Comments describe the RED
+  // evidence and legitimately name the statuses, so compare the SQL only.
+  const sqlOnly = counselingBoundary
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("--"))
+    .join("\n");
+  assert.doesNotMatch(sqlOnly, /'approved'|'rejected'|'cancelled'|'pending'/);
+});
