@@ -1684,7 +1684,7 @@ function CounselingLogSub({
             <div key={entry.id} className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
               <div className="flex justify-between items-start mb-2">
                 <strong className="text-emerald-950 font-bold">{entry.topic}</strong>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${entry.status === "approved" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${entry.status === "approved" ? "bg-emerald-100 text-emerald-800" : entry.status === "cancelled" ? "bg-slate-100 text-slate-600" : "bg-red-100 text-red-800"}`}>
                   {counselingStatusLabels[entry.status]}
                 </span>
               </div>

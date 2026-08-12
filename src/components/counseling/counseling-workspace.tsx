@@ -288,11 +288,23 @@ export function CounselingWorkspace({
         </div>
 
         <div className="counseling-mode-tabs" role="tablist" aria-label="상담 예약 방식">
-          <button data-active={mode === "course"} onClick={() => setMode("course")} type="button">
+          <button
+            aria-selected={mode === "course"}
+            data-active={mode === "course"}
+            onClick={() => setMode("course")}
+            role="tab"
+            type="button"
+          >
             <BookOpen size={16} aria-hidden="true" />
             과목별 예약
           </button>
-          <button data-active={mode === "professor"} onClick={() => setMode("professor")} type="button">
+          <button
+            aria-selected={mode === "professor"}
+            data-active={mode === "professor"}
+            onClick={() => setMode("professor")}
+            role="tab"
+            type="button"
+          >
             <Search size={16} aria-hidden="true" />
             교수별 검색
           </button>

@@ -18,7 +18,7 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
   const [displayMode, setDisplayMode] = useState("anonymous");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filteredPosts = useMemo(
@@ -36,10 +36,10 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
     formData.set("title", title);
     formData.set("content", content);
 
-    setMessage("");
+    setMessage(null);
     startTransition(async () => {
       const result = await createProfessorLoungePost(formData);
-      setMessage(result.message);
+      setMessage({ text: result.message, ok: result.ok });
       if (result.ok) {
         setTitle("");
         setContent("");
@@ -89,7 +89,18 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
           {isPending ? "등록 중" : "등록"}
           <Send size={15} aria-hidden="true" />
         </button>
-        {message ? <p className="support-result">{message}</p> : null}
+        {message ? (
+          <p
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+              message.ok
+                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                : "border-red-100 bg-red-50 text-red-600"
+            }`}
+            role={message.ok ? "status" : "alert"}
+          >
+            {message.text}
+          </p>
+        ) : null}
       </aside>
 
       <section className="professor-lounge-feed" aria-label="라운지 게시글">

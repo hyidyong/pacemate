@@ -26,7 +26,7 @@ export function ReviewsBoard({
   const [teamProject, setTeamProject] = useState("false");
   const [content, setContent] = useState("");
   const [filterCourseId, setFilterCourseId] = useState(initialCourseId ?? "all");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const filteredReviews = useMemo(
@@ -46,10 +46,10 @@ export function ReviewsBoard({
     formData.set("teamProject", teamProject);
     formData.set("content", content);
 
-    setMessage("");
+    setMessage(null);
     startTransition(async () => {
       const result = await createCourseReview(formData);
-      setMessage(result.message);
+      setMessage({ text: result.message, ok: result.ok });
       if (result.ok) {
         setContent("");
         // The list is server data; without a refresh the student was told
@@ -135,7 +135,18 @@ export function ReviewsBoard({
           {isPending ? "등록 중" : "후기 등록"}
           <Send size={15} aria-hidden="true" />
         </button>
-        {message ? <p className="support-result">{message}</p> : null}
+        {message ? (
+          <p
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+              message.ok
+                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                : "border-red-100 bg-red-50 text-red-600"
+            }`}
+            role={message.ok ? "status" : "alert"}
+          >
+            {message.text}
+          </p>
+        ) : null}
       </aside>
 
       <section className="reviews-feed" aria-label="후기 목록">

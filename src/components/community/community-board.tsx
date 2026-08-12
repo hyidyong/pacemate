@@ -118,7 +118,7 @@ export function CommunityBoard({
   const [displayMode, setDisplayMode] = useState<DisplayMode>("anonymous");
   const [commentDraft, setCommentDraft] = useState("");
   const [comments, setComments] = useState<CommunityCommentRecord[] | null>(null);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Load the selected post's comments — they were previously written and
@@ -247,17 +247,17 @@ export function CommunityBoard({
     setComposerOpen(true);
     setReviewMode(false);
     setPreviewPostId("");
-    setMessage("");
+    setMessage(null);
   }
 
   function continueToReview() {
     if (!draftTitle.trim() || !draftContent.trim()) {
-      setMessage("제목과 내용을 입력해주세요.");
+      setMessage({ text: "제목과 내용을 입력해주세요.", ok: false });
       return;
     }
 
     setReviewMode(true);
-    setMessage("");
+    setMessage(null);
   }
 
   function submitPost() {
@@ -271,7 +271,7 @@ export function CommunityBoard({
 
     startTransition(async () => {
       const result = await createCommunityPost(formData);
-      setMessage(result.message);
+      setMessage({ text: result.message, ok: result.ok });
       if (result.ok && result.postId) {
         const newPost: CommunityPostRecord = {
           id: result.postId,
@@ -318,7 +318,7 @@ export function CommunityBoard({
     startTransition(async () => {
       const result = await togglePostReaction(formData);
       if (!result.ok || typeof result.active !== "boolean") {
-        setMessage(result.message);
+        setMessage({ text: result.message, ok: result.ok });
         return;
       }
 
@@ -336,13 +336,13 @@ export function CommunityBoard({
             : item,
         ),
       );
-      setMessage(result.message);
+      setMessage({ text: result.message, ok: result.ok });
     });
   }
 
   function submitComment(post: CommunityPostRecord) {
     if (!commentDraft.trim()) {
-      setMessage("댓글 내용을 입력해 주세요.");
+      setMessage({ text: "댓글 내용을 입력해 주세요.", ok: false });
       return;
     }
 
@@ -353,7 +353,7 @@ export function CommunityBoard({
 
     startTransition(async () => {
       const result = await addCommunityComment(formData);
-      setMessage(result.message);
+      setMessage({ text: result.message, ok: result.ok });
       if (result.ok) {
         setCommentDraft("");
         setPosts((current) =>
@@ -576,7 +576,7 @@ export function CommunityBoard({
                 <div className="community-actions">
                   <button
                     onClick={() => {
-                      setMessage("기존 글로 해결 처리했습니다. 작성 중인 글은 임시저장되어 있습니다.");
+                      setMessage({ text: "기존 글로 해결 처리했습니다. 작성 중인 글은 임시저장되어 있습니다.", ok: true });
                       setPreviewPostId("");
                       setComposerOpen(false);
                     }}
@@ -683,7 +683,18 @@ export function CommunityBoard({
                   </div>
                 ) : null}
 
-                {message ? <p className="mypage-message">{message}</p> : null}
+                {message ? (
+                <p
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                    message.ok
+                      ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                      : "border-red-100 bg-red-50 text-red-600"
+                  }`}
+                  role={message.ok ? "status" : "alert"}
+                >
+                  {message.text}
+                </p>
+              ) : null}
                 <div className="community-composer-actions">
                   {reviewMode ? (
                     <>
