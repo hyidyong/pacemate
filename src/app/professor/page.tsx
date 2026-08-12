@@ -69,7 +69,7 @@ export default async function ProfessorPage({
   );
 
   return (
-    <AppShell>
+    <AppShell professorSurface>
       <section className="screen-hero professor-hero">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
           <h1>교수 대시보드</h1>
