@@ -17,9 +17,11 @@ import {
 import {
   addCommunityComment,
   createCommunityPost,
+  getCommentsForPost,
   togglePostReaction,
 } from "@/services/student-community.actions";
 import type {
+  CommunityCommentRecord,
   CommunityPostRecord,
   CourseRecord,
   StudentCourseRecord,
@@ -115,8 +117,30 @@ export function CommunityBoard({
   const [draftCategory, setDraftCategory] = useState<Exclude<BoardKey, "all">>("question");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("anonymous");
   const [commentDraft, setCommentDraft] = useState("");
+  const [comments, setComments] = useState<CommunityCommentRecord[] | null>(null);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  // Load the selected post's comments — they were previously written and
+  // counted but never rendered anywhere (Stage 4, audit A-1).
+  useEffect(() => {
+    if (!selectedPostId) {
+      setComments(null);
+      return;
+    }
+
+    let cancelled = false;
+    setComments(null);
+    getCommentsForPost(selectedPostId).then((result) => {
+      if (!cancelled) {
+        setComments(result.comments);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPostId]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(getDraftKey(profileId));
@@ -337,6 +361,8 @@ export function CommunityBoard({
             item.id === post.id ? { ...item, comments: item.comments + 1 } : item,
           ),
         );
+        const refreshed = await getCommentsForPost(post.id);
+        setComments(refreshed.comments);
       }
     });
   }
@@ -471,6 +497,27 @@ export function CommunityBoard({
                 </div>
                 <div className="community-comment-box">
                   <strong>댓글 {selectedPost.comments}</strong>
+                  {comments === null ? (
+                    <p className="text-sm text-gray-400" role="status">댓글 불러오는 중…</p>
+                  ) : comments.length ? (
+                    <ul className="flex flex-col gap-2.5">
+                      {comments.map((comment) => (
+                        <li className="rounded-lg bg-gray-50 px-3 py-2.5" key={comment.id}>
+                          <p className="text-xs font-semibold text-gray-500">
+                            {comment.display_mode === "anonymous"
+                              ? comment.anonymous_alias ?? "익명"
+                              : comment.author?.name ?? "익명"}
+                            <span className="ml-2 font-normal text-gray-400">
+                              {new Date(comment.created_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}
+                            </span>
+                          </p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{comment.content}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-400">아직 댓글이 없습니다. 첫 댓글을 남겨보세요.</p>
+                  )}
                   <textarea
                     onChange={(event) => setCommentDraft(event.target.value)}
                     placeholder="댓글을 입력해 주세요"

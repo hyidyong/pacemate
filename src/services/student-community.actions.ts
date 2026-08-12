@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isMissingTimetableSchema } from "@/lib/student-timetable-schema";
 import { getDemoProfile } from "@/services/session.service";
 import type { CourseRecord, StudentCourseRecord } from "@/services/student-community.service";
+import { getPostComments } from "@/services/student-community.service";
 import {
   getExistingScheduleEntries,
   resolveStudentCourseSchedule,
@@ -641,6 +642,23 @@ export async function addCommunityComment(formData: FormData) {
   revalidatePath("/community");
   revalidatePath("/mypage");
   return { ok: true, message: "댓글을 등록했습니다.", commentId: data.id as string };
+}
+
+// Read-only: the board writes comments and shows counts, so it must also be
+// able to read them (Stage 4, audit A-1 — the read path never existed).
+export async function getCommentsForPost(postId: string) {
+  const trimmed = typeof postId === "string" ? postId.trim() : "";
+  if (!trimmed) {
+    return { ok: false as const, comments: [] };
+  }
+
+  try {
+    const grouped = await getPostComments([trimmed]);
+    return { ok: true as const, comments: grouped[trimmed] ?? [] };
+  } catch (error) {
+    console.error("Failed to load comments for post", error);
+    return { ok: false as const, comments: [] };
+  }
 }
 
 export async function togglePostReaction(formData: FormData) {
