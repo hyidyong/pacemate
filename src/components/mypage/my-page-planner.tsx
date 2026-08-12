@@ -38,6 +38,13 @@ import {
   type ExistingScheduleEntry,
 } from "@/services/student-timetable.rules";
 import { ScheduleConflictDialog } from "@/components/schedule/schedule-conflict-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { ScheduleConflictInfo } from "@/components/schedule/schedule-conflict-list";
 import type {
   CommunityPostRecord,
@@ -97,16 +104,18 @@ function TimetableCourseCell({
       <span className="mt-0.5 flex w-full min-w-0 flex-col gap-0.5 truncate text-[9px] font-medium leading-none opacity-70">
         <span className="w-full truncate">{item.classroom ?? "강의실 미정"}</span>
       </span>
-      <div className="absolute inset-0 flex items-center justify-center rounded-sm bg-slate-950/35 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          onClick={() => onRemove(item.id)}
-          className="rounded-full bg-white p-1.5 text-red-500 shadow-md transition-colors hover:bg-red-50"
-          title="과목 삭제"
-          type="button"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
+      {/* Delete affordance: a corner button, never an invisible full-cell
+          overlay — a center tap must not remove the course. Always visible on
+          touch (no hover); revealed on hover/focus for pointer devices. */}
+      <button
+        onClick={() => onRemove(item.id)}
+        className="absolute right-0.5 top-0.5 rounded-full bg-white/95 p-1.5 text-red-500 shadow-sm transition-opacity hover:bg-red-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+        aria-label={`${item.course.name} 시간표에서 삭제`}
+        title="과목 삭제"
+        type="button"
+      >
+        <Trash2 size={12} aria-hidden="true" />
+      </button>
     </div>
   );
 }
@@ -121,6 +130,7 @@ export function MyPagePlanner({
 }: MyPagePlannerProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [pendingRemoval, setPendingRemoval] = useState<{ id: string; name: string } | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState(courses[0]?.id ?? "");
   const [day, setDay] = useState("월");
   const [startTime, setStartTime] = useState("09:00");
@@ -720,7 +730,7 @@ export function MyPagePlanner({
                     <TimetableCourseCell
                       item={item}
                       colorClass={colorClass}
-                      onRemove={() => handleRemove(item.parentId)}
+                      onRemove={() => setPendingRemoval({ id: item.parentId, name: item.course.name })}
                     />
                   </div>
                 );
@@ -1133,6 +1143,37 @@ export function MyPagePlanner({
         onEditTime={handleEditConflictingTime}
         isPending={isPending}
       />
+
+      <Dialog open={pendingRemoval !== null} onOpenChange={(open) => { if (!open) setPendingRemoval(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogTitle>과목 삭제</DialogTitle>
+          <DialogDescription>
+            {pendingRemoval ? `${pendingRemoval.name} 과목을 시간표에서 삭제할까요?` : ""}
+          </DialogDescription>
+          <DialogFooter>
+            <button
+              type="button"
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+              onClick={() => setPendingRemoval(null)}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              disabled={isPending}
+              onClick={() => {
+                if (pendingRemoval) {
+                  handleRemove(pendingRemoval.id);
+                  setPendingRemoval(null);
+                }
+              }}
+            >
+              삭제
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
