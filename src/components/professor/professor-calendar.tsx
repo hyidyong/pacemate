@@ -248,17 +248,28 @@ export function ProfessorCalendar({
     return Math.floor(totalMinutes / 15) + 2;
   }
 
-  function handleSlotClick(dayIndex: number, hourIndex: number, isBlackout: boolean = false, rawSlot?: any) {
+  function handleSlotClick(
+    dayIndex: number,
+    hourIndex: number,
+    isBlackout: boolean = false,
+    rawSlot?: any,
+    // When a rendered chunk is clicked, its exact range is passed so the
+    // dialog header and both actions operate on the SAME time range — the
+    // hour-rounded fallback applies only to empty-cell clicks (audit B-11).
+    explicitRange?: { start: string; end: string },
+  ) {
     const startHourStr = (startHour + hourIndex).toString().padStart(2, '0');
     const endHourStr = (startHour + hourIndex + 1).toString().padStart(2, '0');
     const specificDateStr = weekDates[dayIndex].dateKey;
     const clickedLocal = dateKeyToLocalDate(specificDateStr);
+    const start = explicitRange?.start ?? `${startHourStr}:00`;
+    const end = explicitRange?.end ?? `${endHourStr}:00`;
 
     setActiveSlotAction({
       day: dayIndex + 1, // 1 to 5
       specificDate: specificDateStr,
-      start: `${startHourStr}:00`,
-      end: `${endHourStr}:00`,
+      start,
+      end,
       isBlackout,
       dateStr: clickedLocal
         ? `${clickedLocal.year}년 ${clickedLocal.month}월 ${clickedLocal.day}일`
@@ -268,8 +279,8 @@ export function ProfessorCalendar({
       rawSlot: rawSlot || {
         day: dayIndex + 1,
         specificDate: specificDateStr,
-        start: `${startHourStr}:00`,
-        end: `${endHourStr}:00`,
+        start,
+        end,
         isBlackout: false,
       }
     });
@@ -320,57 +331,56 @@ export function ProfessorCalendar({
   return (
     <div className="flex flex-col gap-4 font-sans">
       {/* Navigation & Actions */}
-      <div className="flex justify-between items-center bg-white/40 backdrop-blur-xl p-3 rounded-xl border border-white/60 shadow-sm">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap justify-between items-center gap-2 bg-white/40 backdrop-blur-xl p-3 rounded-xl border border-white/60 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-white/60 p-1 rounded-xl shadow-sm border border-white/80">
-            <Button variant="ghost" size="icon" onClick={prevWeek} className="h-8 w-8 rounded-lg hover:bg-white/80">
-              <ChevronLeft size={18} />
+            <Button variant="ghost" size="icon" onClick={prevWeek} aria-label="이전 주" className="h-8 w-8 rounded-lg hover:bg-white/80">
+              <ChevronLeft size={18} aria-hidden="true" />
             </Button>
             <span className="font-semibold text-[15px] px-2 text-gray-800">
               {currentLocal.year}년 {currentLocal.month}월
             </span>
-            <Button variant="ghost" size="icon" onClick={nextWeek} className="h-8 w-8 rounded-lg hover:bg-white/80">
-              <ChevronRight size={18} />
+            <Button variant="ghost" size="icon" onClick={nextWeek} aria-label="다음 주" className="h-8 w-8 rounded-lg hover:bg-white/80">
+              <ChevronRight size={18} aria-hidden="true" />
             </Button>
           </div>
-          
-          <div className="flex gap-4 text-xs font-medium text-gray-600 bg-white/50 px-3 py-2 rounded-xl border border-white/50">
+
+          {/* Legend swatches reuse the exact block fills; 상담 불가 was missing
+              from the legend entirely (audit B-12). */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-medium text-gray-600 bg-white/50 px-3 py-2 rounded-xl border border-white/50">
             <span className="flex items-center gap-1.5 text-emerald-950">
-              <span className="w-2.5 h-2.5 rounded-sm bg-blue-100 shadow-sm"></span> 강의
+              <span className="w-2.5 h-2.5 rounded-sm border border-gray-200/70 bg-blue-50/80 shadow-sm"></span> 강의
             </span>
             <span className="flex items-center gap-1.5 text-emerald-950">
-              <span className="w-2.5 h-2.5 rounded-sm bg-purple-100 shadow-sm"></span> 행정
+              <span className="w-2.5 h-2.5 rounded-sm border border-gray-200/70 bg-purple-50 shadow-sm"></span> 행정
             </span>
             <span className="flex items-center gap-1.5 text-emerald-950">
-              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-200 shadow-sm"></span> 상담 확정
+              <span className="w-2.5 h-2.5 rounded-sm border border-gray-200/70 bg-emerald-100/80 shadow-sm"></span> 상담 확정
             </span>
             <span className="flex items-center gap-1.5 text-emerald-950">
-              <span className="w-2.5 h-2.5 rounded-sm bg-emerald-50/80 shadow-sm"></span> 상담 가능
+              <span className="w-2.5 h-2.5 rounded-sm border border-gray-200/70 bg-emerald-50/40 shadow-sm"></span> 상담 가능
             </span>
             <span className="flex items-center gap-1.5 text-emerald-950">
-              <span className="w-2.5 h-2.5 rounded-sm bg-slate-100 shadow-sm"></span> 상담 미개방
+              <span className="w-2.5 h-2.5 rounded-sm border border-gray-200/70 bg-slate-50/60 shadow-sm"></span> 상담 미개방
+            </span>
+            <span className="flex items-center gap-1.5 text-emerald-950">
+              <span className="w-2.5 h-2.5 rounded-sm border border-gray-200/70 bg-gray-100 shadow-sm"></span> <span className="line-through decoration-gray-400">상담 불가</span>
             </span>
           </div>
         </div>
-
-        <Button 
-          variant="outline"
-          className="rounded-xl bg-white/60 border-white/80 hover:bg-white/90 shadow-sm text-sm h-9"
-          onClick={() => {
-            alert("데모 시간표 데이터가 로드되었습니다.");
-          }}
-        >
-          샘플 시간표 불러오기
-        </Button>
       </div>
 
-      {/* CSS Grid Calendar - Glassmorphism TimeBlocks Style */}
-      <div 
+      {/* CSS Grid Calendar - Glassmorphism TimeBlocks Style.
+          Below ~640px the week grid scrolls horizontally instead of
+          compressing day columns to ~36px (audit C-9). */}
+      <div className="w-full overflow-x-auto">
+      <div
         className="relative bg-white/30 backdrop-blur-xl border border-white/50 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden"
         style={{
           display: "grid",
           gridTemplateColumns: "50px repeat(5, 1fr)",
           gridTemplateRows: `40px repeat(${(dynamicEndHour - startHour) * 4}, ${rowHeight}px)`,
+          minWidth: "640px",
         }}
       >
         {/* Top-Left Empty Header */}
@@ -421,19 +431,21 @@ export function ProfessorCalendar({
           </div>
         ))}
 
-        {/* Grid Cells (Empty Slots for Interaction) */}
-        {weekDates.map((_, dayIndex) => (
-          hours.map((_, hourIndex) => (
-            <div 
+        {/* Grid Cells (Empty Slots for Interaction) — real buttons so the
+            calendar is keyboard-operable (audit D-4). */}
+        {weekDates.map((wd, dayIndex) => (
+          hours.map((hour, hourIndex) => (
+            <button
               key={`cell-${dayIndex}-${hourIndex}`}
               onClick={() => handleSlotClick(dayIndex, hourIndex)}
-              className="cursor-pointer hover:bg-black/5 transition-colors duration-200"
-              style={{ 
-                gridRow: `${hourIndex * 4 + 2} / span 4`, 
+              aria-label={`${wd.label} ${hour}시 일정 추가 또는 차단`}
+              className="cursor-pointer hover:bg-black/5 focus-visible:bg-black/5 transition-colors duration-200"
+              style={{
+                gridRow: `${hourIndex * 4 + 2} / span 4`,
                 gridColumn: dayIndex + 2,
               }}
-              title="클릭하여 일정 추가 또는 차단"
-            ></div>
+              type="button"
+            ></button>
           ))
         ))}
 
@@ -451,7 +463,13 @@ export function ProfessorCalendar({
                 if (isRecommended) {
                   // open dialog for recommended slots as well
                   e.stopPropagation();
-                  handleSlotClick(block.day - 1, parseInt(block.startTime.split(":")[0]) - startHour, block.isBlackout, block.rawSlot);
+                  handleSlotClick(
+                    block.day - 1,
+                    parseInt(block.startTime.split(":")[0]) - startHour,
+                    block.isBlackout,
+                    block.rawSlot,
+                    { start: block.startTime, end: block.endTime },
+                  );
                 } else if (isCounseling) {
                   e.stopPropagation();
                   handleCounselingClick(block);
@@ -480,6 +498,7 @@ export function ProfessorCalendar({
           );
         })}
       </div>
+      </div>
 
       {/* Popover/Dialog for Add Admin / Blackout Interaction */}
       <Dialog open={!!activeSlotAction} onOpenChange={(open) => !open && setActiveSlotAction(null)}>
@@ -490,7 +509,7 @@ export function ProfessorCalendar({
               일정 설정
             </DialogTitle>
             <DialogDescription className="text-gray-500 font-medium">
-              {activeSlotAction?.dateStr} {activeSlotAction?.startHourStr}:00 - {activeSlotAction?.endHourStr}:00
+              {activeSlotAction?.dateStr} {activeSlotAction?.start} - {activeSlotAction?.end}
             </DialogDescription>
           </DialogHeader>
           
@@ -619,8 +638,8 @@ export function ProfessorCalendar({
                   {selectedBlock.day ? WEEKDAYS[selectedBlock.day - 1] + "요일" : ""} {selectedBlock.startTime} ~ {selectedBlock.endTime}
                 </p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setSelectedBlock(null)} className="h-8 w-8 rounded-xl bg-gray-100 hover:bg-gray-200">
-                <X size={16} />
+              <Button variant="ghost" size="icon" aria-label="닫기" onClick={() => setSelectedBlock(null)} className="h-8 w-8 rounded-xl bg-gray-100 hover:bg-gray-200">
+                <X size={16} aria-hidden="true" />
               </Button>
             </div>
             
