@@ -224,7 +224,7 @@ export function ProfessorWorkspace({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [currentCounselingRequests, setCurrentCounselingRequests] = useState<ProfessorCounselingRequest[]>(counselingRequests);
   const [currentCalendarRequests, setCurrentCalendarRequests] = useState<ProfessorCounselingRequest[]>(calendarRequests);
   const [currentNotificationCounts, setCurrentNotificationCounts] = useState(notificationCounts);
@@ -291,15 +291,16 @@ export function ProfessorWorkspace({
     window.dispatchEvent(new CustomEvent<boolean>("professor-mobile-menu-state", { detail: sidebarOpen }));
   }, [sidebarOpen]);
 
-  // Toast: shows message at top, auto-dismiss after 3s
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
+  // Toast: shows message at top, auto-dismiss (failures linger longer)
+  function showToast(msg: string, ok: boolean = true) {
+    setToast({ text: msg, ok });
+    setTimeout(() => setToast(null), ok ? 3000 : 6000);
   }
 
-  // Shared action runner
+  // Shared action runner — afterSuccess (e.g. removing a card from the
+  // pending queue) must only run when the server action actually succeeded.
   function runAction(
-    action: (formData: FormData) => Promise<{ message: string }>,
+    action: (formData: FormData) => Promise<{ ok: boolean; message: string }>,
     formData: FormData,
     afterSuccess?: () => void,
   ) {
@@ -307,8 +308,10 @@ export function ProfessorWorkspace({
     startTransition(async () => {
       const result = await action(formData);
       setMessage(result.message);
-      showToast(result.message);
-      afterSuccess?.();
+      showToast(result.message, result.ok);
+      if (result.ok) {
+        afterSuccess?.();
+      }
     });
   }
 
@@ -706,9 +709,18 @@ export function ProfessorWorkspace({
 
       {/* Toast */}
       {toast ? (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-800 text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 transform translate-y-0 opacity-100">
-          <Check size={18} className="text-emerald-400" />
-          <span className="text-sm font-medium tracking-wide">{toast}</span>
+        <div
+          role="status"
+          className={`fixed bottom-6 right-6 z-50 px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 transform translate-y-0 opacity-100 ${
+            toast.ok ? "bg-slate-800 text-white" : "bg-red-700 text-white"
+          }`}
+        >
+          {toast.ok ? (
+            <Check size={18} aria-hidden="true" className="text-emerald-400" />
+          ) : (
+            <span aria-hidden="true" className="text-base font-bold text-red-200">!</span>
+          )}
+          <span className="text-sm font-medium tracking-wide">{toast.text}</span>
         </div>
       ) : null}
     </div>
@@ -889,7 +901,7 @@ function ScheduleManualSub({
   professor: { id: string };
   availability: ProfessorAvailability[];
   isPending: boolean;
-  runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
+  runAction: (action: (fd: FormData) => Promise<{ ok: boolean; message: string }>, fd: FormData, cb?: () => void) => void;
   showToast: (msg: string) => void;
 }) {
   const [dayOfWeek, setDayOfWeek] = useState("2");
@@ -978,7 +990,7 @@ function RoadmapEditSub({
   professor: { id: string };
   courses: ProfessorCourse[];
   isPending: boolean;
-  runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
+  runAction: (action: (fd: FormData) => Promise<{ ok: boolean; message: string }>, fd: FormData, cb?: () => void) => void;
   showToast: (msg: string) => void;
 }) {
   const [directCourse, setDirectCourse] = useState(courseValue(courses[0]));
@@ -1351,7 +1363,7 @@ function ManualFaqSub({
   courses: ProfessorCourse[];
   faqs: ProfessorFaq[];
   isPending: boolean;
-  runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
+  runAction: (action: (fd: FormData) => Promise<{ ok: boolean; message: string }>, fd: FormData, cb?: () => void) => void;
   showToast: (msg: string) => void;
 }) {
   const [faqCourseId, setFaqCourseId] = useState(courses[0]?.id ?? "");
@@ -1442,8 +1454,8 @@ function PendingCounselingSub({
   counselingRequests: ProfessorCounselingRequest[];
   highlightedRequestId?: string;
   isPending: boolean;
-  runAction: (action: (fd: FormData) => Promise<{ message: string }>, fd: FormData, cb?: () => void) => void;
-  showToast: (msg: string) => void;
+  runAction: (action: (fd: FormData) => Promise<{ ok: boolean; message: string }>, fd: FormData, cb?: () => void) => void;
+  showToast: (msg: string, ok?: boolean) => void;
   onRequestStatusChange: (updatedRequest: ProfessorCounselingRequest) => void;
 }) {
   const pendingRequests = counselingRequests.filter((r) => r.status === "pending");
@@ -1479,12 +1491,11 @@ function PendingCounselingSub({
       setLocalPending((prev) => prev.filter((r) => r.id !== request.id));
       onRequestStatusChange({ ...request, status: "approved" });
     });
-    showToast("일정에 추가 했습니다");
   }
 
   function handleReject(request: ProfessorCounselingRequest) {
     if (!rejectNote) {
-      showToast("거절 사유를 입력해 주세요.");
+      showToast("거절 사유를 입력해 주세요.", false);
       return;
     }
     const formData = new FormData();
