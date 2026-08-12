@@ -24,9 +24,37 @@ function getAutoReply(message: string) {
   return "";
 }
 
+/**
+ * Stage 9 — the anonymous support boundary.
+ *
+ * /support is deliberately reachable without a session, and that is preserved.
+ * What is NOT preserved is the shape of the old boundary:
+ *
+ *   before:  anonymous browser -> INSERT into user_notifications with a
+ *            caller-chosen recipient_id, recipient_role, school_id,
+ *            target_href, category, title and body
+ *   after:   anonymous browser -> this validated server action -> a
+ *            notification whose every routing field is a constant chosen here
+ *
+ * The anon INSERT policy the old shape depended on is gone (20260814010000),
+ * and no client role holds INSERT on `user_notifications` at all, so the only
+ * way to create one is through server code that has already decided what it is
+ * creating. The caller controls exactly two things — a title and a body — and
+ * both are length-bounded before they are stored.
+ *
+ * Anti-abuse is deliberately bounded to what can be enforced correctly here:
+ * length caps and a fixed low-trust routing shape. Per-IP throttling is NOT
+ * added — university traffic arrives through campus NAT, so an IP is not a
+ * caller (the same reasoning as KI-021), and an in-memory limiter on serverless
+ * is per-instance theatre. A volume control belongs with a shared store, which
+ * this stage does not introduce.
+ */
+const SUPPORT_TITLE_MAX = 120;
+const SUPPORT_MESSAGE_MAX = 500;
+
 export async function submitSupportInquiry(formData: FormData) {
   const profile = await getDemoProfile();
-  const title = text(formData.get("title"));
+  const title = text(formData.get("title")).slice(0, SUPPORT_TITLE_MAX);
   const message = text(formData.get("message"));
   const category = text(formData.get("category"), "system");
 
@@ -34,18 +62,31 @@ export async function submitSupportInquiry(formData: FormData) {
     return { ok: false, message: "문의 제목과 내용을 조금 더 구체적으로 적어 주세요." };
   }
 
+  if (message.length > 4000) {
+    return { ok: false, message: "문의 내용은 4000자 이내로 작성해 주세요." };
+  }
+
   const autoReply = getAutoReply(`${title} ${message}`);
   if (autoReply) {
     return { ok: true, autoReplied: true, message: autoReply };
   }
 
+  // Every routing field below is a constant. An anonymous submission is
+  // labelled as such rather than borrowing a name it cannot prove, and it is
+  // addressed to the admin role — never to a recipient the caller names.
+  const submitter = profile?.name ?? "비로그인 사용자";
   const notificationResult = await createUserNotification({
     recipientRole: "admin",
     recipientId: null,
     category: "system",
     title: `운영 문의: ${title}`,
-    body: `[${category}] ${profile?.name ?? "사용자"}: ${message.slice(0, 500)}`,
+    body: `[${category}] ${submitter}: ${message.slice(0, SUPPORT_MESSAGE_MAX)}`,
     targetHref: "/admin",
+    // A signed-in submitter's inquiry reaches their own university's admins; an
+    // anonymous one has no tenant to claim and stays untenanted, which the
+    // Stage 8 read predicate already handles (NULL school_id matches nothing,
+    // so it is visible only through the server-side admin surface).
+    schoolId: profile?.school_id ?? null,
   });
 
   if (!notificationResult.ok) {

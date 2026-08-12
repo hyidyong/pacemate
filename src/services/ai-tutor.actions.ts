@@ -4,7 +4,10 @@
 // (the authenticated policies still compare auth.uid() to profiles.id, which
 // no longer matches after the auth_user_id mapping migrations), so this module
 // keeps using the anon client on purpose.
-import { supabase } from "@/lib/supabase/client";
+// Stage 9: the `demo anon ...` policies this module relied on are gone
+// (20260814010000). Reads and writes now go through the caller's own
+// session, so RLS enforces ownership and tenancy instead of the anon role.
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDemoProfile } from "@/services/session.service";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -42,7 +45,7 @@ async function authorizeCourseForStudent(
 ): Promise<{ currentWeek: number } | null> {
   if (!courseId) return null;
 
-  const { data, error } = await supabase
+  const { data, error } = await (await createSupabaseServerClient())
     .from("student_courses")
     .select("course_id, current_week, course:courses!inner(id, school_id)")
     .eq("student_id", studentId)
@@ -114,7 +117,7 @@ export async function generateWeeklyGuide(
   }
 
   // 1. Fetch Course & Syllabus
-  const { data: course } = await supabase
+  const { data: course } = await (await createSupabaseServerClient())
     .from("courses")
     .select("name, description, syllabi(parsed_text, raw_extracted_text)")
     .eq("id", courseId)
@@ -126,7 +129,7 @@ export async function generateWeeklyGuide(
     "강의 계획서 정보가 없습니다.";
 
   // 2. Fetch Student Profile
-  const { data: profile } = await supabase
+  const { data: profile } = await (await createSupabaseServerClient())
     .from("student_profiles")
     .select("target_career, interests, weak_basics")
     .eq("profile_id", studentId)
@@ -170,7 +173,7 @@ ${feedback ? `학생의 이전 실제 진도 피드백: "${feedback}" (이 피�
     const resultContent = JSON.parse(json.choices[0].message.content);
 
     // Save to Database
-    const { error: insertError } = await supabase.from("student_mission_progress").upsert({
+    const { error: insertError } = await (await createSupabaseServerClient()).from("student_mission_progress").upsert({
       student_id: studentId,
       course_id: courseId,
       week_number: currentWeek,
@@ -214,7 +217,7 @@ export async function submitProgressFeedback(
   const authorizedWeek = enrollment.currentWeek;
 
   // 1. Save Feedback to current week
-  const { error: feedbackError } = await supabase.from("student_mission_progress").upsert({
+  const { error: feedbackError } = await (await createSupabaseServerClient()).from("student_mission_progress").upsert({
     student_id: studentId,
     course_id: courseId,
     week_number: authorizedWeek,
@@ -235,7 +238,7 @@ export async function submitProgressFeedback(
 
   // Compare-and-set on the week we authorized against, so two concurrent
   // submissions cannot advance the enrollment twice.
-  const { error: weekError } = await supabase
+  const { error: weekError } = await (await createSupabaseServerClient())
     .from("student_courses")
     .update({ current_week: nextWeek })
     .eq("student_id", studentId)

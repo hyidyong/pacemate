@@ -1,7 +1,7 @@
 import "server-only";
 
 import { normalizeUuid } from "@/lib/uuid";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const NOTIFICATION_CATEGORIES = [
@@ -157,11 +157,23 @@ export async function createUserNotification(
   return createUserNotifications([input]);
 }
 
+// Stage 9. This used to write through the SSR session client, which meant the
+// row was created by whatever role the caller happened to have — `anon` for the
+// sessionless /support flow. That is why `user_notifications` carried an INSERT
+// policy open to `anon` whose only condition was three non-empty strings, and
+// the Stage 9 probe confirmed the consequence: an unauthenticated caller could
+// deliver a notification with an arbitrary title, body and target_href into any
+// user's feed.
+//
+// Notifications are never created by a browser; every caller is server code
+// that has already authorized the action. So the write now runs under the
+// service role, and no client role holds INSERT on the table at all
+// (20260814010000). The shape of the row is still validated here — the service
+// role bypasses RLS, so this function IS the boundary.
 export async function createUserNotifications(
   inputs: readonly UserNotificationCreateInput[],
 ): Promise<NotificationCreateResult> {
-  const supabase = await createSupabaseServerClient();
-  return createUserNotificationsWithClient(supabase, inputs);
+  return createUserNotificationsWithClient(createSupabaseAdminClient(), inputs);
 }
 
 export async function createUserNotificationsWithClient(

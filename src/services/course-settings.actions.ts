@@ -2,12 +2,32 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { supabase } from "@/lib/supabase/client";
 import { createUserNotificationsWithClient } from "@/services/notifications.create.service";
 import { getDemoProfile } from "@/services/session.service";
 
 export async function getCourseRoadmap(courseId: string) {
-  const { data, error } = await supabase
+  // Stage 9: this returned the full parsed syllabus of ANY course to ANY
+  // caller — no session, no tenant, no enrolment. `syllabi` was also
+  // anon-readable at the database, so both layers were open. The action now
+  // requires a session and the course must be in the caller's own university.
+  const profile = await getDemoProfile();
+  if (!profile || !profile.school_id) {
+    return { success: false, parsedText: null };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data: course } = await admin
+    .from("courses")
+    .select("id")
+    .eq("id", courseId)
+    .eq("school_id", profile.school_id)
+    .maybeSingle();
+
+  if (!course) {
+    return { success: false, parsedText: null };
+  }
+
+  const { data, error } = await admin
     .from("syllabi")
     .select("parsed_text")
     .eq("course_id", courseId)
@@ -32,7 +52,9 @@ export async function removeCourseAssignment(formData: FormData) {
   const courseId = formData.get("courseId") as string;
   if (!courseId) return { message: "과목을 선택해주세요." };
 
-  const { error } = await supabase.from("roadmap_revision_requests").insert({
+  // Stage 9: session roles no longer hold INSERT on this table; the role
+  // gate above is the authorization and the service role performs the write.
+  const { error } = await createSupabaseAdminClient().from("roadmap_revision_requests").insert({
     scope: "course",
     status: "pending",
     course_id: courseId,

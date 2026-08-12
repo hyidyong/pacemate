@@ -1,5 +1,8 @@
 import { roadmapCourses, type RoadmapCourse } from "@/data/roadmap-explorer";
-import { supabase } from "@/lib/supabase/client";
+// Stage 9: the `demo anon ...` policies this module relied on are gone
+// (20260814010000). Reads and writes now go through the caller's own
+// session, so RLS enforces ownership and tenancy instead of the anon role.
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type RoadmapRevisionRequest = {
   id: string;
@@ -33,7 +36,8 @@ const editableArrayFields = [
 export async function getRoadmapRevisionRequests(
   statuses?: RoadmapRevisionRequest["status"][],
 ): Promise<RoadmapRevisionRequest[]> {
-  let query = supabase
+  const client = await createSupabaseServerClient();
+  let query = client
     .from("roadmap_revision_requests")
     .select(
       "id, scope, status, course_code, course_id, department_name, title, summary, proposed_by_name, reviewed_by_name, approved_by_name, source_title, source_url, proposed_patch, admin_note, created_at, reviewed_at, approved_at, rejected_at",

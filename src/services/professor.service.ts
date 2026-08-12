@@ -3,7 +3,8 @@
 // currently allow; counseling request reads need the service role because the
 // authenticated role can no longer read student names after the profile
 // column-grant hardening migrations.
-import { supabase as anonSupabase } from "@/lib/supabase/client";
+// Stage 9: the anon read policies these two queries used are gone
+// (20260814010000); they now read as the signed-in caller.
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { RoadmapRevisionRequest } from "@/services/roadmap-revisions.service";
@@ -181,19 +182,17 @@ async function getCurrentProfessor(profile: DemoProfile | null) {
       .eq("profile_id", profile.id)
       .maybeSingle();
 
-    if (data) {
-      return data;
-    }
+    return data;
   }
 
-  const { data } = await supabase
-    .from("professors")
-    .select("id, profile_id, name, office, email, bio, department:departments(name)")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  return data;
+  // Stage 9: this used to fall back to `.order("created_at").limit(1)` — the
+  // globally first professor row. Every assistant took that branch (assistants
+  // never have a linked `professors` row), as did any SSO-provisioned professor
+  // whose profile was not linked yet. The page then loaded THAT professor's
+  // courses, schedule and counseling caseload, including student names and
+  // identifiers, with no tenant relationship to the viewer. Returning null lets
+  // getProfessorPageData render its existing "not linked" empty state instead.
+  return null;
 }
 
 async function getProfessorCourses(professorId: string): Promise<ProfessorCourse[]> {
@@ -234,7 +233,7 @@ async function getTeachingSlots(
 async function getAvailability(
   professorId: string,
 ): Promise<ProfessorAvailability[]> {
-  const { data, error } = await anonSupabase
+  const { data, error } = await (await createSupabaseServerClient())
     .from("professor_availability")
     .select("id, professor_id, day_of_week, specific_date, start_time, end_time, slot_minutes, is_active")
     .eq("professor_id", professorId)
@@ -268,7 +267,7 @@ async function getAdminTasks(
 }
 
 async function getFaqs(professorId: string): Promise<ProfessorFaq[]> {
-  const { data, error } = await anonSupabase
+  const { data, error } = await (await createSupabaseServerClient())
     .from("faqs")
     .select("id, question, answer, category, approved_at, course:courses(id, name)")
     .eq("professor_id", professorId)

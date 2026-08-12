@@ -1,7 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase/client";
+// Stage 9: the `demo anon ...` policies this module relied on are gone
+// (20260814010000). Reads and writes now go through the caller's own
+// session, so RLS enforces ownership and tenancy instead of the anon role.
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDemoProfile } from "@/services/session.service";
 
 function text(value: FormDataEntryValue | null, fallback = "") {
@@ -26,7 +29,7 @@ export async function createCourseReview(formData: FormData) {
     return { ok: false, message: "과목과 후기를 조금 더 구체적으로 입력해 주세요." };
   }
 
-  const { error } = await supabase.from("course_reviews").insert({
+  const { error } = await (await createSupabaseServerClient()).from("course_reviews").insert({
     course_id: courseId,
     author_id: profile.id,
     difficulty: rating(formData.get("difficulty")),
