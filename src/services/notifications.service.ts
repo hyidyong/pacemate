@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { notificationOwnershipFilter } from "@/services/notifications.ownership";
 import type { DemoProfile } from "@/services/session.service";
 import {
   notificationCategoryLabels,
@@ -38,10 +39,11 @@ function normalizeNotificationLimit(limit: number): number {
 
 const NOTIFICATION_READ_ERROR = "알림을 불러오지 못했습니다.";
 
+// Reads use the SAME predicate as the writes (Stage 8 review finding 3), so a
+// user is never shown a notification they would then be unable to mark read.
+// Definition and the NULL-school_id decision live in notifications.ownership.ts.
 function applyNotificationOwnership<T>(query: T, profile: DemoProfile) {
-  return (query as { or: (filters: string) => T }).or(
-    `recipient_id.eq.${profile.id},recipient_role.eq.${profile.role}`,
-  );
+  return (query as { or: (filters: string) => T }).or(notificationOwnershipFilter(profile));
 }
 
 // Request-scoped memo (cache keys non-primitive args by reference — callers must
