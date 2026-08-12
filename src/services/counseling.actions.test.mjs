@@ -110,9 +110,17 @@ function makeFakeDb(name) {
 
   function applyFilters(rows, filters) {
     return rows.filter((row) =>
-      filters.every((f) =>
-        f.op === "eq" ? readColumn(row, f.col) === f.val : f.val.includes(readColumn(row, f.col)),
-      ),
+      filters.every((f) => {
+        const value = readColumn(row, f.col);
+        if (f.op === "eq") return value === f.val;
+        if (f.op === "in") return f.val.includes(value);
+        // Range filters bound the busy feed to the slot horizon (Stage 8 P1-1).
+        // ISO-8601 UTC strings sort lexicographically, which is what PostgREST
+        // compares here too.
+        if (f.op === "gte") return String(value) >= String(f.val);
+        if (f.op === "lt") return String(value) < String(f.val);
+        throw new Error(`unsupported filter op in fake client: ${f.op}`);
+      }),
     );
   }
 
@@ -124,6 +132,8 @@ function makeFakeDb(name) {
       limit: () => builder,
       eq: (col, val) => (q.filters.push({ op: "eq", col, val }), builder),
       in: (col, val) => (q.filters.push({ op: "in", col, val }), builder),
+      gte: (col, val) => (q.filters.push({ op: "gte", col, val }), builder),
+      lt: (col, val) => (q.filters.push({ op: "lt", col, val }), builder),
       insert: (values) => ((q.op = "insert"), (q.values = values), builder),
       update: (values) => ((q.op = "update"), (q.values = values), builder),
       single: () => ((q.single = true), builder),

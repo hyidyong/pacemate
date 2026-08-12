@@ -1,6 +1,12 @@
 export const PACEMATE_TIME_ZONE = "Asia/Seoul";
 export const STUDENT_BOOKING_END_HOUR = 18;
 
+// How many days ahead of today the bookable-slot set extends. Exported so
+// consumers that must bound a query to the same window (the busy feed, Stage 8
+// P1-1) derive it from the domain rather than restating the number — a drift
+// between the two would silently change which bookings consume availability.
+export const COUNSELING_SLOT_HORIZON_DAYS = 14;
+
 import type { CounselingSlot } from "@/types/counseling";
 
 type Availability = {
@@ -104,7 +110,7 @@ export function buildAvailableCounselingSlots({
     adminTasks,
   };
 
-  for (let offset = 1; offset <= 14; offset += 1) {
+  for (let offset = 1; offset <= COUNSELING_SLOT_HORIZON_DAYS; offset += 1) {
     for (const slot of buildBookableSlotsForLocalDate(addLocalDays(today, offset), context)) {
       const id = getCounselingSlotId(slot);
       if (!slots.has(id)) {
