@@ -656,6 +656,21 @@ export function MyPagePlanner({
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-8 pb-20 md:pb-8">
       <MyPageSectionTabs activeTab={activeTab} onChange={setActiveTab} />
+      {/* Feedback renders ABOVE the tab sections: actions on the 찜/투두/
+          커뮤니티 tabs write to it too, and it used to be invisible there
+          (Stage 4, audit A-6). */}
+      {feedback ? (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm font-medium ${
+            feedback.ok
+              ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+              : "border-red-100 bg-red-50 text-red-600"
+          }`}
+          role={feedback.ok ? "status" : "alert"}
+        >
+          {feedback.message}
+        </div>
+      ) : null}
       {/* SECTION 1: 2D Timetable */}
       <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "all" || activeTab === "timetable" ? "" : "hidden"}`}>
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
@@ -664,19 +679,7 @@ export function MyPagePlanner({
             <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">{scheduledCourseIds.size}과목</span>
           </h2>
         </div>
-        {feedback ? (
-          <div
-            className={`mx-5 mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${
-              feedback.ok
-                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                : "border-red-100 bg-red-50 text-red-600"
-            }`}
-            role="status"
-          >
-            {feedback.message}
-          </div>
-        ) : null}
-        
+
         {/* Below sm the 7-day grid scrolls horizontally instead of squeezing
             each day column to ~39px (Stage 4, audit C-7). */}
         <div className="w-full min-w-0 overflow-x-auto p-2 sm:p-5">

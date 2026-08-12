@@ -330,10 +330,10 @@ export async function saveCustomCourseToSchedule(formData: FormData) {
   const customCourseId = requiredText(formData.get("customCourseId"));
   const slots = readScheduleSlots(formData);
   if (!profileId || !title || !slots.length) {
-    return { ok: false, message: "A title and at least one valid day and time are required." };
+    return { ok: false, message: "수업 이름과 요일·시간을 한 개 이상 입력해 주세요." };
   }
   const supabase = createStudentCommunitySupabaseClient();
-  if (!supabase) return { ok: false, message: "Timetable storage is unavailable." };
+  if (!supabase) return { ok: false, message: "시간표 저장소에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요." };
 
   if (formData.get("confirmOverlap") !== "true") {
     try {
@@ -365,7 +365,7 @@ export async function saveCustomCourseToSchedule(formData: FormData) {
         .select("id, title, color").single();
   if (courseError || !customCourse?.id) {
     console.error("saveCustomCourseToSchedule failed:", courseError?.message);
-    return { ok: false, message: "Unable to save the custom course." };
+    return { ok: false, message: "직접 입력 수업을 저장하지 못했습니다." };
   }
 
   const { error: slotError } = await supabase.rpc("replace_student_custom_course_schedule_slots", {
@@ -385,7 +385,7 @@ export async function saveCustomCourseToSchedule(formData: FormData) {
       await supabase.from("student_custom_courses").delete()
         .eq("id", customCourse.id).eq("student_id", profileId);
     }
-    return { ok: false, message: "Unable to save custom course times." };
+    return { ok: false, message: "직접 입력 수업 시간을 저장하지 못했습니다." };
   }
 
   const { data: savedSlots, error: savedSlotsError } = await supabase
@@ -394,7 +394,7 @@ export async function saveCustomCourseToSchedule(formData: FormData) {
     .eq("student_custom_course_id", customCourse.id)
     .order("day_of_week", { ascending: true })
     .order("start_time", { ascending: true });
-  if (savedSlotsError) return { ok: false, message: "Unable to load custom course times." };
+  if (savedSlotsError) return { ok: false, message: "직접 입력 수업 시간을 불러오지 못했습니다." };
 
   const course: StudentCourseRecord = {
     id: `custom:${customCourse.id}`, status: "interested", is_favorite: false,
@@ -405,23 +405,23 @@ export async function saveCustomCourseToSchedule(formData: FormData) {
       credit: 0, category: "custom", description: null, prerequisite_text: null },
   };
   revalidateTimetablePaths();
-  return { ok: true, message: "Custom course saved.", course };
+  return { ok: true, message: "직접 입력 수업을 저장했습니다.", course };
 }
 
 export async function removeCustomCourseFromSchedule(formData: FormData) {
   const profileId = await getProfileId();
   const customCourseId = requiredText(formData.get("customCourseId"));
-  if (!profileId || !customCourseId) return { ok: false, message: "Custom course not found." };
+  if (!profileId || !customCourseId) return { ok: false, message: "직접 입력 수업을 찾을 수 없습니다." };
   const supabase = createStudentCommunitySupabaseClient();
-  if (!supabase) return { ok: false, message: "Timetable storage is unavailable." };
+  if (!supabase) return { ok: false, message: "시간표 저장소에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요." };
 
   // Database FK cascade deletes this course's slots, without touching the
   // authoritative student_courses row used by roadmap and notices.
   const { error } = await supabase.from("student_custom_courses").delete()
     .eq("id", customCourseId).eq("student_id", profileId);
-  if (error) return { ok: false, message: "Unable to remove the custom course." };
+  if (error) return { ok: false, message: "직접 입력 수업을 삭제하지 못했습니다." };
   revalidateTimetablePaths();
-  return { ok: true, message: "Custom course removed." };
+  return { ok: true, message: "직접 입력 수업을 삭제했습니다." };
 }
 
 export async function toggleFavoriteCourse(formData: FormData) {
