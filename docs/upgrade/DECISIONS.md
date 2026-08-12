@@ -1,5 +1,92 @@
 # Architectural Decisions
 
+## D-011 — The busy feed reads with service-role authority; the GiST constraint stays the sole overbooking enforcer
+
+Status: Accepted (Stage 5, 2026-08-12)
+
+Context: `getBusyRequests` ran on the student session client, and the RLS
+SELECT policy (20260713090000) admits only the caller's own rows — so the
+canonical busy set (ALL pending+approved rows, D-005) was silently truncated
+cross-student. Displayed availability counted slots other students already
+held, and the booking path's server-side revalidation was structurally blind:
+every cross-student collision reached the DB and surfaced as a generic
+retry-invitation. This broke the Stage 2 displayed==canonical invariant.
+
+Decision: the busy read uses the admin client (minimal columns — professor_id
+and the requested range only, no student identifiers), following the
+professor data path's documented precedent. Server-side revalidation is now
+authoritative for stale/blind submissions (controlled SLOT_NOT_AVAILABLE +
+revalidatePath), while the live-verified GiST exclusion constraint
+`counseling_requests_no_active_overlap` (23P01 probe, 2026-08-12) remains the
+only serialization authority for the TOCTOU window — the check+insert pair
+deliberately stays two statements, because even a wrapping transaction could
+not close that race at read-committed. Constraint conflicts (23P01/23505) map
+to the same slot-conflict vocabulary; unknown errors keep the generic
+retryable message. A SECURITY DEFINER booking RPC was evaluated and rejected:
+it would need the canonical availability rules reimplemented in SQL,
+resurrecting the dual-engine divergence D-004 eliminated. Consequence: the
+/counseling page now requires SUPABASE_SERVICE_ROLE_KEY at runtime (already
+required by professor pages and demo auth).
+
+## D-012 — Counseling status transitions are compare-and-set against a legal matrix
+
+Status: Accepted (Stage 5, 2026-08-12)
+
+Context: `updateCounselingStatus` was a blind UPDATE-by-id with a whitelist
+that accepted `pending` as a target — competing transitions were
+last-writer-wins with contradictory notifications, and terminal rows could be
+resurrected (cancelled→approved), guarded only by the DB constraint when the
+slot happened to be re-taken.
+
+Decision: every transition carries a from-state predicate in the same single
+UPDATE statement (approved⇐pending, rejected⇐pending,
+cancelled⇐pending|approved; rejected/cancelled terminal; `pending` removed
+from targets — no UI ever sent it). Zero matched rows (PGRST116) is a
+controlled "already processed" conflict that also revalidates both consumers.
+No version column or updated_at token is needed: the from-state IS the
+optimistic-concurrency guard for this domain's rule. The cancel notification
+copy was fixed in the same function (KI-015): cancellations no longer
+masquerade as time adjustments promising a suggested time the statement just
+nulled.
+
+## D-013 — Booking idempotency by post-conflict self-match, not idempotency keys
+
+Status: Accepted (Stage 5, 2026-08-12)
+
+Context: duplicate submissions (double click, network retry, retry after a
+lost response) were UI-guarded only; the duplicate hit the DB constraint and
+was reported as a failure although the caller's booking had committed.
+
+Decision: a duplicate of the caller's OWN active booking is detected by
+matching the submitted normalized slot id against the caller's own
+pending/approved rows (session-visible under RLS) — checked both at
+revalidation (the common retry-after-commit path, no insert attempted) and in
+the constraint-conflict branch (the in-flight double-click race) — and
+acknowledged with ok:true "이미 신청된 상담 시간입니다". No key store, no new
+column, no migration: the active row itself is the idempotency record, so the
+duplicate window equals the reservation's active lifetime. A client-generated
+idempotency-key mechanism was rejected as strictly more machinery for the
+same observable outcomes.
+
+## D-014 — Student self-cancel is a CAS on the admin client with an app-level ownership predicate
+
+Status: Accepted (Stage 5, 2026-08-12)
+
+Context: no student cancel existed (KI-017); stale pending requests lingered
+forever. Students have no UPDATE policy on counseling_requests, and the
+authenticated policy family is known-broken post-auth-mapping (KI-007) and
+owned by Stage 9.
+
+Decision: `cancelMyCounselingRequest` mirrors the professor transition
+pattern — a single conditional UPDATE (id + student_id = caller + status IN
+pending|approved → cancelled) on the admin client, controlled refusal
+("취소할 수 없는 상담 신청입니다") for foreign rows, terminal rows, or lost
+races; best-effort professor notification; revalidatePath ×2. A student
+self-cancel RLS policy was deliberately NOT added now: patching one policy
+into a known-wrong family would churn the live, hand-migrated DB twice —
+Stage 9 owns that overhaul (this action is on its migration list). UI is one
+confirm()-guarded button on the student's own active requests.
+
 ## D-009 — Counseling display cap is per professor
 
 Status: Accepted (Stage 4, 2026-08-12)

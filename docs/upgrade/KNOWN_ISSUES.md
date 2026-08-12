@@ -3,6 +3,31 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-018 — Stage 5 concurrency findings deferred by design
+
+Status: OPEN (documented 2026-08-12; evidence in docs/upgrade/stage-05/DESIGN.md §13
+and CONCURRENCY_TEST_MATRIX.md). Deferred deliberately:
+- M10: nothing bounds one student's pending requests across DIFFERENT slots (no
+  constraint includes student_id). Product-policy question, not a race defect.
+- R6 write side: professor-suggested times (reject flow) are validated against
+  nothing at write time (professor.actions.ts requires only non-empty
+  suggestedStart); an off-grid/unavailable suggestion renders a button that can
+  only fail with SLOT_NOT_AVAILABLE. Consumption-side protection (Stage 5)
+  already prevents any invalid booking; the write-side rule needs a product
+  definition. Stage 6/8 candidate.
+- Notification best-effort gap: the reservation write and its notification are
+  two round trips by design (D-011 rejected the RPC fusion); a crash in between
+  loses the notification silently (the handled failure path is honest —
+  ok:true degraded message, characterization-pinned). Outbox/reliable delivery
+  belongs to Stage 8.
+- professor_note/suggested_* are still nulled unconditionally by approve/cancel
+  transitions and raced by updateCounselingDetails (last write wins on the
+  note). The CAS from-state guard (D-012) serializes STATUS, not these columns.
+  Fold into the Stage 8/9 counseling hardening.
+- Ops note: /counseling (student page) now requires SUPABASE_SERVICE_ROLE_KEY
+  at runtime for the busy feed (D-011) — same requirement professor pages
+  already had; deployments missing the key render the Stage 4 error notice.
+
 ## KI-017 — Stage 4 audit findings deferred by design
 
 Status: OPEN (documented 2026-08-12; full evidence in docs/upgrade/stage-04/UX_AUDIT.md
@@ -36,8 +61,10 @@ stage-04/DESIGN.md "Changes explicitly NOT being made":
   dropped (a proper row UI exists twice elsewhere).
 - A-25/A-26: community composer forces a 유사 글 review step even with no matches;
   post detail lives in the third sidebar column below two recommendation rails.
-- Student reservation CANCEL action does not exist (pending requests for past
-  times linger as 승인 대기) — new API semantics, Stage 5 input.
+- Student reservation CANCEL action: RESOLVED in Stage 5 (2026-08-12) —
+  cancelMyCounselingRequest (D-014), CAS pending|approved→cancelled scoped to
+  the owning student, minimal UI button, rendered-verified live (booking
+  cancelled, slot count restored in place, professor notified).
 - Systemic (Stage 4 documented, not unified): Tailwind-vs-globals.css breakpoint
   schism (640/768/1024 vs 620/700/900); 9+ date-format implementations (2 use
   browser-local time); dead ui primitives (Badge/Select/Popover) vs 38 raw
@@ -137,9 +164,13 @@ Stage 9). Evidence from the Stage 2 discovery sweep (2026-08-12):
   client under the permissive `demo anon manage professor availability` policy
   (schema.sql:501, `using (professor_id is not null)`) — any caller can open/block any
   professor's availability.
-- `updateCounselingStatus` (professor.actions.ts:198) checks role only, not ownership,
-  and has no from-state check: any professor/assistant can move any request to any
-  status via the service-role client.
+- `updateCounselingStatus` (professor.actions.ts) checks role only, not ownership:
+  any professor/assistant can move any request via the service-role client.
+  Stage 5 (D-012) added the from-state CAS and a legal transition matrix, so
+  impossible/backward transitions are gone — but the OWNERSHIP hole remains
+  Stage 9 scope. Stage 5 also added cancelMyCounselingRequest (D-014) using the
+  same service-role + app-predicate pattern; include a student self-cancel
+  policy in the Stage 9 RLS overhaul list.
 - anon retains an UPDATE grant on counseling_requests plus a hardcoded-demo-email anon
   UPDATE policy (schema.sql:507-523) never dropped by migration 20260713090000.
 
@@ -153,10 +184,10 @@ Status: PARTIALLY RESOLVED in Stage 4 (2026-08-12):
 - RECLASSIFIED: the "상담 슬롯 counts inactive rows" stat tile is currently DEAD
   COMPUTATION — adminStats is computed and passed but never rendered (Stage 4
   audit B-27); either render it with the corrected filter or delete it.
-- STILL OPEN: cancel notification text bug: professor cancel sends title "상담
-  시간이 조정 필요합니다" with an empty-note body implying a suggested time exists
-  (professor.actions.ts); approve/cancel also null out professor_note and
-  suggested_* unconditionally (see also KI-017 B-7).
+- Cancel notification text bug: RESOLVED in Stage 5 (2026-08-12, D-012) —
+  cancelled transitions send honest copy ("상담 예약이 취소됐습니다", no phantom
+  추천 시간 promise); behavior-tested. STILL OPEN: approve/cancel null out
+  professor_note and suggested_* unconditionally (now tracked in KI-018).
 - Schema drift: `suggested_start`/`suggested_end`/`location` exist only in schema.sql
   (no migration adds them); `offering_id` exists only in migration 20260712000000 (not
   in schema.sql's table body). Reconcile with the migration-history cleanup (KI-006

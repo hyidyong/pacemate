@@ -4,6 +4,7 @@ import {
   PACEMATE_TIME_ZONE,
   buildAvailableCounselingSlots,
 } from "@/lib/counseling-slots";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
 import type {
@@ -41,6 +42,7 @@ export async function getCounselingPageData(
   profile: DemoProfile | null,
 ): Promise<CounselingPageData> {
   const supabase = await createSupabaseServerClient();
+  const adminSupabase = createSupabaseAdminClient();
   // One batch: courses/professors consume nothing from the availability set, so
   // splitting them into a second await only added a full WAN stage. The real
   // dependency (student_courses -> course_professors) lives inside
@@ -50,7 +52,7 @@ export async function getCounselingPageData(
       getStudentRequests(supabase, profile),
       getAvailabilityRows(supabase),
       getTeachingSlots(supabase),
-      getBusyRequests(supabase),
+      getBusyRequests(adminSupabase),
       getAdminTasksRows(supabase),
       getCounselingCourses(supabase, profile),
       getCounselingProfessors(supabase),
@@ -66,10 +68,11 @@ export async function getCounselingPageData(
 
 export async function getAvailableCounselingSlots() {
   const supabase = await createSupabaseServerClient();
+  const adminSupabase = createSupabaseAdminClient();
   const [availability, teachingSlots, busyRequests, adminTasks] = await Promise.all([
     getAvailabilityRows(supabase),
     getTeachingSlots(supabase),
-    getBusyRequests(supabase),
+    getBusyRequests(adminSupabase),
     getAdminTasksRows(supabase),
   ]);
 
@@ -244,7 +247,15 @@ async function getAdminTasksRows(supabase: ServerClient): Promise<AdminTaskRow[]
   return (data ?? []) as AdminTaskRow[];
 }
 
-async function getBusyRequests(supabase: ServerClient): Promise<BusyRequestRow[]> {
+// The busy feed is the canonical "these ranges are consumed" input (D-005) for
+// both the displayed availability and the booking revalidation. It must see
+// EVERY student's pending/approved rows, but the session client is RLS-scoped
+// to the caller's own rows — which silently blinded availability to other
+// students' reservations. Read it with the admin client (minimal columns, no
+// student identifiers), the same authority the professor data path uses.
+async function getBusyRequests(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+): Promise<BusyRequestRow[]> {
   const { data, error } = await supabase
     .from("counseling_requests")
     .select("professor_id, requested_start, requested_end")

@@ -197,6 +197,20 @@ export async function addProfessorFaq(formData: FormData) {
   return { ok: true, message: "FAQ 답변을 저장했습니다." };
 }
 
+// Legal status transitions (Stage 5, matrix M4/M5): rejected and cancelled
+// are terminal, and `pending` is never a target — no UI ever sends it, and it
+// was the resurrection vector that could re-consume a slot someone else
+// re-booked. The from-state predicate makes each transition a compare-and-set:
+// competing updates on one request resolve to exactly one winner.
+const LEGAL_TRANSITION_SOURCES: Record<string, string[]> = {
+  approved: ["pending"],
+  rejected: ["pending"],
+  cancelled: ["pending", "approved"],
+};
+
+const COUNSELING_STATUS_CONFLICT_MESSAGE =
+  "이미 처리된 상담 신청입니다. 최신 상태를 확인해 주세요.";
+
 export async function updateCounselingStatus(formData: FormData) {
   const profile = await getDemoProfile();
   if (profile?.role !== "professor" && profile?.role !== "assistant") {
@@ -209,7 +223,8 @@ export async function updateCounselingStatus(formData: FormData) {
   const suggestedStart = text(formData.get("suggestedStart"));
   const suggestedEnd = text(formData.get("suggestedEnd"));
 
-  if (!requestId || !["pending", "approved", "rejected", "cancelled"].includes(status)) {
+  const allowedFromStatuses = LEGAL_TRANSITION_SOURCES[status];
+  if (!requestId || !allowedFromStatuses) {
     return { ok: false, message: "상담 요청을 처리할 수 없습니다." };
   }
 
@@ -230,22 +245,47 @@ export async function updateCounselingStatus(formData: FormData) {
       suggested_end: suggestedEnd || null,
     })
     .eq("id", requestId)
+    .in("status", allowedFromStatuses)
     .select("id, student_id, topic, requested_start, suggested_start")
     .single();
 
   if (error) {
-      return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+    // 0 rows matched (PGRST116): a competing transition won, or the request
+    // no longer exists — the workspace's data changed underneath this client.
+    // 23P01 is the DB exclusion constraint defending a (now target-less)
+    // resurrection into a re-booked slot; same controlled outcome.
+    if (error.code === "PGRST116" || error.code === "23P01") {
+      revalidatePath("/professor");
+      revalidatePath("/counseling");
+      return { ok: false, message: COUNSELING_STATUS_CONFLICT_MESSAGE };
+    }
+    return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }
+
+  const notificationCopy =
+    status === "approved"
+      ? {
+          title: "상담 신청이 승인됐습니다",
+          body: professorNote || `${data.topic} 상담 신청이 승인됐습니다.`,
+        }
+      : status === "cancelled"
+        ? {
+            title: "상담 예약이 취소됐습니다",
+            body:
+              professorNote ||
+              `${data.topic} 상담 예약이 취소됐습니다. 다른 시간으로 다시 신청할 수 있습니다.`,
+          }
+        : {
+            title: "상담 시간이 조정 필요합니다",
+            body: `${professorNote} 추천 시간으로 다시 예약할 수 있습니다.`,
+          };
 
   const notificationResult = await createUserNotification({
     recipientRole: "student",
     recipientId: data.student_id,
     category: "counseling",
-    title: status === "approved" ? "상담 신청이 승인됐습니다" : "상담 시간이 조정 필요합니다",
-    body:
-      status === "approved"
-        ? professorNote || `${data.topic} 상담 신청이 승인됐습니다.`
-        : `${professorNote} 추천 시간으로 다시 예약할 수 있습니다.`,
+    title: notificationCopy.title,
+    body: notificationCopy.body,
     targetHref: "/counseling",
   });
 

@@ -20,6 +20,12 @@ function stubModule(source) {
 const SERVER_STUB = stubModule(
   "export const createSupabaseServerClient = async () => globalThis.__stage3FakeSupabase;",
 );
+// Stage 5 moved the busy-request read onto the admin client (authoritative
+// busy feed); the counting fake stays shared so the inventory below remains
+// the complete per-page-load query budget across both clients.
+const ADMIN_STUB = stubModule(
+  "export const createSupabaseAdminClient = () => globalThis.__stage3FakeSupabase;",
+);
 
 async function loadCounselingService() {
   const source = await readFile(new URL("./counseling.service.ts", import.meta.url), "utf8");
@@ -27,7 +33,8 @@ async function loadCounselingService() {
   const rewritten = source
     .replace('import "server-only";', "")
     .replace('from "@/lib/counseling-slots"', `from ${JSON.stringify(domainUrl)}`)
-    .replace('from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`);
+    .replace('from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`)
+    .replace('from "@/lib/supabase/admin"', `from ${JSON.stringify(ADMIN_STUB)}`);
   const compiled = transpileModule(rewritten, {
     compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
   }).outputText;
