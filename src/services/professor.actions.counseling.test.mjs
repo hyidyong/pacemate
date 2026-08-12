@@ -151,6 +151,11 @@ function requestRow(status = "pending") {
 function setupWorld(rows) {
   const db = makeFakeDb();
   db.state.fixtures.counseling_requests = rows;
+  // Stage 6: the caller's own professor row (same tenant as the request's
+  // prof-1) so resolveCounselingWriteProfessorIds resolves the ownership scope.
+  db.state.fixtures.professors = [
+    { id: "prof-1", name: "김교수", profile_id: "prof-profile-1", school_id: "s1" },
+  ];
   globalThis.__stage5AdminClient = db;
   globalThis.__stage5Profile = PROFESSOR_PROFILE;
   globalThis.__stage5Notifications = [];

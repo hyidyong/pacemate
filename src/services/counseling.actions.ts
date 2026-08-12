@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCounselingSlotId } from "@/lib/counseling-slots";
+import { tryResolveTenantContext } from "@/lib/tenant";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
@@ -65,9 +66,19 @@ export async function createCounselingRequest(formData: FormData) {
     return { ok: false, message: SLOT_NOT_AVAILABLE_MESSAGE };
   }
 
+  // Stage 6: the authoritative tenant is the student's own school. The slot
+  // set is computed for that tenant only, so a crafted slotId naming a foreign
+  // professor is not in `availableSlots` and falls through to the deny path
+  // below (server boundary for booking, AUDIT X1). The DB WITH CHECK is the
+  // second layer if this is ever bypassed.
+  const tenant = tryResolveTenantContext(profile);
+  if (!tenant) {
+    return { ok: false, message: SLOT_NOT_AVAILABLE_MESSAGE };
+  }
+
   let availableSlots;
   try {
-    availableSlots = await getAvailableCounselingSlots();
+    availableSlots = await getAvailableCounselingSlots(tenant.tenantId);
   } catch {
     return { ok: false, message: SLOT_NOT_AVAILABLE_MESSAGE };
   }
@@ -131,6 +142,7 @@ export async function createCounselingRequest(formData: FormData) {
   const notificationResult = await createUserNotification({
     recipientRole: "professor",
     recipientId: null,
+    schoolId: tenant.tenantId,
     category: "counseling",
     title: "새 상담 신청",
     body: `${profile.name} 학생이 ${topic} 상담을 신청했습니다.`,
@@ -217,6 +229,7 @@ export async function cancelMyCounselingRequest(formData: FormData) {
   const notificationResult = await createUserNotification({
     recipientRole: "professor",
     recipientId: null,
+    schoolId: profile.school_id,
     category: "counseling",
     title: "상담 신청이 취소됐습니다",
     body: `${profile.name} 학생이 ${data.topic} 상담 신청을 취소했습니다.`,

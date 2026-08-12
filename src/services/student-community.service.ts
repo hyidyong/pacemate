@@ -108,24 +108,14 @@ function isMissingCommunityTypeColumn(error: { code?: string; message?: string }
   );
 }
 
-export async function ensureProfileSchool(profile: DemoProfile | null) {
-  if (!profile || profile.school_id) {
-    return;
-  }
-  const supabase = await createSupabaseServerClient();
-
-  const { data: school } = await supabase
-    .from("schools")
-    .select("id")
-    .eq("name", defaultSchoolName)
-    .maybeSingle();
-
-  if (school?.id) {
-    await supabase
-      .from("profiles")
-      .update({ school_id: school.id })
-      .eq("id", profile.id);
-  }
+// Stage 6: profiles.school_id is backfilled and NOT NULL, so a profile never
+// arrives here school-less. The old body auto-assigned the FIRST school in the
+// table to any null-school profile — a client-independent tenant forgery once
+// a second university exists (AUDIT X9). Neutered to a no-op; tenant now comes
+// from the session profile only. Kept as an exported no-op so its callers need
+// no signature change this stage.
+export async function ensureProfileSchool(_profile: DemoProfile | null) {
+  return;
 }
 
 export async function getMyPageData(
@@ -139,7 +129,7 @@ export async function getMyPageData(
       getSchoolName(profile),
       getCourses(),
       getMyCourses(profile),
-      getPosts(profile?.id),
+      getPosts(profile?.id, profile?.school_id),
       getReactedPostIds(profile?.id, "scrap"),
       getReactedPostIds(profile?.id, "like"),
       getCommentedPostIds(profile?.id),
@@ -161,7 +151,7 @@ export async function getCommunityData(
     getSchoolName(profile),
     getCourses(),
     getMyCourses(profile),
-    getPosts(profile?.id),
+    getPosts(profile?.id, profile?.school_id),
   ]);
 
   return { schoolName, profile, courses, myCourses, posts };
@@ -318,7 +308,15 @@ export async function getFavoriteCourseIds(profileId: string): Promise<Set<strin
   return new Set((data ?? []).map((row) => row.course_id as string));
 }
 
-async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
+async function getPosts(
+  profileId?: string,
+  tenantId?: string | null,
+): Promise<CommunityPostRecord[]> {
+  // Stage 6: the community board is scoped to the reader's tenant (AUDIT X10).
+  // A tenant-less session sees no posts rather than the whole platform's board.
+  if (!tenantId) {
+    return [];
+  }
   const supabase = await createSupabaseServerClient();
 
   let { data, error } = await supabase
@@ -326,6 +324,7 @@ async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
     .select(postSelectColumns)
     .eq("status", "active")
     .eq("community_type", "student")
+    .eq("school_id", tenantId)
     .order("created_at", { ascending: false })
     .limit(80);
 
@@ -335,6 +334,7 @@ async function getPosts(profileId?: string): Promise<CommunityPostRecord[]> {
       .from("posts")
       .select(postSelectColumns)
       .eq("status", "active")
+      .eq("school_id", tenantId)
       .order("created_at", { ascending: false })
       .limit(80);
 

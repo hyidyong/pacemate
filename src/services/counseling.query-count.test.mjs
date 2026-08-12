@@ -30,9 +30,11 @@ const ADMIN_STUB = stubModule(
 async function loadCounselingService() {
   const source = await readFile(new URL("./counseling.service.ts", import.meta.url), "utf8");
   const domainUrl = new URL("../lib/counseling-slots.ts", import.meta.url).href;
+  const tenantUrl = new URL("../lib/tenant.ts", import.meta.url).href;
   const rewritten = source
     .replace('import "server-only";', "")
     .replace('from "@/lib/counseling-slots"', `from ${JSON.stringify(domainUrl)}`)
+    .replace('from "@/lib/tenant"', `from ${JSON.stringify(tenantUrl)}`)
     .replace('from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`)
     .replace('from "@/lib/supabase/admin"', `from ${JSON.stringify(ADMIN_STUB)}`);
   const compiled = transpileModule(rewritten, {

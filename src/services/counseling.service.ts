@@ -4,6 +4,7 @@ import {
   PACEMATE_TIME_ZONE,
   buildAvailableCounselingSlots,
 } from "@/lib/counseling-slots";
+import { tryResolveTenantContext } from "@/lib/tenant";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
@@ -41,6 +42,15 @@ type BusyRequestRow = {
 export async function getCounselingPageData(
   profile: DemoProfile | null,
 ): Promise<CounselingPageData> {
+  // Stage 6: everything a student sees is scoped to their own tenant. A
+  // session with no resolvable tenant renders the empty view rather than the
+  // whole platform's professors/slots.
+  const tenant = tryResolveTenantContext(profile);
+  if (!profile || !tenant) {
+    return { requests: [], availableSlots: [], courses: [], professors: [] };
+  }
+  const tenantId = tenant.tenantId;
+
   const supabase = await createSupabaseServerClient();
   const adminSupabase = createSupabaseAdminClient();
   // One batch: courses/professors consume nothing from the availability set, so
@@ -50,12 +60,12 @@ export async function getCounselingPageData(
   const [requests, availability, teachingSlots, busyRequests, adminTasks, courses, professors] =
     await Promise.all([
       getStudentRequests(supabase, profile),
-      getAvailabilityRows(supabase),
-      getTeachingSlots(supabase),
+      getAvailabilityRows(supabase, tenantId),
+      getTeachingSlots(supabase, tenantId),
       getBusyRequests(adminSupabase),
-      getAdminTasksRows(supabase),
-      getCounselingCourses(supabase, profile),
-      getCounselingProfessors(supabase),
+      getAdminTasksRows(supabase, tenantId),
+      getCounselingCourses(supabase, profile, tenantId),
+      getCounselingProfessors(supabase, tenantId),
     ]);
 
   return {
@@ -66,14 +76,14 @@ export async function getCounselingPageData(
   };
 }
 
-export async function getAvailableCounselingSlots() {
+export async function getAvailableCounselingSlots(tenantId: string) {
   const supabase = await createSupabaseServerClient();
   const adminSupabase = createSupabaseAdminClient();
   const [availability, teachingSlots, busyRequests, adminTasks] = await Promise.all([
-    getAvailabilityRows(supabase),
-    getTeachingSlots(supabase),
+    getAvailabilityRows(supabase, tenantId),
+    getTeachingSlots(supabase, tenantId),
     getBusyRequests(adminSupabase),
-    getAdminTasksRows(supabase),
+    getAdminTasksRows(supabase, tenantId),
   ]);
 
   return buildSlots(availability, teachingSlots, busyRequests, adminTasks);
@@ -105,10 +115,17 @@ async function getStudentRequests(
   return (data ?? []) as unknown as StudentCounselingRequest[];
 }
 
-async function getAvailabilityRows(supabase: ServerClient): Promise<AvailabilityRow[]> {
+async function getAvailabilityRows(
+  supabase: ServerClient,
+  tenantId: string,
+): Promise<AvailabilityRow[]> {
+  // !inner + the embedded school_id filter scopes availability to the tenant's
+  // professors at the DB boundary — a foreign professor's window never reaches
+  // the slot builder, so it can never be rendered or booked.
   const { data, error } = await supabase
     .from("professor_availability")
-    .select("professor_id, day_of_week, specific_date, start_time, end_time, slot_minutes, is_active, professor:professors(id, name, office, email)")
+    .select("professor_id, day_of_week, specific_date, start_time, end_time, slot_minutes, is_active, professor:professors!inner(id, name, office, email, school_id)")
+    .eq("professor.school_id", tenantId)
     .order("day_of_week", { ascending: true })
     .order("start_time", { ascending: true });
 
@@ -122,13 +139,18 @@ async function getAvailabilityRows(supabase: ServerClient): Promise<Availability
 async function getCounselingCourses(
   supabase: ServerClient,
   profile: DemoProfile | null,
+  tenantId: string,
 ): Promise<CounselingCourseOption[]> {
   const courseIds = await getStudentCourseIds(supabase, profile);
+  // Scope to the tenant's courses. Without this, the empty-course-list
+  // fallthrough (no .in filter) would return every course_professors row on
+  // the platform (AUDIT X3).
   let query = supabase
     .from("course_professors")
     .select(
-      "course:courses(id, code, name, category), professor:professors(id, name, office, email, bio, department:departments(name))",
+      "course:courses!inner(id, code, name, category, school_id), professor:professors(id, name, office, email, bio, department:departments(name))",
     )
+    .eq("course.school_id", tenantId)
     .order("semester_label", { ascending: false });
 
   if (courseIds.length) {
@@ -193,10 +215,17 @@ async function getStudentCourseIds(supabase: ServerClient, profile: DemoProfile 
   return data.map((item) => item.course_id as string);
 }
 
-async function getCounselingProfessors(supabase: ServerClient): Promise<CounselingProfessor[]> {
+async function getCounselingProfessors(
+  supabase: ServerClient,
+  tenantId: string,
+): Promise<CounselingProfessor[]> {
+  // The professor directory is a searchable, bookable list rendered to the
+  // student — scope it to the tenant (AUDIT X2). professors.school_id is a
+  // real column (Stage 6 M2), so this is a direct filter.
   const { data, error } = await supabase
     .from("professors")
     .select("id, name, office, email, bio, department:departments(name)")
+    .eq("school_id", tenantId)
     .order("name", { ascending: true });
 
   if (error) {
@@ -215,16 +244,23 @@ async function getCounselingProfessors(supabase: ServerClient): Promise<Counseli
   );
 }
 
-async function getTeachingSlots(supabase: ServerClient): Promise<TeachingSlotRow[]> {
+async function getTeachingSlots(
+  supabase: ServerClient,
+  tenantId: string,
+): Promise<TeachingSlotRow[]> {
+  // Teaching slots feed the same slot builder; scope to the tenant's
+  // professors via the embedded !inner filter (the professor field is used
+  // only for filtering, not output).
   const { data, error } = await supabase
     .from("professor_teaching_slots")
-    .select("professor_id, day_of_week, start_time, end_time");
+    .select("professor_id, day_of_week, start_time, end_time, professor:professors!inner(school_id)")
+    .eq("professor.school_id", tenantId);
 
   if (error) {
     throw new Error("Failed to load teaching slots");
   }
 
-  return (data ?? []) as TeachingSlotRow[];
+  return (data ?? []) as unknown as TeachingSlotRow[];
 }
 
 type AdminTaskRow = {
@@ -235,16 +271,20 @@ type AdminTaskRow = {
   end_time: string;
 };
 
-async function getAdminTasksRows(supabase: ServerClient): Promise<AdminTaskRow[]> {
+async function getAdminTasksRows(
+  supabase: ServerClient,
+  tenantId: string,
+): Promise<AdminTaskRow[]> {
   const { data, error } = await supabase
     .from("professor_admin_tasks")
-    .select("professor_id, title, day_of_week, start_time, end_time");
+    .select("professor_id, title, day_of_week, start_time, end_time, professor:professors!inner(school_id)")
+    .eq("professor.school_id", tenantId);
 
   if (error) {
     throw new Error("Failed to load professor admin tasks");
   }
 
-  return (data ?? []) as AdminTaskRow[];
+  return (data ?? []) as unknown as AdminTaskRow[];
 }
 
 // The busy feed is the canonical "these ranges are consumed" input (D-005) for
@@ -253,6 +293,15 @@ async function getAdminTasksRows(supabase: ServerClient): Promise<AdminTaskRow[]
 // to the caller's own rows — which silently blinded availability to other
 // students' reservations. Read it with the admin client (minimal columns, no
 // student identifiers), the same authority the professor data path uses.
+//
+// Stage 6: this read is DELIBERATELY not tenant-filtered. The slot builder
+// keys busy rows on professorId, and the availability set is already
+// tenant-scoped, so a foreign tenant's busy rows never match a rendered slot
+// (they are inert) and never reach the client. Adding a tenant filter here
+// would be a pure perf/data-minimization change (Stage 8), and it would touch
+// the Stage 5 concurrency invariant (D-011) that this read is authoritative —
+// left intact. Isolation is enforced by the availability/professor scoping
+// above, not by this feed.
 async function getBusyRequests(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
 ): Promise<BusyRequestRow[]> {
