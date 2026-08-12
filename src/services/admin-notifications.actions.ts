@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { classifyPostgresError } from "@/lib/observability/log";
+import { recordSecurityEvent } from "@/lib/observability/security-audit";
 import { getDemoProfile } from "@/services/session.service";
 
 type BroadcastResult = { ok: boolean; message: string };
@@ -103,9 +105,31 @@ export async function sendAdminBroadcastNotification(
     })),
   );
   if (insertError) {
-    console.error("Admin notification broadcast failed", insertError.message);
+    // Stage 9: the raw PostgrestError is no longer logged - its detail/hint can
+    // embed row values. The code classifies the failure just as well.
+    await recordSecurityEvent({
+      event: "admin.broadcast_failed",
+      outcome: classifyPostgresError(insertError.code),
+      actorProfileId: profile.id,
+      actorRole: profile.role,
+      schoolId: tenantId,
+      subjectType: "notification_broadcast",
+      detail: insertError.code,
+    });
     return { ok: false, message: "알림을 발송하지 못했습니다. 다시 시도해 주세요." };
   }
+
+  // A single admin click writes one notification row per profile in the tenant.
+  // Before Stage 9 that left no record of who sent what, to how many people.
+  await recordSecurityEvent({
+    event: "admin.broadcast_sent",
+    outcome: "ok",
+    actorProfileId: profile.id,
+    actorRole: profile.role,
+    schoolId: tenantId,
+    subjectType: "notification_broadcast",
+    detail: `${targetGroup} recipients=${recipientsToInsert.length}`,
+  });
 
   revalidatePath("/admin");
   revalidatePath("/notifications");
