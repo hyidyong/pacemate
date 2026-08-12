@@ -83,6 +83,10 @@ export async function createCounselingRequest(formData: FormData) {
     if (ownRequest) {
       return { ok: true, message: ALREADY_RESERVED_MESSAGE };
     }
+    // A submitted slot that no longer exists means the client's list is
+    // stale — refresh both consumers so the ghost slot disappears.
+    revalidatePath("/counseling");
+    revalidatePath("/professor");
     return { ok: false, message: SLOT_NOT_AVAILABLE_MESSAGE };
   }
 

@@ -291,6 +291,11 @@ test("M1/M3: a slot held by ANOTHER student is rejected before any insert", asyn
     );
     assert.equal(result.ok, false);
     assert.equal(result.message, SLOT_NOT_AVAILABLE);
+    assert.deepEqual(
+      globalThis.__stage5Revalidated,
+      ["/counseling", "/professor"],
+      "a stale submission proves the client's slot list is outdated — both consumers must revalidate",
+    );
   } finally {
     teardownWorld();
   }
