@@ -5,8 +5,28 @@
 // no longer matches after the auth_user_id mapping migrations), so this module
 // keeps using the anon client on purpose.
 import { supabase } from "@/lib/supabase/client";
+import { getDemoProfile } from "@/services/session.service";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Stage 8 P0-2. Both exported actions previously took `studentId` from the
+// caller and never resolved a session, so anyone holding the (publicly
+// discoverable) action id could write another student's progress, advance
+// another student's course week, and spend OpenAI credits without an account.
+// The acting student is now resolved server-side and the parameter is ignored;
+// the signature is preserved so the existing call sites and UI are untouched.
+async function resolveActingStudentId(): Promise<string | null> {
+  const profile = await getDemoProfile();
+  if (!profile || profile.role !== "student") {
+    return null;
+  }
+  return profile.id;
+}
+
+// The OpenAI call previously had no timeout, so a slow upstream pinned the
+// serverless invocation until the platform killed it. Matches the bound already
+// used by ai-tutor-rag.actions.ts.
+const OPENAI_TIMEOUT_MS = 20000;
 
 const SYSTEM_PROMPT = `너는 PaceMate의 AI 학습 튜터야. 
 반드시 사용자가 업로드한 [강의 계획서 및 교과서 파일]의 정보에만 기반해서 답변해야 해.
@@ -21,7 +41,17 @@ const SYSTEM_PROMPT = `너는 PaceMate의 AI 학습 튜터야.
   "prep_review_guide": "예습 및 복습 가이드..."
 }`;
 
-export async function generateWeeklyGuide(courseId: string, studentId: string, currentWeek: number, feedback: string = "") {
+export async function generateWeeklyGuide(
+  courseId: string,
+  _studentId: string,
+  currentWeek: number,
+  feedback: string = "",
+) {
+  const studentId = await resolveActingStudentId();
+  if (!studentId) {
+    return null;
+  }
+
   // 1. Fetch Course & Syllabus
   const { data: course } = await supabase
     .from("courses")
@@ -67,6 +97,7 @@ ${feedback ? `학생의 이전 실제 진도 피드백: "${feedback}" (이 피�
         response_format: { type: "json_object" },
         temperature: 0.2,
       }),
+      signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -97,7 +128,17 @@ ${feedback ? `학생의 이전 실제 진도 피드백: "${feedback}" (이 피�
   }
 }
 
-export async function submitProgressFeedback(courseId: string, studentId: string, currentWeek: number, feedback: string) {
+export async function submitProgressFeedback(
+  courseId: string,
+  _studentId: string,
+  currentWeek: number,
+  feedback: string,
+) {
+  const studentId = await resolveActingStudentId();
+  if (!studentId) {
+    return;
+  }
+
   // 1. Save Feedback to current week
   const { error: feedbackError } = await supabase.from("student_mission_progress").upsert({
     student_id: studentId,
@@ -122,5 +163,5 @@ export async function submitProgressFeedback(courseId: string, studentId: string
     console.error("Failed to advance current week:", weekError);
   }
 
-  await generateWeeklyGuide(courseId, studentId, nextWeek, feedback);
+  await generateWeeklyGuide(courseId, _studentId, nextWeek, feedback);
 }
