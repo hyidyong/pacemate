@@ -56,6 +56,7 @@ export async function removeCourseAssignment(formData: FormData) {
   // gate above is the authorization and the service role performs the write.
   const { error } = await createSupabaseAdminClient().from("roadmap_revision_requests").insert({
     scope: "course",
+      school_id: profile.school_id,
     status: "pending",
     course_id: courseId,
     title: "담당 과목 삭제 요청",

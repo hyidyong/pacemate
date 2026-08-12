@@ -226,6 +226,27 @@ export async function provisionTenant(ledger, label, runId) {
     `broadcast ${label}`,
   );
 
+  // A pending roadmap revision belonging to this tenant, so cross-tenant read
+  // and approval can be attacked with a real UUID (Codex F4).
+  const revision = await createRow(
+    ledger,
+    "roadmap_revision_requests",
+    {
+      scope: "course",
+      status: "pending",
+      school_id: school.id,
+      // roadmap_revision_scope_target requires a target for the chosen scope.
+      course_code: `PB-${label}-${runId}`.slice(0, 20),
+      department_name: `${PROBE_MARKER} dept ${label}`,
+      title: `${PROBE_MARKER} revision ${label}`,
+      summary: `${PROBE_MARKER} revision summary ${label}`,
+      proposed_by: professorProfile.id,
+      proposed_by_name: `${PROBE_MARKER} professor ${label}`,
+      proposed_patch: { shortReason: `${PROBE_MARKER} patch ${label}` },
+    },
+    `roadmap revision ${label}`,
+  );
+
   const mission = await createRow(
     ledger,
     "student_mission_progress",
@@ -258,6 +279,7 @@ export async function provisionTenant(ledger, label, runId) {
     directNotification,
     broadcast,
     mission,
+    revision,
   };
 }
 

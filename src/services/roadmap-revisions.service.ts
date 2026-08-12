@@ -1,3 +1,4 @@
+import { getDemoProfile } from "@/services/session.service";
 import { roadmapCourses, type RoadmapCourse } from "@/data/roadmap-explorer";
 // Stage 9: the `demo anon ...` policies this module relied on are gone
 // (20260814010000). Reads and writes now go through the caller's own
@@ -33,15 +34,28 @@ const editableArrayFields = [
   "weeklyFocus",
 ] as const;
 
+/**
+ * Codex F4. Every read of this workflow is tenant-scoped twice over: the
+ * session client means the tenant-scoped SELECT policy applies at the database
+ * (the authoritative control), and the explicit `school_id` filter below states
+ * the same intent in the query, so switching this to the service-role client
+ * later cannot silently globalise the roadmap overlay again.
+ */
 export async function getRoadmapRevisionRequests(
   statuses?: RoadmapRevisionRequest["status"][],
 ): Promise<RoadmapRevisionRequest[]> {
+  const profile = await getDemoProfile();
+  if (!profile?.school_id) {
+    return [];
+  }
+
   const client = await createSupabaseServerClient();
   let query = client
     .from("roadmap_revision_requests")
     .select(
       "id, scope, status, course_code, course_id, department_name, title, summary, proposed_by_name, reviewed_by_name, approved_by_name, source_title, source_url, proposed_patch, admin_note, created_at, reviewed_at, approved_at, rejected_at",
     )
+    .eq("school_id", profile.school_id)
     .order("created_at", { ascending: false });
 
   if (statuses?.length) {

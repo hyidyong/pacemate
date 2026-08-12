@@ -726,6 +726,54 @@ async function main() {
       );
     }
 
+    // ------------------------------- roadmap workflow tenant scope (Codex F4)
+    // The workflow had no tenant column at all, so staff of any university
+    // could read every request and an admin of any university could approve
+    // one — and approving merges the patch into the roadmap students read.
+    {
+      const { status, body } = await asProfA(
+        `roadmap_revision_requests?select=id,title&id=eq.${B.revision.id}`,
+      );
+      check(
+        "roadmap:cross-tenant-read",
+        "tenant A staff must not read tenant B's roadmap revision request",
+        status === 200 && rowCount(body) === 0,
+        `status ${status}, ${rowCount(body) ?? "?"} row(s)`,
+      );
+    }
+    {
+      const { status } = await asProfA(`roadmap_revision_requests?id=eq.${B.revision.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "approved" }),
+      });
+      const [after] = await rest.select(
+        "roadmap_revision_requests",
+        `select=status&id=eq.${B.revision.id}`,
+      );
+      if (after?.status !== "pending") {
+        await rest.update("roadmap_revision_requests", `id=eq.${B.revision.id}`, {
+          status: "pending",
+        });
+      }
+      check(
+        "roadmap:cross-tenant-approve",
+        "tenant A staff must not approve tenant B's revision even with the exact UUID",
+        after?.status === "pending",
+        `PATCH ${status}; status is now ${JSON.stringify(after?.status ?? null)}`,
+      );
+    }
+    {
+      const { status, body } = await asProfA(
+        `roadmap_revision_requests?select=id&id=eq.${A.revision.id}`,
+      );
+      check(
+        "allow:staff-reads-own-tenant-revision",
+        "tenant A staff CAN read their own tenant's revision request",
+        status === 200 && rowCount(body) === 1,
+        `status ${status}, ${rowCount(body) ?? "?"} row(s)`,
+      );
+    }
+
     // ------------------------------------------------- legitimate paths (allow)
     // A security fix that denies everyone is not a fix. These must stay GREEN.
     const allowChecks = [

@@ -223,3 +223,48 @@ test("the Stage 5 transition rules are not duplicated into RLS", () => {
     .join("\n");
   assert.doesNotMatch(sqlOnly, /'approved'|'rejected'|'cancelled'|'pending'/);
 });
+
+const roadmapScope = read("20260814070000_stage9_roadmap_tenant_scope.sql");
+
+test("the roadmap revision workflow has an authoritative tenant", () => {
+  assert.match(roadmapScope, /add column if not exists school_id uuid references public\.schools\(id\)/);
+  assert.match(roadmapScope, /alter column school_id set not null/);
+  // Backfill must be provable, not hopeful.
+  assert.match(roadmapScope, /precondition failed: % roadmap_revision_requests row\(s\) have no resolvable tenant/);
+  assert.match(roadmapScope, /postcondition failed: unscoped roadmap revision rows remain/);
+});
+
+test("roadmap reads are tenant-scoped and writes stay server-only", () => {
+  assert.match(roadmapScope, /create policy "tenant reads its own roadmap revision requests"[\s\S]*?school_id = app_private\.current_school_id\(\)/);
+  assert.match(roadmapScope, /revoke insert, update, delete on public\.roadmap_revision_requests from authenticated, anon/);
+  assert.match(roadmapScope, /grant select, insert, update, delete on public\.roadmap_revision_requests to service_role/);
+  assert.match(roadmapScope, /postcondition failed: a client role can write the workflow/);
+  assert.match(roadmapScope, /postcondition failed: service_role cannot run the approval/);
+});
+
+test("approval is constrained by tenant, not by role alone", async () => {
+  const { readFileSync } = await import("node:fs");
+  const action = readFileSync(
+    new URL("../../src/services/admin-approval.actions.ts", import.meta.url),
+    "utf8",
+  );
+  // The service-role update predicate must carry school_id, so a leaked or
+  // guessed UUID from another tenant cannot be approved.
+  assert.match(action, /\.eq\("id", requestId\)\s*\n\s*\.eq\("school_id", profile\.school_id\)/);
+});
+
+test("the professor direct-edit path writes through the service role with a tenant", async () => {
+  const { readFileSync } = await import("node:fs");
+  const actions = readFileSync(
+    new URL("../../src/services/professor.actions.ts", import.meta.url),
+    "utf8",
+  );
+  // Stage 9 revoked authenticated INSERT here, which silently broke this action.
+  const selfApprove = actions.slice(actions.indexOf('status: "approved",'));
+  assert.match(selfApprove.slice(0, 400), /school_id: profile\.school_id/);
+  assert.doesNotMatch(
+    actions,
+    /const supabase = await createSupabaseServerClient\(\);\s*\n\s*const \{ data, error \} = await supabase\s*\n\s*\.from\("roadmap_revision_requests"\)/,
+    "the roadmap revision insert must not use the session client",
+  );
+});

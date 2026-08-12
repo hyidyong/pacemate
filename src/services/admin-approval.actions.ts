@@ -77,10 +77,16 @@ export async function updateRoadmapRevisionStatus(formData: FormData) {
             admin_note: adminNote || null,
           };
 
+  // Codex F4: role alone is not authorization. Approving merges the request's
+  // patch into the roadmap every student reads, so a tenant B admin holding a
+  // tenant A request's UUID could publish into A. The predicate is constrained
+  // by school_id as well as id, so the service-role update cannot reach outside
+  // the caller's own university even if the id is guessed or leaked.
   const { data, error } = await createSupabaseAdminClient()
     .from("roadmap_revision_requests")
     .update(patch)
     .eq("id", requestId)
+    .eq("school_id", profile.school_id)
     .select("id, title, course_id, course_code")
     .single();
 

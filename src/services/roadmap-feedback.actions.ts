@@ -58,6 +58,7 @@ export async function submitRoadmapFeedback(formData: FormData) {
     .from("roadmap_revision_requests")
     .insert({
       scope: "course",
+      school_id: profile.school_id,
       status: "pending",
       course_code: courseCode,
       course_id: courseId,

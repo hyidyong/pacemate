@@ -418,7 +418,7 @@
       "id": "counseling-direct:student",
       "property": "a professor must not reassign a request to another student",
       "pass": true,
-      "detail": "PATCH 403; student_id is now \"00144ffd-841a-4625-87e3-da327ef06ca4\""
+      "detail": "PATCH 403; student_id is now \"465dd896-0a2f-4eb9-8c7c-650147cc5c48\""
     },
     {
       "id": "counseling-direct:suggested",
@@ -429,6 +429,24 @@
     {
       "id": "allow:professor-reads-own-caseload",
       "property": "a professor CAN still read their own counseling request",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "roadmap:cross-tenant-read",
+      "property": "tenant A staff must not read tenant B's roadmap revision request",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "roadmap:cross-tenant-approve",
+      "property": "tenant A staff must not approve tenant B's revision even with the exact UUID",
+      "pass": true,
+      "detail": "PATCH 403; status is now \"pending\""
+    },
+    {
+      "id": "allow:staff-reads-own-tenant-revision",
+      "property": "tenant A staff CAN read their own tenant's revision request",
       "pass": true,
       "detail": "status 200, 1 row(s)"
     },

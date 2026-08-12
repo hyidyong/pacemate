@@ -55,6 +55,7 @@ export const MARKED_TABLES = [
   ["study_tasks", "title", `like.*${PROBE_MARKER}*`],
   ["posts", "title", `like.*${PROBE_MARKER}*`],
   ["course_reviews", "content", `like.*${PROBE_MARKER}*`],
+  ["roadmap_revision_requests", "title", `like.*${PROBE_MARKER}*`],
 ];
 
 /**

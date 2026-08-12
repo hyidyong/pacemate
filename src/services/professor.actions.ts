@@ -492,6 +492,7 @@ export async function createRoadmapRevisionRequest(formData: FormData) {
     .from("roadmap_revision_requests")
     .insert({
       scope: scope === "department" ? "department" : "course",
+      school_id: profile.school_id,
       status: "pending",
       course_code: scope === "department" ? null : ownedCourse?.courseCode ?? null,
       course_id: scope === "department" ? null : ownedCourse?.courseId ?? null,
@@ -556,6 +557,13 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
     return { ok: false, message: "수정할 내용을 한 가지 이상 입력해 주세요." };
   }
 
+  // The row this writes is self-approved and enters the roadmap overlay, so it
+  // must carry a tenant. resolveOwnedCourse already proved the caller owns the
+  // course; this makes the identity requirement explicit rather than optional.
+  if (!profile?.school_id) {
+    return { ok: false, message: "소속 대학을 확인할 수 없습니다." };
+  }
+
   const proposedPatch = {
     ...(shortReason ? { shortReason } : {}),
     ...(basics.length ? { basics } : {}),
@@ -565,12 +573,18 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
   };
 
   const timestamp = new Date().toISOString();
-  const supabase = await createSupabaseServerClient();
+  // Codex F4 regression: this still used the SESSION client, and Stage 9 revoked
+  // authenticated INSERT on this table, so a professor's direct roadmap edit had
+  // silently started failing. Ownership was already proven by resolveOwnedCourse
+  // above, so the write runs under the service role — and now carries the
+  // tenant, which the approval and overlay paths scope on.
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("roadmap_revision_requests")
     .insert({
       scope: "course",
       status: "approved",
+      school_id: profile.school_id,
       course_code: ownedCourse.courseCode,
       course_id: ownedCourse.courseId,
       department_name: "법학과",
