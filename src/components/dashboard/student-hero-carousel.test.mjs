@@ -11,14 +11,19 @@ test("student hero carousel keeps banner images uncropped and supports every nav
 
   assert.match(source, /^"use client";/);
   assert.match(source, /useState\(0\)/);
-  assert.match(source, /2_500/);
+  // Stage 4 (audit D-14/C-18, deliberate change): the 2.5s always-on interval
+  // violated WCAG 2.2.2 — the carousel must pause via button, hover/focus,
+  // and prefers-reduced-motion, at a calmer 5s cadence.
+  assert.match(source, /5_000/);
+  assert.doesNotMatch(source, /2_500/);
+  assert.match(source, /prefers-reduced-motion/);
+  assert.match(source, /aria-pressed=\{isPaused\}/);
   assert.match(source, /clearInterval/);
-  assert.match(source, /}, \[currentIndex\]\);/);
   assert.match(source, /currentIndex - 1 \+ HERO_SLIDES\.length/);
   assert.match(source, /currentIndex \+ 1/);
   assert.match(source, /setCurrentIndex\(index\)/);
   assert.match(source, /translateX\(`?-?\$\{currentIndex \* 100\}%`?\)/);
-  assert.match(source, /<section[^>]*className="mt-4 md:mt-6"/);
+  assert.match(source, /className="mt-4 md:mt-6"/);
   assert.match(source, /className="w-full flex-none"/);
   assert.match(source, /className="block h-auto w-full object-contain"/);
   assert.doesNotMatch(source, /min-w-full|object-cover|min-h-\[|100vh|background-size/);

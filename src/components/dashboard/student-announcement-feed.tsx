@@ -62,7 +62,7 @@ export function StudentAnnouncementFeed({ announcements }: { announcements: Stud
               <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{notice.content}</p>
               {notice.courseName ? <span className="mt-1 block text-[11px] font-medium text-emerald-700">{notice.courseName}</span> : null}
             </Link>
-            <button aria-label={`${notice.title} 닫기`} className="shrink-0 rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" onClick={() => dismiss(notice.id)} type="button"><X size={16} /></button>
+            <button aria-label={`${notice.title} 닫기`} className="-m-1.5 shrink-0 rounded-full p-2.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" onClick={() => dismiss(notice.id)} type="button"><X size={16} /></button>
           </article>
         ))}
       </div>
