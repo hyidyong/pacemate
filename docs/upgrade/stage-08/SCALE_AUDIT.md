@@ -91,10 +91,37 @@ from the database:
 | S3 — cancel then 20-way re-book race | cancel freed the slot; exactly 1 row after the race |
 | S4 — 12 students, 12 distinct slots | 12/12 booked, 1 row per slot |
 
-**All 10 invariant checks passed.** Measured cost of the protection: p50
-1754 ms for 20 students contending one slot vs 726 ms for 12 students on
-distinct slots — the exclusion constraint serializes *contenders* without
-serializing unrelated bookings, exactly as D-011/D-017 intended.
+**All 10 invariant checks passed** — and passed again unchanged after every
+Stage 8 fix was applied (`results/booking-contention-after.json`). Measured cost
+of the protection: p50 1754 ms for 20 students contending one slot vs 726 ms for
+12 students on distinct slots — the exclusion constraint serializes *contenders*
+without serializing unrelated bookings, exactly as D-011/D-017 intended.
+
+### After the Stage 8 changes
+
+Same scenarios, same tiers, re-run on the post-change build
+(`results/*-after.json`):
+
+| Scenario | Before p50 / p95 | After p50 / p95 | Read |
+|---|---|---|---|
+| `/counseling` c=10 | 466 / 604 ms | 438 / 581 ms | within variance |
+| `/dashboard` c=10 | 524 / 710 ms | 542 / 821 ms | within variance |
+| `/professor` c=10 | 526 / 887 ms | 558 / 1015 ms | within variance |
+| `/admin` c=10 | 236 / 332 ms | 231 / 315 ms | within variance |
+| Booking S1 (20-way contention) | p50 1648 ms | p50 2179 ms | within variance (see below) |
+| Booking S4 (12 distinct slots) | p50 770 ms | p50 766 ms | unchanged |
+
+**No latency improvement is claimed, and none should be expected.** D-008
+already established that wall-clock against the live database is too noisy to
+assert (Stage 3 observed 2–4× spikes within one session), which is why
+correctness is guarded by deterministic tests rather than timing assertions.
+More fundamentally, the busy-feed bound (P1-1) targets *growth*: the live
+database holds **3** counseling requests, so bounding a query that currently
+returns 3 rows cannot produce a measurable win. Its value is that the row count
+now tracks the 14-day booking horizon instead of cumulative platform-wide
+bookings forever. The same applies to the four indexes on tables of ~126 rows.
+
+Error rate was **0% at every tier, before and after**.
 
 ---
 
@@ -293,8 +320,13 @@ measurement, and the projection in §3 says which queries would break first.
 
 ## 6. What Stage 8 changes (and deliberately does not)
 
-Implemented (see `IMPLEMENTATION_PLAN.md` for status): P0-1, P0-2, P1-1, P1-2,
-P1-3, and the P2 observability foundation.
+Implemented (all landed; see `IMPLEMENTATION_PLAN.md` for commits): P0-1, P0-2,
+P1-1, P1-2, P1-3, and the P2 observability foundation. **P1-4 rate limiting was
+deliberately NOT implemented** — reasoning in `IMPLEMENTATION_PLAN.md` §8;
+in short, the concrete abuse vectors turned out to be authorization holes (now
+closed), no measurement showed a rate bottleneck, and the only mechanisms
+available without new infrastructure would be either per-instance theatre or a
+threshold invented without a baseline.
 
 Deliberately NOT done, with reasons: no Redis / queue / microservice /
 Kubernetes / APM vendor (no measurement justifies any of them, and the stage

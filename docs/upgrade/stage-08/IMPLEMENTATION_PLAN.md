@@ -4,15 +4,18 @@ Ordered by the stage brief's priority scheme. One concern per commit,
 Red → Green for every correctness/security fix. Status is updated as work
 lands; anything not completed is marked honestly rather than removed.
 
-| # | Priority | Item | Status |
-|---|---|---|---|
-| 1 | P0 | `markAllNotificationsRead` cross-tenant write | ☐ |
-| 2 | P0 | AI actions missing authorization | ☐ |
-| 3 | P1 | busy feed unbounded / no time window | ☐ |
-| 4 | P1 | no Supabase request timeout | ☐ |
-| 5 | P1 | evidence-justified indexes | ☐ |
-| 6 | P2 | observability foundation | ☐ |
-| 7 | — | verification, docs, PR | ☐ |
+| # | Priority | Item | Status | Commit |
+|---|---|---|---|---|
+| 1 | P0 | `markAllNotificationsRead` cross-tenant write | **DONE** | 165dc94 |
+| 2 | P0 | AI actions missing authorization | **DONE** | eaa05cd |
+| 3 | P1 | busy feed unbounded / no time window | **DONE** | 5ef9371 |
+| 4 | P1 | no Supabase request timeout | **DONE** | fdf9339 |
+| 5 | P1 | evidence-justified indexes | **DONE** (applied live) | c151c89 |
+| 6 | P2 | observability foundation | **DONE** | c009ad1 |
+| 7 | — | verification, docs, PR | **DONE** | this commit |
+
+Rate limiting (P1-4 in the audit) was **NOT implemented** — see §8 for the
+reasoning, which is a deliberate decision rather than an omission.
 
 ---
 
@@ -156,10 +159,70 @@ sites.
 
 ---
 
-## 7. Verification
+## 7. Verification — results
 
-Targeted regression per fix (Red → Green), then: full suite, typecheck, lint,
-build + bundle budgets, bounded re-run of the same load scenarios for
-before/after comparison, booking contention at 20 students, and the Stage 6
-two-tenant isolation suite. Live-database safety protocol
-(`LOAD_TEST_PLAN.md` §5) applies to every run.
+Targeted regression per fix (Red → Green), then the full gate. All recorded in
+`HANDOFF.md`; headlines:
+
+| Check | Result |
+|---|---|
+| Full suite | 306 tests / 303 pass / 3 fail — the pre-existing KI-002 trio BY NAME (baseline was 289/286/3; +17 Stage 8 tests, all green) |
+| Typecheck | clean |
+| Lint | baseline (1 pre-existing `no-img-element` warning) |
+| Build | PASS, all bundle budgets met, shared JS 102 kB unchanged (no new deps) |
+| Stage 6 tenant isolation | 5/5 GREEN |
+| Stage 2/5 invariant suites | 35/35 GREEN |
+| Booking contention (20 students) | 10/10 invariant checks PASS, after the changes |
+| Read load baseline + moderate | re-run, 0% errors |
+| Live DB teardown | 0 leftover fixtures; 27 profiles / 3 counseling requests / 1 school |
+
+### Red → Green evidence
+
+| Fix | RED | GREEN |
+|---|---|---|
+| P0-1 | 2/2 failed — a foreign tenant's row flipped to `is_read=true` | 2/2 |
+| P0-2 | 4/4 failed — foreign-student writes recorded, OpenAI credits spent with no session | 4/4 |
+| P1-1 | 2/2 failed — no time bound on the busy query | 2/2 |
+| P1-2 | failure injection: a hung upstream never resolved | 4/4 |
+| P2 | — (new capability, not a bug fix) | 5/5 |
+
+### Deliberate test updates (not silent breakage)
+
+- Four fake clients gained `.gte()`/`.lt()`, modelling a client surface the real
+  PostgREST client already has. Without it the Stage 5/6 suites threw
+  `TypeError`, which was a fake-surface gap, not an app regression.
+- Four transpile loaders gained an observability stub.
+- `counseling-request-security.test.mjs` froze the old `console.error` shape; it
+  now asserts the structured event **and the absence** of `details`/`hint`.
+
+### Environment note
+
+Midway through the stage `node_modules` was emptied outside this session, and a
+plain `npm ci` reinstalled **without devDependencies**, producing thousands of
+spurious type errors and `MODULE_NOT_FOUND` in tests. Fixed with
+`npm ci --include=dev`. Recorded so the same symptom is not misdiagnosed as a
+code regression next time.
+
+## 8. Rate limiting — deliberately not implemented
+
+The audit ranked this P1-4, and it is **not** done. The reasoning, so the
+decision can be revisited rather than rediscovered:
+
+1. The two concrete abuse vectors found were *authorization* holes, not rate
+   problems: unauthenticated AI actions burning OpenAI credits (P0-2, now
+   closed) and unbounded per-student booking volume (KI-018 M10, a product
+   policy question — how many pending requests a student may hold — that nobody
+   has answered).
+2. On Vercel serverless with no new infrastructure, an in-memory limiter is
+   per-instance and resets on cold start, so it would produce the *appearance*
+   of protection without the substance. The honest options are Postgres-backed
+   counters (an extra round trip on every hot request) or platform controls.
+3. No measurement in this stage showed a request-rate bottleneck: 0% errors at
+   every tier run.
+4. Per-IP limiting — the easy default — is actively wrong here: campus NAT puts
+   thousands of legitimate students behind one address, the exact failure the
+   stage brief warns about.
+
+Implementing a limiter now would mean choosing a scope and a threshold with no
+baseline to justify either. Recorded in KNOWN_ISSUES with the evidence needed
+to do it properly (production traffic baseline + the M10 product decision).

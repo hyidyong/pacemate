@@ -89,8 +89,8 @@ never used interchangeably.
 | Tier | Concurrency | Iterations | Status |
 |---|---|---|---|
 | smoke | 1 | 5 | RUN (harness validation) |
-| baseline | 1 | 30 + 3 warmup | **RUN** — `results/read-load-baseline.json` |
-| moderate | 10 | 200 + 5 warmup | **RUN** — `results/read-load-moderate.json` |
+| baseline | 1 | 30 + 3 warmup | **RUN before + after** — `results/read-load-baseline{,-after}.json` |
+| moderate | 10 | 200 + 5 warmup | **RUN before + after** — `results/read-load-moderate{,-after}.json` |
 | high | 25 | 400 | **NOT RUN** — live-database safety |
 | stress | 50 | 600 | **NOT RUN** — live-database safety |
 | breaking point | escalate to failure | — | **NOT RUN** — would require deliberately degrading production |
@@ -108,7 +108,7 @@ estimated.
 | Tier | Students | Status |
 |---|---|---|
 | validation | 6 | RUN |
-| bounded contention | 20 | **RUN** — `results/booking-contention.json` |
+| bounded contention | 20 | **RUN before + after** — `results/booking-contention{,-after}.json`, 10/10 checks PASS both times |
 | high contention | 100+ | **NOT RUN** — live-database safety |
 
 ---

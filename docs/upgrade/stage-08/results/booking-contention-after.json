@@ -1,0 +1,144 @@
+{
+  "runId": "6fdb5da9",
+  "baseUrl": "http://127.0.0.1:3000",
+  "generatedAt": "2026-08-12T16:49:54.427Z",
+  "students": 20,
+  "findings": [
+    {
+      "scenario": "S1 same-slot stampede",
+      "concurrency": 20,
+      "outcomes": {
+        "winners": 1,
+        "attempted": 20,
+        "storageFailures": 0,
+        "httpErrors": 0
+      },
+      "latency": {
+        "requests": 20,
+        "ok": 20,
+        "failed": 0,
+        "errorRatePct": 0,
+        "throughputRps": 9.14,
+        "latencyMs": {
+          "min": 2173.8,
+          "p50": 2179.2,
+          "p95": 2185.4,
+          "p99": 2187,
+          "max": 2187,
+          "mean": 2180
+        },
+        "statusCounts": {
+          "200": 20
+        },
+        "wallClockMs": 2188
+      },
+      "checks": [
+        {
+          "id": "I1 capacity never exceeded",
+          "pass": true,
+          "detail": "1 active request(s) for the contended slot (must be <= 1)"
+        },
+        {
+          "id": "I1b exactly one student owns the contended slot",
+          "pass": true,
+          "detail": "1 distinct student(s) own 1 row(s) — must be 1 and 1"
+        },
+        {
+          "id": "I4 conflicts are conflicts, not storage failures or 5xx",
+          "pass": true,
+          "detail": "storage-failure responses=0, HTTP 5xx=0"
+        }
+      ]
+    },
+    {
+      "scenario": "S2 duplicate submissions",
+      "concurrency": 5,
+      "outcomes": {
+        "activeRowsForSlot": 1,
+        "studentRowsForSlot": 1,
+        "storageFailures": 0,
+        "httpErrors": 0
+      },
+      "checks": [
+        {
+          "id": "I2 no duplicate logical reservation",
+          "pass": true,
+          "detail": "1 active row(s) for the slot after 5 duplicate submits (must be exactly 1)"
+        },
+        {
+          "id": "I2b duplicates create no extra rows and no storage failure",
+          "pass": true,
+          "detail": "student holds 1 active row(s) for this slot; storage-failures=0, 5xx=0"
+        }
+      ]
+    },
+    {
+      "scenario": "S3 cancel + re-book",
+      "concurrency": 20,
+      "outcomes": {
+        "cancelStatus": "cancelled",
+        "activeRowsAfterRebook": 1,
+        "storageFailures": 0,
+        "httpErrors": 0
+      },
+      "checks": [
+        {
+          "id": "I5 cancellation frees the slot",
+          "pass": true,
+          "detail": "cancelled row status=cancelled, active rows after cancel=0 (must be 0)"
+        },
+        {
+          "id": "I5b freed slot re-books exactly once under a race",
+          "pass": true,
+          "detail": "1 active row(s) after a 20-way re-book race (must be exactly 1)"
+        },
+        {
+          "id": "I4 no storage failures or 5xx during the race",
+          "pass": true,
+          "detail": "storage-failures=0, 5xx=0"
+        }
+      ]
+    },
+    {
+      "scenario": "S4 distinct slots",
+      "concurrency": 12,
+      "outcomes": {
+        "bookedSlots": 12,
+        "attempted": 12,
+        "storageFailures": 0,
+        "httpErrors": 0
+      },
+      "latency": {
+        "requests": 12,
+        "ok": 12,
+        "failed": 0,
+        "errorRatePct": 0,
+        "throughputRps": 13.46,
+        "latencyMs": {
+          "min": 756,
+          "p50": 766.5,
+          "p95": 889.3,
+          "p99": 889.3,
+          "max": 889.3,
+          "mean": 791.3
+        },
+        "statusCounts": {
+          "200": 12
+        },
+        "wallClockMs": 891
+      },
+      "checks": [
+        {
+          "id": "throughput preserved for non-contending bookings",
+          "pass": true,
+          "detail": "12/12 distinct-slot bookings succeeded"
+        },
+        {
+          "id": "I1 one row per distinct slot",
+          "pass": true,
+          "detail": "rows per slot: [1,1,1,1,1,1,1,1,1,1,1,1]"
+        }
+      ]
+    }
+  ]
+}

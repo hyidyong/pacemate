@@ -3,6 +3,72 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-021 — Stage 8 scale/reliability: findings deferred by design
+
+Status: OPEN (documented 2026-08-13; full evidence in docs/upgrade/stage-08/).
+Stage 8 closed two P0 correctness/security defects and four P1 scale items
+(D-022/D-023). The following are recorded with evidence rather than silently
+carried:
+
+- **Rate limiting is NOT implemented** (SCALE_AUDIT P1-4,
+  IMPLEMENTATION_PLAN §8). No app-level limiter exists anywhere. Deferred
+  deliberately: the concrete abuse vectors found were authorization holes (now
+  closed), no tier showed a request-rate bottleneck (0% errors throughout), an
+  in-memory limiter on Vercel serverless is per-instance and resets on cold
+  start (protection theatre), and per-IP scoping is actively wrong behind
+  campus NAT. Doing it properly needs a production traffic baseline plus the
+  KI-018 M10 product decision (how many pending requests one student may hold).
+  `/support` additionally requires NO session at all
+  (support.actions.ts:27,47) — fix the authorization before adding a limiter.
+- **Unbounded professor report reads remain** (KI-016 carry-over):
+  professor-anonymous-weekly-aggregate.server.ts:266 and
+  professor-course-progress-report.server.ts:199 fetch ALL `course_offerings`
+  platform-wide, then all matching progress rows. Stage 8 added the
+  `student_weekly_progress (offering_id, week_number)` index that makes the
+  second query survivable, but the SCOPING fix changes displayed content and is
+  entangled with the Stage 9 privacy work, so it stays there.
+- **No pagination anywhere**: `.range()` appears zero times in the codebase.
+  The `limit 80` / `limit 40` feed caps are silent truncation, which becomes a
+  correctness problem (users cannot reach their own older posts) before a
+  performance one.
+- **Admin broadcast does not chunk**: admin-notifications.actions.ts:66-73,92
+  builds an `IN` list of every tenant profile and inserts one row per recipient
+  in a single statement. Fine at demo scale; needs chunking before a
+  full-size tenant exists.
+- **Escalations inbox is unbounded** and, on the assistant/admin branch, has no
+  filter at all (professor-questions.server.ts:125-131). Stage 8 added the
+  `(professor_id, created_at desc)` index for the professor branch only.
+- **Notification READ path is still untenanted**
+  (notifications.service.ts:63-69,90-93) — the same `OR` shape whose WRITE side
+  Stage 8 fixed. Left to Stage 9 with KI-019, because read isolation is not
+  DB-enforceable until the anon SELECT policy family is overhauled. The KI-016
+  "user_notifications partial unread index" candidate is consequently REFINED,
+  not adopted: one partial index cannot serve an `OR` across two columns, and
+  the `school_id`-leading variant only becomes usable once that tenant filter
+  exists.
+- **`user_notifications.school_id` remains nullable** (D-018), so the Stage 8
+  tenant-scoped bulk mark-read deliberately does not match untenanted rows.
+  Live check at fix time: 0 such rows exist. If ungated writers later create
+  them, those notifications become undismissable in bulk until D-018's NOT NULL
+  work lands.
+- **The middleware auth cost is UNVERIFIED**: `getClaims()` verifies locally
+  when JWTs are asymmetric (JWKS cached ~10 min per warm instance) but falls
+  back to a GoTrue network call per request when they are symmetric (HS256).
+  Which applies here is a Supabase dashboard setting not visible in the repo.
+  Decode a live access token's header (`alg`/`kid`) before designing any
+  auth-cost mitigation — the answer changes the plan by an order of magnitude.
+- **PostgREST `!inner` embed filters may not use the tenant filter to drive the
+  scan** (three availability reads, counseling.service.ts:125-130, 254-257,
+  278-281). Analysis only, needs `EXPLAIN` against the live DB to confirm; if
+  confirmed, resolve tenant professor ids first and use `.in("professor_id",…)`.
+- **Load tiers above 10 concurrent VUs / 20 concurrent bookings were NOT RUN**
+  (high, stress, breaking point, recovery). They are implemented in the harness
+  and blocked only on the absence of a non-production Supabase project. Nothing
+  about capacity beyond the tested numbers is claimed.
+- **Legacy `console.*` sites remain** (~70 across 28 files) alongside the new
+  structured logger, and ~40 bare `catch {}` still swallow failures (KI-003
+  family). Stage 8 converted the highest-value sites only.
+
 ## KI-020 — Stage 7 SSO readiness: residuals, blocked externals, and findings recorded in passing
 
 Status: OPEN (documented 2026-08-13; evidence in docs/upgrade/stage-07/*).

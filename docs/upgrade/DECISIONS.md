@@ -1,5 +1,67 @@
 # Architectural Decisions
 
+## D-022 — Scalability is bounded queries, bounded requests, and evidence-justified indexes; no new infrastructure
+
+Status: Accepted (Stage 8, 2026-08-13)
+
+Context: Stage 8 had to prepare for multiple universities and tens of thousands
+of registered users. The measured evidence (SCALE_AUDIT §2) showed 0% errors at
+every tier run and latency that is Supabase round-trip-bound, not CPU-bound —
+`/login`, the only route touching no database, sustained ~9× the throughput of
+the heaviest page. The bottlenecks found were query SHAPE and unbounded growth,
+not request volume.
+
+Decision: no Redis, queue, message bus, microservice, Kubernetes, distributed
+cache, second database, or APM vendor. No new connection pooler either — the
+app has no app-side pool to pool (all access is stateless PostgREST HTTPS; there
+is no `pg` driver), so the platform already owns that layer. What Stage 8 ships
+instead: bound the one unbounded hot query (busy feed → the 14-day slot
+horizon, derived from the domain constant so the two cannot drift), bound every
+Supabase request with a fetch timeout (supabase-js has no default, so a hung
+call previously pinned a serverless invocation until the platform killed it),
+and add four indexes each justified by a named query. Zero new runtime
+dependencies; shared JS unchanged at 102 kB.
+
+Consequences: correctness-critical reads stay uncached — D-007 is untouched,
+because the measured problem was query shape, not repetition, and the busy feed
+is booking-authoritative (D-011). No retry was added anywhere: retrying a
+booking mutation is guaranteed to fail again (D-013) and would convert overload
+into a retry storm, so the timeout produces bounded FAILURE, not bounded
+retrying. Capacity claims are limited to what was tested (10 concurrent VUs on
+reads, 20 concurrent bookings); larger tiers are implemented in the harness but
+recorded NOT RUN because the only Supabase project is live production.
+
+## D-023 — Observability is log-based with an enforced field allowlist and an explicit conflict-vs-fault taxonomy
+
+Status: Accepted (Stage 8, 2026-08-13)
+
+Context: the app had 70 free-form `console.*` calls, ~40 silent `catch {}`, no
+request id, no metrics, and no `instrumentation.ts`. The decisive example: the
+booking path caught a slot-fetch failure, logged NOTHING, and returned the
+business-conflict message — so a Supabase outage was invisible to operators and
+misreported to students as "that slot is taken".
+
+Decision: structured JSON lines to stdout (Vercel captures it; a drain can be
+attached later) instead of an APM vendor or metrics backend. Fields are
+ALLOWLISTED in code, generalizing the discipline `sso-audit.ts` already proved,
+so a future caller cannot widen the log surface and leak PII — notably
+`profiles.identifier`, which IS the user's email and must never be logged; the
+profile uuid is the safe pseudonymous identifier. Errors carry an explicit
+taxonomy (`ok` / `conflict` / `denied` / `user_error` / `fault`) and
+`classifyPostgresError` maps 23P01/23505/PGRST116 to `conflict`, never `fault`,
+so a legitimately contended slot cannot pollute the fault rate an operator
+pages on. A correlation id is minted in middleware, preferring the platform's
+own id when present. Tracing was deliberately NOT added: the request path is
+short and single-process, so logs plus a correlation id reconstruct it.
+
+Consequences: alert thresholds are NOT fabricated — only directional statements
+are recorded, because the sole baseline is a single-instance local run at demo
+data volume. The sso-audit emitter now rides the shared logger, so the durable
+sink KI-020 asks for becomes a sink swap rather than a rewrite; the table itself
+is not created while no real IdP exists to generate non-synthetic events.
+Rewriting all 70 legacy `console.*` sites was left out of scope as unrelated
+churn; the helper plus the highest-value call sites establish the pattern.
+
 ## D-019 — SSO uses Supabase Auth as the protocol engine, wrapped in a thin app-owned identity boundary
 
 Status: Accepted (Stage 7, 2026-08-13)

@@ -4,43 +4,49 @@
 
 Stage 8 / 10
 Scale / Reliability / Observability
-Status: IN PROGRESS on branch `upgrade/stage-8` (started 2026-08-13).
-Base: `main` @ 9eeaf78 (Stage 7 PR #41 merged 2026-08-13).
-Stage docs: docs/upgrade/stage-08/ (SCALE_AUDIT, LOAD_TEST_PLAN,
-OBSERVABILITY_DESIGN, IMPLEMENTATION_PLAN, HANDOFF).
+Status: COMPLETE on branch `upgrade/stage-8` (2026-08-13) — awaiting PR
+review/merge. Base: `main` @ 9eeaf78 (Stage 7 PR #41 merged 2026-08-13).
+See docs/upgrade/stage-08/HANDOFF.md.
 
-## Primary Objective
+Next stage: Stage 9 — NOT started. Stage 9 begins only after the Stage 8 PR
+merges, from the HANDOFF "Stage 9 inputs" section.
 
-Prepare the platform for production-scale usage across multiple universities
-— evidence-based scalability and operational reliability, NOT pretend
-millions-of-users claims. Target: multiple universities, tens of thousands of
-REGISTERED users, with realistic CONCURRENT timetable/counseling/booking/
-admin/SSO traffic. Themes: load testing, capacity analysis, database
-scalability, connection management, caching, rate limiting, reliability,
-observability (logs/metrics/tracing), failure behavior.
+## What Stage 8 delivered
 
-Discovery before infrastructure: no Redis/Kafka/queues/microservices/APM
-unless measurements justify them. Correctness > throughput — Stage 5
-transaction guarantees and Stage 6 tenant isolation must not be weakened by
-any scalability change. Distinguish REGISTERED USERS / CONCURRENT USERS /
-REQUESTS PER SECOND; never claim untested capacity.
+Evidence-based scalability and operational reliability, with no new
+infrastructure (D-022) and log-based observability (D-023).
 
-## Stage 8 inputs (from previous stages)
+Fixed: a cross-tenant notification write (`markAllNotificationsRead` updated
+role-addressed rows in every university); two AI server actions that took
+`studentId` from the caller with no authorization and no OpenAI timeout; the
+unbounded, monotonically growing counseling busy feed; the absence of any
+request timeout on all four Supabase clients; four missing indexes on named hot
+queries.
 
-- KI-016: unbounded queries + index candidates; supabase-js in shared shell;
-  dashboard student_courses 5× reads.
-- KI-018: notification outbox/reliable delivery; note-wipe race.
-- KI-019: academic_terms / course_equivalencies cleanup (deferred here).
-- KI-020: durable audit-event sink for the sso-audit seam; session
-  revocation store; schools.status join in profile reads (Stage 9-shaped
-  items stay Stage 9).
+Added: a zero-dependency load harness (`scripts/loadtest/`) that drives real
+sessions and server actions and validates BUSINESS STATE, not HTTP 200; and a
+structured logging foundation with a field allowlist, a conflict-vs-fault
+taxonomy, correlation ids, and Next's `onRequestError`.
 
-## Non-goals
+## Tested capacity (precise)
 
-- Stage 9 RLS/privacy overhaul (KI-007/011/014 anon-policy family)
+10 concurrent virtual users across six authenticated routes, 0% errors, p99
+≤ 1377 ms, single local production instance against live Supabase; 20
+concurrent booking mutations with all ten Stage 5 invariant checks intact.
+
+NOT TESTED (implemented in the harness, blocked on the absence of a
+non-production database): hundreds/thousands of concurrent users, stress,
+breaking point, recovery, sustained soak, Vercel multi-instance behaviour.
+Nothing beyond the tested numbers is claimed.
+
+## Non-goals (this stage)
+
+- Redis / queues / microservices / Kubernetes / APM vendor / new pooler
+- Stage 9 RLS + privacy overhaul (anon-policy family, notification read
+  scoping, professor report scoping)
 - Stage 10 CI/CD
-- UI/UX changes (Stage 4 preserved)
-- New heavy infrastructure without measured justification
+- UI/UX changes (Stage 4 preserved — no user-visible copy or layout changed)
+- Rate limiting (deliberately deferred with reasoning — KI-021)
 
 ## Completion rule
 
