@@ -1032,7 +1032,7 @@ export function MyPagePlanner({
 
       {/* SECTION 4: Community Tabs */}
       <section className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${activeTab === "all" || activeTab === "community" ? "" : "hidden"}`}>
-        <div className="border-b border-gray-100 px-2 pt-2 flex overflow-x-auto hide-scrollbar">
+        <div className="border-b border-gray-100 px-2 pt-2 flex overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button 
             onClick={() => setActiveCommunityTab("my")}
             className={`px-4 py-3 text-sm font-bold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${activeCommunityTab === "my" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-800"}`}

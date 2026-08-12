@@ -385,6 +385,12 @@ select {
   .site-footer {
     display: none !important;
   }
+
+  /* Clearance for the fixed bottom navs, at the SAME breakpoint they appear
+     (md). Replaces the old body padding that applied where no nav exists. */
+  .app-shell-main--with-mobile-nav {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
 }
 
 .app-shell-main {
@@ -2901,8 +2907,6 @@ select {
 
 .professor-admin-clear p {
   margin: 0;
-}fessor-admin-clear p {
-  margin: 0;
   overflow-wrap: anywhere;
 }
 
@@ -4288,11 +4292,11 @@ select {
   line-height: 1.55;
 }
 
+/* Bottom-nav clearance lives on .app-shell-main--with-mobile-nav (below,
+   @767px — the same breakpoint the navs appear at). The old body rule here
+   padded EVERY route between 768-900px where no nav exists, and stacked with
+   the main rule below 620px into ~166px of dead space (Stage 4, audit C-33). */
 @media (max-width: 900px) {
-  body {
-    padding-bottom: calc(82px + env(safe-area-inset-bottom));
-  }
-
   .section-header {
     align-items: stretch;
     flex-direction: column;
@@ -4392,10 +4396,6 @@ select {
 
   .app-shell-main {
     padding-top: 14px;
-  }
-
-  .app-shell-main--with-mobile-nav {
-    padding-bottom: calc(84px + env(safe-area-inset-bottom));
   }
 
   .dashboard-student-overview {

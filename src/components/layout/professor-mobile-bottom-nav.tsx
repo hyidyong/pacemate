@@ -55,10 +55,10 @@ export function ProfessorMobileBottomNav() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 shadow-[0_-14px_34px_rgba(23,32,26,0.09)] backdrop-blur-md"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-14px_34px_rgba(23,32,26,0.09)] backdrop-blur-md"
       aria-label="Professor mobile navigation"
     >
-      <div className="grid h-[64px] grid-cols-5 pb-[env(safe-area-inset-bottom)]">
+      <div className="grid h-[64px] grid-cols-5">
         {professorMobileNavItems.map(({ id, label, href, icon: Icon }) => {
           const isActive = activeItem === id;
 
@@ -78,7 +78,7 @@ export function ProfessorMobileBottomNav() {
                 />
               ) : null}
               <Icon size={18} strokeWidth={isActive ? 2.4 : 1.8} aria-hidden="true" />
-              <span className="min-w-0 whitespace-nowrap">{label}</span>
+              <span className="min-w-0 max-w-full truncate">{label}</span>
             </Link>
           );
         })}

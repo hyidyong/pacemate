@@ -600,7 +600,7 @@ export function ProfessorWorkspace({
         </div>
         
         {/* Navigation Menus */}
-        <nav className="flex-1 lg:overflow-y-auto px-4 pb-4 lg:pb-6 flex lg:flex-col gap-3 lg:gap-2 overflow-x-auto scrollbar-hide border-b lg:border-none border-slate-100">
+        <nav className="flex-1 lg:overflow-y-auto px-4 pb-4 lg:pb-6 flex lg:flex-col gap-3 lg:gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b lg:border-none border-slate-100">
           {professorTabs.map((tab) => (
             <div key={tab.id} className="lg:mb-4 flex-shrink-0 flex lg:block items-center gap-2">
               <div className="hidden lg:block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 ml-2">

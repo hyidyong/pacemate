@@ -70,7 +70,7 @@ export async function AppShell({
         />
 
         <main
-          className={`app-shell-main${isStudent || isProfessor ? " app-shell-main--with-mobile-nav" : ""}`}
+          className={`app-shell-main${isStudent || isProfessor || isOperator ? " app-shell-main--with-mobile-nav" : ""}`}
         >
           {children}
         </main>

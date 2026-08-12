@@ -17,7 +17,10 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
 };
 
-export const viewport: Viewport = { themeColor: "#6BCB77" };
+// viewport-fit=cover is required for env(safe-area-inset-*) to resolve to
+// anything but 0 — without it every safe-area rule in the app was a no-op
+// on notched devices (Stage 4, audit C-28).
+export const viewport: Viewport = { themeColor: "#6BCB77", viewportFit: "cover" };
 
 export default function RootLayout({
   children,

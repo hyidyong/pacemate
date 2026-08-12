@@ -93,7 +93,7 @@ export function RegisterCourseDialog({
               {slots.map((slot, index) => (
                 <div
                   key={index}
-                  className="grid grid-cols-[0.8fr_1fr_1fr_1.2fr_auto] items-center gap-2"
+                  className="grid gap-2 sm:grid-cols-[0.8fr_1fr_1fr_1.2fr_auto] sm:items-center"
                 >
                   <select
                     value={slot.day}

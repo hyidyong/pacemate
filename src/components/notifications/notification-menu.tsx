@@ -128,7 +128,7 @@ export function NotificationMenu({
         <span className="sr-only">알림</span>
       </button>
       {open ? (
-        <div className="absolute right-0 top-full z-[200] mt-3 w-80 rounded-3xl bg-white p-3 shadow-lg ring-1 ring-slate-100">
+        <div className="absolute right-0 top-full z-[200] mt-3 w-[min(20rem,calc(100vw-2rem))] rounded-3xl bg-white p-3 shadow-lg ring-1 ring-slate-100">
           <div className="flex items-center justify-between px-2 pb-2">
             <strong className="text-sm text-slate-800">알림 센터</strong>
             <Link className="text-xs font-semibold text-emerald-600" href="/notifications">
