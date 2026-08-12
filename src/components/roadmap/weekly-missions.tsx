@@ -1,36 +1,56 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { generateWeeklyGuide, submitProgressFeedback } from "@/services/ai-tutor.actions";
 
 export function WeeklyMissions({ studentId, courseId, currentWeek, initialGuide }: { studentId: string, courseId: string, currentWeek: number, initialGuide: any }) {
+  const router = useRouter();
   const [guide, setGuide] = useState(initialGuide);
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
+  const [status, setStatus] = useState<{ text: string; ok: boolean } | null>(null);
 
   const handleGenerate = () => {
+    setStatus(null);
     startTransition(async () => {
       const result = await generateWeeklyGuide(courseId, studentId, currentWeek);
-      if (result) setGuide(result);
+      if (result) {
+        setGuide(result);
+      } else {
+        // A falsy result used to re-enable the button with no message at all
+        // — failure was indistinguishable from a no-op (audit A-16).
+        setStatus({ text: "가이드를 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.", ok: false });
+      }
     });
   };
 
   const handleFeedbackSubmit = () => {
+    setStatus(null);
     startTransition(async () => {
       await submitProgressFeedback(courseId, studentId, currentWeek, feedback);
-      alert("다음 주차 가이드가 실제 진도에 맞게 조정되었습니다.");
+      setStatus({ text: "다음 주차 가이드가 실제 진도에 맞게 조정되었습니다.", ok: true });
       setShowFeedback(false);
-      // In a real app we'd refresh the page or update state to next week
-      window.location.reload();
+      // router.refresh() keeps scroll position, tab selection, and local
+      // todo state — window.location.reload() destroyed all three.
+      router.refresh();
     });
   };
 
   return (
     <div className="section" style={{ border: "1px solid var(--color-border)", padding: "16px", borderRadius: "8px", marginTop: "16px" }}>
       <h3>주차별 맞춤 예습/복습 가이드 (현재 {currentWeek}주차)</h3>
-      
+      {status ? (
+        <p
+          role={status.ok ? "status" : "alert"}
+          style={{ marginTop: "8px", fontSize: "13px", fontWeight: 600, color: status.ok ? "#047857" : "#dc2626" }}
+        >
+          {status.text}
+        </p>
+      ) : null}
+
       {!guide ? (
         <div style={{ marginTop: "12px" }}>
           <p>아직 이번 주차 가이드가 생성되지 않았습니다.</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Send, Star } from "lucide-react";
 import type { CourseSummary } from "@/services/course.service";
 import { createCourseReview } from "@/services/reviews.actions";
@@ -17,6 +18,7 @@ export function ReviewsBoard({
   initialCourseId?: string;
   reviews: CourseReview[];
 }) {
+  const router = useRouter();
   const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
   const [difficulty, setDifficulty] = useState("3");
   const [workload, setWorkload] = useState("3");
@@ -50,6 +52,9 @@ export function ReviewsBoard({
       setMessage(result.message);
       if (result.ok) {
         setContent("");
+        // The list is server data; without a refresh the student was told
+        // 등록했습니다 while the feed stayed unchanged (audit A-14).
+        router.refresh();
       }
     });
   }
