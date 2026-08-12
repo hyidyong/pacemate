@@ -5,8 +5,81 @@
 // no longer matches after the auth_user_id mapping migrations), so this module
 // keeps using the anon client on purpose.
 import { supabase } from "@/lib/supabase/client";
+import { getDemoProfile } from "@/services/session.service";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+// Stage 8 P0-2. Both exported actions previously took `studentId` from the
+// caller and never resolved a session, so anyone holding the (publicly
+// discoverable) action id could write another student's progress, advance
+// another student's course week, and spend OpenAI credits without an account.
+// The acting student is now resolved server-side and the parameter is ignored;
+// the signature is preserved so the existing call sites and UI are untouched.
+async function resolveActingStudent() {
+  const profile = await getDemoProfile();
+  if (!profile || profile.role !== "student" || !profile.school_id) {
+    return null;
+  }
+  return { id: profile.id, schoolId: profile.school_id };
+}
+
+// Review finding 2. Deriving studentId from the session closed the identity
+// hole but left courseId and currentWeek caller-supplied and unvalidated, so a
+// student could name ANOTHER UNIVERSITY'S course id: its syllabus text would be
+// read and sent to OpenAI (cross-tenant exfiltration through the prompt) and
+// progress rows written for a course they do not own.
+//
+// Authorization is now derived from the student's OWN enrollment, joined to the
+// course's tenant. `.limit(1).maybeSingle()` rather than a bare `maybeSingle()`
+// because student_courses is unique on (student_id, course_id, STATUS), so one
+// student legitimately has several rows for the same course (KI-012).
+// Returns the AUTHORITATIVE week for this enrollment, or null when the student
+// may not act on this course at all.
+async function authorizeCourseForStudent(
+  studentId: string,
+  schoolId: string,
+  courseId: string,
+): Promise<{ currentWeek: number } | null> {
+  if (!courseId) return null;
+
+  const { data, error } = await supabase
+    .from("student_courses")
+    .select("course_id, current_week, course:courses!inner(id, school_id)")
+    .eq("student_id", studentId)
+    .eq("course_id", courseId)
+    .eq("course.school_id", schoolId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const currentWeek = (data as { current_week?: number }).current_week;
+  return isValidWeek(currentWeek) ? { currentWeek } : null;
+}
+
+// A course week is a small positive integer, matched by the
+// student_courses_current_week_range CHECK constraint.
+const MAX_COURSE_WEEK = 30;
+
+function isValidWeek(week: unknown): week is number {
+  return typeof week === "number" && Number.isInteger(week) && week >= 1 && week <= MAX_COURSE_WEEK;
+}
+
+// Review round 3, finding 2. Bounding the week to 1..30 only rejects absurd
+// input; a week inside that range is still caller-supplied and proves nothing.
+// The enrollment row holds the authoritative week, so the caller's value is
+// treated purely as an optimistic-concurrency token: it must match, or the
+// request is stale (an out-of-date tab) or forged (an attempt to read/overwrite
+// a week the student has not reached). Either way it is rejected BEFORE the
+// syllabus read, the OpenAI call, any progress write, and any advance.
+function isAuthorizedWeek(claimedWeek: number, authoritativeWeek: number): boolean {
+  return isValidWeek(claimedWeek) && claimedWeek === authoritativeWeek;
+}
+
+// The OpenAI call previously had no timeout, so a slow upstream pinned the
+// serverless invocation until the platform killed it. Matches the bound already
+// used by ai-tutor-rag.actions.ts.
+const OPENAI_TIMEOUT_MS = 20000;
 
 const SYSTEM_PROMPT = `너는 PaceMate의 AI 학습 튜터야. 
 반드시 사용자가 업로드한 [강의 계획서 및 교과서 파일]의 정보에만 기반해서 답변해야 해.
@@ -21,7 +94,25 @@ const SYSTEM_PROMPT = `너는 PaceMate의 AI 학습 튜터야.
   "prep_review_guide": "예습 및 복습 가이드..."
 }`;
 
-export async function generateWeeklyGuide(courseId: string, studentId: string, currentWeek: number, feedback: string = "") {
+export async function generateWeeklyGuide(
+  courseId: string,
+  _studentId: string,
+  currentWeek: number,
+  feedback: string = "",
+) {
+  const student = await resolveActingStudent();
+  if (!student) {
+    return null;
+  }
+  const studentId = student.id;
+
+  // Authorize BEFORE reading the syllabus or calling OpenAI: the course text
+  // becomes prompt content, so an unauthorized read is already a disclosure.
+  const enrollment = await authorizeCourseForStudent(studentId, student.schoolId, courseId);
+  if (!enrollment || !isAuthorizedWeek(currentWeek, enrollment.currentWeek)) {
+    return null;
+  }
+
   // 1. Fetch Course & Syllabus
   const { data: course } = await supabase
     .from("courses")
@@ -67,6 +158,7 @@ ${feedback ? `학생의 이전 실제 진도 피드백: "${feedback}" (이 피�
         response_format: { type: "json_object" },
         temperature: 0.2,
       }),
+      signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
     });
 
     if (!res.ok) {
@@ -97,12 +189,35 @@ ${feedback ? `학생의 이전 실제 진도 피드백: "${feedback}" (이 피�
   }
 }
 
-export async function submitProgressFeedback(courseId: string, studentId: string, currentWeek: number, feedback: string) {
+export async function submitProgressFeedback(
+  courseId: string,
+  _studentId: string,
+  currentWeek: number,
+  feedback: string,
+) {
+  const student = await resolveActingStudent();
+  if (!student) {
+    return;
+  }
+  const studentId = student.id;
+
+  // Same authorization gate as generateWeeklyGuide: this path writes progress
+  // AND advances student_courses.current_week, so neither an unowned courseId
+  // nor an unauthorized week may reach either statement.
+  const enrollment = await authorizeCourseForStudent(studentId, student.schoolId, courseId);
+  if (!enrollment || !isAuthorizedWeek(currentWeek, enrollment.currentWeek)) {
+    return;
+  }
+
+  // Every week below is the SERVER's value, never the caller's — the caller's
+  // was only ever an equality token checked above.
+  const authorizedWeek = enrollment.currentWeek;
+
   // 1. Save Feedback to current week
   const { error: feedbackError } = await supabase.from("student_mission_progress").upsert({
     student_id: studentId,
     course_id: courseId,
-    week_number: currentWeek,
+    week_number: authorizedWeek,
     actual_progress_feedback: feedback,
   }, { onConflict: "student_id,course_id,week_number" });
 
@@ -110,17 +225,26 @@ export async function submitProgressFeedback(courseId: string, studentId: string
     console.error("Failed to save progress feedback:", feedbackError);
   }
 
-  // 2. Trigger AI generation for NEXT week (currentWeek + 1)
-  const nextWeek = currentWeek + 1;
+  // 2. Trigger AI generation for NEXT week. The final week of a course has no
+  // next week to advance into; stop rather than writing a value the
+  // student_courses_current_week_range constraint would reject.
+  const nextWeek = authorizedWeek + 1;
+  if (!isValidWeek(nextWeek)) {
+    return;
+  }
+
+  // Compare-and-set on the week we authorized against, so two concurrent
+  // submissions cannot advance the enrollment twice.
   const { error: weekError } = await supabase
     .from("student_courses")
     .update({ current_week: nextWeek })
     .eq("student_id", studentId)
-    .eq("course_id", courseId);
+    .eq("course_id", courseId)
+    .eq("current_week", authorizedWeek);
 
   if (weekError) {
     console.error("Failed to advance current week:", weekError);
   }
 
-  await generateWeeklyGuide(courseId, studentId, nextWeek, feedback);
+  await generateWeeklyGuide(courseId, _studentId, nextWeek, feedback);
 }

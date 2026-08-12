@@ -47,12 +47,25 @@ test("counseling RLS migration updates only the reviewed authenticated student p
   assert.doesNotMatch(sql, /disable row level security|security definer|service_role/i);
 });
 
-test("counseling insert failures log structured Supabase diagnostics without changing the public message", async () => {
+test("counseling insert failures log structured diagnostics without changing the public message", async () => {
   const source = await readFile(new URL("./counseling.actions.ts", import.meta.url), "utf8");
-  assert.match(source, /console\.error\([^)]*counseling request insert failed/is);
-  for (const field of ["code", "message", "details", "hint"]) {
-    assert.match(source, new RegExp(`error\\?\\.${field}|error\\.${field}`));
-  }
+
+  // Stage 8 P2 updated the MECHANISM deliberately: the ad-hoc console.error was
+  // replaced by the shared structured logger, which classifies the outcome so a
+  // storage fault is distinguishable from a slot conflict in logs.
+  assert.match(source, /logEvent\(\{[\s\S]*?event:\s*"booking\.storage_failure"/);
+  assert.match(source, /outcome:\s*"fault"/);
+  assert.match(source, /code:\s*error\?\.code/);
+
+  // ...and NARROWED the payload on purpose: Postgres `details`/`hint` strings
+  // can embed row values, and profiles.identifier is an email address. They are
+  // no longer logged, so this asserts their ABSENCE rather than their presence.
+  assert.doesNotMatch(source, /details:\s*error\?\.details/);
+  assert.doesNotMatch(source, /hint:\s*error\?\.hint/);
+
+  // A legitimate conflict must be logged as a conflict, never as a fault.
+  assert.match(source, /event:\s*"booking\.slot_conflict"[\s\S]*?outcome:\s*"conflict"/);
+
   assert.doesNotMatch(source, /access_token|refresh_token|service_role/i);
   assert.match(source, /student_id:\s*profile\.id/);
   assert.match(source, /\.insert\([\s\S]*?\.select\("id"\)/);

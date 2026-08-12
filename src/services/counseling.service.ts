@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  COUNSELING_SLOT_HORIZON_DAYS,
   PACEMATE_TIME_ZONE,
   buildAvailableCounselingSlots,
 } from "@/lib/counseling-slots";
@@ -14,6 +15,8 @@ import type {
   CounselingProfessor,
   StudentCounselingRequest,
 } from "@/types/counseling";
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 type AvailabilityRow = {
   professor_id: string;
@@ -302,13 +305,34 @@ async function getAdminTasksRows(
 // the Stage 5 concurrency invariant (D-011) that this read is authoritative —
 // left intact. Isolation is enforced by the availability/professor scoping
 // above, not by this feed.
+// Stage 8 P1-1: bound the window. `approved` rows never leave the status, so an
+// unbounded status-only filter grew with cumulative platform-wide bookings
+// forever — on every /counseling render AND inside every booking action.
+//
+// The bound is derived, not guessed: the slot builder only considers local
+// dates today+1..today+COUNSELING_SLOT_HORIZON_DAYS, so a booking whose range
+// ended before now cannot overlap any bookable slot, and one starting past the
+// horizon cannot either. Both are inert inputs; excluding them is
+// behaviour-preserving by construction. A day of slack on each side absorbs any
+// KST/UTC boundary skew between this query and the builder's own `now`.
+//
+// Deliberately still NOT filtered by professor or tenant: the feed must see
+// EVERY student's rows (D-011) and the slot set is already tenant-scoped, so
+// foreign rows are inert. Scoping to the caller would resurrect the pre-D-011
+// blindness this read exists to fix.
 async function getBusyRequests(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
+  now = new Date(),
 ): Promise<BusyRequestRow[]> {
+  const windowStart = new Date(now.getTime() - DAY_IN_MS);
+  const windowEnd = new Date(now.getTime() + (COUNSELING_SLOT_HORIZON_DAYS + 1) * DAY_IN_MS);
+
   const { data, error } = await supabase
     .from("counseling_requests")
     .select("professor_id, requested_start, requested_end")
-    .in("status", ["pending", "approved"]);
+    .in("status", ["pending", "approved"])
+    .gte("requested_end", windowStart.toISOString())
+    .lt("requested_start", windowEnd.toISOString());
 
   if (error) {
     throw new Error("Failed to load busy counseling requests");

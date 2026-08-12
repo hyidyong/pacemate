@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createTimeoutFetch } from "@/lib/supabase/fetch-timeout";
 
 function getRequiredServerEnv(name: "NEXT_PUBLIC_SUPABASE_URL" | "SUPABASE_SERVICE_ROLE_KEY") {
   const value = process.env[name];
@@ -27,6 +28,7 @@ export function createSupabaseAdminClient() {
         autoRefreshToken: false,
         persistSession: false,
       },
+      global: { fetch: createTimeoutFetch() },
     },
   );
 }

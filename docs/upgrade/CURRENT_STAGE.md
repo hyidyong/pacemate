@@ -2,47 +2,54 @@
 
 ## Current Stage
 
-Stage 7 / 10
-University SSO Readiness
-Status: COMPLETE on branch `upgrade/stage-7` (2026-08-13) — awaiting PR
-review/merge. Base: `main` @ 19a1124 (Stage 6 PR #40 merged 2026-08-12).
-See docs/upgrade/stage-07/HANDOFF.md. Real university integration is
-BLOCKED — requires institution IdP configuration / credentials.
+Stage 8 / 10
+Scale / Reliability / Observability
+Status: COMPLETE on branch `upgrade/stage-8` (2026-08-13) — awaiting PR
+review/merge. Base: `main` @ 9eeaf78 (Stage 7 PR #41 merged 2026-08-13).
+See docs/upgrade/stage-08/HANDOFF.md.
 
-Next stage: Stage 8 — NOT started. Stage 8 begins only after the Stage 7 PR
-merges, from the HANDOFF "Stage 8 inputs" section.
+Next stage: Stage 9 — NOT started. Stage 9 begins only after the Stage 8 PR
+merges, from the HANDOFF "Stage 9 inputs" section.
 
-## Primary Objective
+## What Stage 8 delivered
 
-Prepare the platform for university SSO without connecting a real university:
+Evidence-based scalability and operational reliability, with no new
+infrastructure (D-022) and log-based observability (D-023).
 
-```text
-University IdP → OIDC/SAML → platform auth boundary → verified institutional
-identity → tenant membership resolution → role mapping → application session
-```
+Fixed: a cross-tenant notification write (`markAllNotificationsRead` updated
+role-addressed rows in every university); two AI server actions that took
+`studentId` from the caller with no authorization and no OpenAI timeout; the
+unbounded, monotonically growing counseling busy feed; the absence of any
+request timeout on all four Supabase clients; four missing indexes on named hot
+queries.
 
-Deliverables: SSO-ready architecture + provider adapter/interface +
-tenant/provider configuration model + mock/dev IdP integration +
-claim/membership mapping + security tests. Real institution integration is
-BLOCKED (requires institution IdP configuration/credentials) and must never
-be fabricated or claimed complete.
+Added: a zero-dependency load harness (`scripts/loadtest/`) that drives real
+sessions and server actions and validates BUSINESS STATE, not HTTP 200; and a
+structured logging foundation with a field allowlist, a conflict-vs-fault
+taxonomy, correlation ids, and Next's `onRequestError`.
 
-Stage 6 tenant isolation remains the authoritative security boundary. SSO
-authentication must never bypass tenant authorization. Authentication (who
-did the IdP verify) stays separate from authorization (what may this user do
-in this tenant); IdP claims never auto-grant privileged roles without an
-explicit trusted mapping rule.
+## Tested capacity (precise)
 
-## Non-goals
+10 concurrent virtual users across six authenticated routes, 0% errors, p99
+≤ 1377 ms, single local production instance against live Supabase; 20
+concurrent booking mutations with all ten Stage 5 invariant checks intact.
 
-- Real university IdP integration (no institution metadata/credentials exist)
-- Fabricated issuers/certs/secrets presented as production-ready
-- Stage 8 reliability/scale, Stage 9 RLS overhaul (KI-011/KI-014 family),
-  Stage 10 CI/CD
-- Broad login-page redesign (Stage 4 UX preserved)
+NOT TESTED (implemented in the harness, blocked on the absence of a
+non-production database): hundreds/thousands of concurrent users, stress,
+breaking point, recovery, sustained soak, Vercel multi-instance behaviour.
+Nothing beyond the tested numbers is claimed.
+
+## Non-goals (this stage)
+
+- Redis / queues / microservices / Kubernetes / APM vendor / new pooler
+- Stage 9 RLS + privacy overhaul (anon-policy family, notification read
+  scoping, professor report scoping)
+- Stage 10 CI/CD
+- UI/UX changes (Stage 4 preserved — no user-visible copy or layout changed)
+- Rate limiting (deliberately deferred with reasoning — KI-021)
 
 ## Completion rule
 
-Stage 7 work completes on the branch only; merging requires external review
-and human approval. Never merge automatically. Never start Stage 8
+Stage 8 work completes on the branch only; merging requires external review
+and human approval. Never merge automatically. Never start Stage 9
 automatically. Repository state is the source of truth.

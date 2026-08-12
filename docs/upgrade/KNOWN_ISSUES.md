@@ -3,6 +3,132 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-021 — Stage 8 scale/reliability: findings deferred by design
+
+Status: OPEN (documented 2026-08-13; full evidence in docs/upgrade/stage-08/).
+Stage 8 closed two P0 correctness/security defects and four P1 scale items
+(D-022/D-023), then a further six defects found by external review of PR #42.
+
+### External review round (PR #42) — resolved, with two corrections
+
+Six review findings were verified against the branch and the installed SDKs;
+all six were confirmed and fixed on this branch. Two invalidated earlier
+Stage 8 claims and are recorded here so the history is honest:
+
+- The Stage 8 fetch timeout bounded each ATTEMPT, not the request, and
+  postgrest-js treated its `TimeoutError` as a retryable network error — one
+  hung GET became 4 fetches over 8.3s against a 300ms budget. Fixed
+  (`AbortError` + shared per-endpoint deadline). Residual: the bound is
+  per-attempt plus a cool-off, so a pathological SDK could still spend up to
+  roughly 2x the budget on one endpoint before failing fast; that is bounded
+  and documented, not unbounded.
+- "The AI actions are authorized" was true for identity only. `courseId` and
+  `currentWeek` were caller-supplied, allowing cross-tenant syllabus
+  exfiltration through the OpenAI prompt. Fixed by deriving authorization from
+  the student's own enrollment joined to the course tenant.
+
+### External review round 2 — resolved
+
+Four findings; all four confirmed and fixed. Two revealed larger problems:
+
+- `student_courses.current_week` had **never been migrated** (present only in
+  `supabase/schema.sql`), so it was absent live. Beyond blocking the week
+  authorization, this meant the dashboard's weekly-missions query failed with
+  400 and the feature never rendered, and the enrollment advance could never
+  succeed. Migration `20260813020000` repairs the drift with a CHECK constraint.
+  This is the KI-015 drift family; other drifted columns in that note remain
+  unaudited.
+- `user_notifications` RLS was effectively `using (target_href <> '')`: with
+  only the public publishable key and no authentication, all 131 rows were
+  readable, and an authenticated student could read and update another tenant's
+  role broadcast. Migration `20260813030000` scopes SELECT/UPDATE to
+  `authenticated` with a predicate mirroring the application's.
+  **Consequence to watch:** anon now has no SELECT policy, so the realtime
+  notification channel (`notification-menu.tsx`, off by default and desktop
+  only) will no longer receive rows unless its client carries a user JWT. Page
+  loads are unaffected. Not re-verified in a browser — UNVERIFIED.
+- INSERT on `user_notifications` remains open to `anon` because the sessionless
+  `/support` flow creates notifications through the session client. That flow's
+  missing authorization is still open (below).
+
+Still open from that round:
+
+- The live 20-student booking-contention evidence predates the review-round
+  commits. It was not re-run because the round's instructions forbid
+  destructive tests against live Supabase and, by design, the harness now
+  refuses to run without an explicit non-production opt-in. The deterministic
+  Stage 5 suites (26/26) cover the affected paths.
+- `student_mission_progress` and `student_courses.current_week` writes are now
+  gated on enrollment, but there is still no product rule for which week a
+  student may advance to; the bound is a sanity range (1..30), not a policy.
+
+
+The following are recorded with evidence rather than silently carried:
+
+- **Rate limiting is NOT implemented** (SCALE_AUDIT P1-4,
+  IMPLEMENTATION_PLAN §8). No app-level limiter exists anywhere. Deferred
+  deliberately: the concrete abuse vectors found were authorization holes (now
+  closed), no tier showed a request-rate bottleneck (0% errors throughout), an
+  in-memory limiter on Vercel serverless is per-instance and resets on cold
+  start (protection theatre), and per-IP scoping is actively wrong behind
+  campus NAT. Doing it properly needs a production traffic baseline plus the
+  KI-018 M10 product decision (how many pending requests one student may hold).
+  `/support` additionally requires NO session at all
+  (support.actions.ts:27,47) — fix the authorization before adding a limiter.
+- **Unbounded professor report reads remain** (KI-016 carry-over):
+  professor-anonymous-weekly-aggregate.server.ts:266 and
+  professor-course-progress-report.server.ts:199 fetch ALL `course_offerings`
+  platform-wide, then all matching progress rows. Stage 8 added the
+  `student_weekly_progress (offering_id, week_number)` index that makes the
+  second query survivable, but the SCOPING fix changes displayed content and is
+  entangled with the Stage 9 privacy work, so it stays there.
+- **No pagination anywhere**: `.range()` appears zero times in the codebase.
+  The `limit 80` / `limit 40` feed caps are silent truncation, which becomes a
+  correctness problem (users cannot reach their own older posts) before a
+  performance one.
+- **Admin broadcast does not chunk**: admin-notifications.actions.ts:66-73,92
+  builds an `IN` list of every tenant profile and inserts one row per recipient
+  in a single statement. Fine at demo scale; needs chunking before a
+  full-size tenant exists.
+- **Escalations inbox is unbounded** and, on the assistant/admin branch, has no
+  filter at all (professor-questions.server.ts:125-131). Stage 8 added the
+  `(professor_id, created_at desc)` index for the professor branch only.
+- **Notification read/write scoping — RESOLVED at both layers** (updated again
+  in review round 2; the earlier "defence in depth, not enforcement" wording is
+  now false and has been removed). The app layer shares one predicate across
+  reads and writes (`notifications.ownership.ts`), and migration
+  `20260813030000` enforces the same rule in the database: SELECT and UPDATE are
+  scoped to `authenticated` with a tenant-aware predicate, so the direct
+  PostgREST path is closed too (verified live — anon reads 0 rows; cross-tenant
+  read and update both denied). `user_notifications` is therefore no longer part
+  of the KI-019 anon-read family; every OTHER table in that family still is.
+  The KI-016 "user_notifications partial unread index" candidate becomes
+  actionable now that a `school_id` filter exists on the read path, but was
+  still not added: it needs a measurement, and one partial index cannot serve
+  the `recipient_id OR role` disjunction — two would be required.
+- **`user_notifications.school_id` remains nullable** (D-018), so the Stage 8
+  tenant-scoped bulk mark-read deliberately does not match untenanted rows.
+  Live check at fix time: 0 such rows exist. If ungated writers later create
+  them, those notifications become undismissable in bulk until D-018's NOT NULL
+  work lands.
+- **The middleware auth cost is UNVERIFIED**: `getClaims()` verifies locally
+  when JWTs are asymmetric (JWKS cached ~10 min per warm instance) but falls
+  back to a GoTrue network call per request when they are symmetric (HS256).
+  Which applies here is a Supabase dashboard setting not visible in the repo.
+  Decode a live access token's header (`alg`/`kid`) before designing any
+  auth-cost mitigation — the answer changes the plan by an order of magnitude.
+- **PostgREST `!inner` embed filters may not use the tenant filter to drive the
+  scan** (three availability reads, counseling.service.ts:125-130, 254-257,
+  278-281). Analysis only, needs `EXPLAIN` against the live DB to confirm; if
+  confirmed, resolve tenant professor ids first and use `.in("professor_id",…)`.
+- **Load tiers above 10 concurrent VUs / 20 concurrent bookings were NOT RUN**
+  (high, stress, breaking point, recovery). They are implemented in the harness
+  and blocked only on the absence of a non-production Supabase project. Nothing
+  about capacity beyond the tested numbers is claimed.
+- **Legacy `console.*` sites remain** (~70 across 28 files) alongside the new
+  structured logger, and ~40 bare `catch {}` still swallow failures (KI-003
+  family). Stage 8 converted the highest-value sites only.
+
 ## KI-020 — Stage 7 SSO readiness: residuals, blocked externals, and findings recorded in passing
 
 Status: OPEN (documented 2026-08-13; evidence in docs/upgrade/stage-07/*).
@@ -63,8 +189,11 @@ are NOT falsely asserted closed:
 - Anon direct-PostgREST access (AUDIT §7.5, A1/A2): the public publishable key
   + demo `using(true)`-class anon policies still expose profiles,
   student_profiles, student_courses, counseling_requests (SELECT),
-  user_notifications (SELECT/INSERT/UPDATE), student_mission_progress, and the
-  catalog to a crafted `curl`, independent of all app-layer scoping. This is
+  student_mission_progress, and the catalog to a crafted `curl`, independent of
+  all app-layer scoping. **`user_notifications` left this list in Stage 8**
+  (migration 20260813030000 scopes its SELECT/UPDATE to `authenticated` with a
+  tenant predicate; INSERT remains open to anon for the sessionless /support
+  flow). This is
   the KI-007/011/014 family — the Stage 9 RLS overhaul. Stage 6 deliberately
   did not patch one policy into that known-wrong family twice (D-014/D-016
   discipline).

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { normalizeUuid } from "@/lib/uuid";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { notificationOwnershipFilter } from "@/services/notifications.ownership";
 import { getDemoProfile } from "@/services/session.service";
 
 function text(value: FormDataEntryValue | null) {
@@ -26,9 +27,6 @@ function safeNotificationTargetHref(value: unknown): string {
   return targetHref;
 }
 
-function notificationOwnershipFilter(profile: NonNullable<Awaited<ReturnType<typeof getDemoProfile>>>) {
-  return `recipient_id.eq.${profile.id},recipient_role.eq.${profile.role}`;
-}
 
 export async function markNotificationReadAndGo(formData: FormData) {
   const profile = await getDemoProfile();

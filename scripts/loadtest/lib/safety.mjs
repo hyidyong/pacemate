@@ -1,0 +1,238 @@
+// Safety guards for the load harnesses (Stage 8, review findings 4 and 5).
+//
+// The booking-contention harness PROVISIONS auth users and profiles and then
+// issues real booking mutations. Its only previous protection was a cleanup
+// step in a `finally` block — which is not protection at all: it does not help
+// if the process is killed, if cleanup itself fails, or if the operator pointed
+// it at the wrong project. Guards must run BEFORE the first mutation and must
+// fail closed.
+//
+// Everything here is a pure function over an env bag so it can be tested
+// without touching a network or a database.
+
+export const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+export function isLoopbackUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    return LOOPBACK_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function projectRefFromSupabaseUrl(rawUrl) {
+  try {
+    const { hostname } = new URL(rawUrl);
+    // https://<ref>.supabase.co
+    const [ref] = hostname.split(".");
+    return ref || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Finding 5 — the application target.
+ *
+ * Virtual users send real credentials (passwords, session cookies) to whatever
+ * --baseUrl says. Loopback is therefore the default and anything else needs a
+ * deliberate opt-in, HTTPS, and a declared expected host, so a typo or a stale
+ * flag cannot ship credentials to an unintended origin.
+ */
+export function evaluateTargetGuard(env, baseUrl) {
+  const problems = [];
+
+  if (isLoopbackUrl(baseUrl)) {
+    return { allowed: true, problems, loopback: true };
+  }
+
+  if (env.PACEMATE_LOADTEST_ALLOW_REMOTE !== "1") {
+    problems.push(
+      `target ${baseUrl} is not loopback; set PACEMATE_LOADTEST_ALLOW_REMOTE=1 to send credentials off-box`,
+    );
+  }
+
+  let host = null;
+  try {
+    const url = new URL(baseUrl);
+    host = url.host;
+    if (url.protocol !== "https:") {
+      problems.push(`remote target must use https, got ${url.protocol.replace(":", "")}`);
+    }
+  } catch {
+    problems.push(`target ${baseUrl} is not a valid URL`);
+  }
+
+  const expectedHost = env.PACEMATE_LOADTEST_EXPECTED_HOST;
+  if (!expectedHost) {
+    problems.push("remote target requires PACEMATE_LOADTEST_EXPECTED_HOST to confirm the destination");
+  } else if (host && expectedHost !== host) {
+    problems.push(`target host ${host} does not match PACEMATE_LOADTEST_EXPECTED_HOST=${expectedHost}`);
+  }
+
+  return { allowed: problems.length === 0, problems, loopback: false };
+}
+
+/**
+ * Projects known to be PRODUCTION. Compiled into the repository on purpose:
+ * a denylist that lives in an environment variable is just another thing the
+ * operator can assert away, and the whole point of this list is that it cannot
+ * be overridden by the environment being checked.
+ *
+ * Add a ref here whenever a new production project appears.
+ */
+export const KNOWN_PRODUCTION_PROJECT_REFS = new Set(["szztsqdnvenfbgxtylkl"]);
+
+/**
+ * A tenant may only be treated as isolated when the DATABASE says so. The
+ * marker lives in `schools.slug`, is read back server-side, and cannot be
+ * conjured by passing a UUID on the command line.
+ */
+export const TEST_TENANT_SLUG_PREFIX = "pacemate-loadtest-";
+
+/**
+ * Finding 4 — the database the harness will MUTATE.
+ *
+ * Round 2 of this guard was still bypassable, and both bypasses were
+ * reproduced before this change:
+ *
+ *   A. `PACEMATE_LOADTEST_TARGET_KIND=non-production` on the production
+ *      project — the operator simply asserts safety and is believed.
+ *   B. `PACEMATE_LOADTEST_SCHOOL_ID=<the real tenant's uuid>` — an arbitrary
+ *      UUID was accepted as proof of isolation.
+ *
+ * Self-assertion is therefore no longer evidence. On a project in
+ * KNOWN_PRODUCTION_PROJECT_REFS, `TARGET_KIND` is IGNORED entirely, and the
+ * only remaining path is a tenant whose test marker is verified against the
+ * database by verifyIsolatedTenant() before anything is written.
+ *
+ * This function stays pure and synchronous (env in, verdict out); the
+ * server-side confirmation it demands is performed by assertSafeToMutate().
+ */
+export function evaluateMutationGuard(env, supabaseUrl) {
+  const problems = [];
+  const actualRef = projectRefFromSupabaseUrl(supabaseUrl);
+  const isKnownProduction = actualRef ? KNOWN_PRODUCTION_PROJECT_REFS.has(actualRef) : false;
+
+  if (env.PACEMATE_LOADTEST_ALLOW_MUTATIONS !== "1") {
+    problems.push(
+      "mutations are disabled by default; set PACEMATE_LOADTEST_ALLOW_MUTATIONS=1 to allow this run to create and book real rows",
+    );
+  }
+
+  const expectedRef = env.PACEMATE_LOADTEST_EXPECTED_PROJECT_REF;
+  if (!expectedRef) {
+    problems.push(
+      "set PACEMATE_LOADTEST_EXPECTED_PROJECT_REF to the Supabase project ref you intend to mutate",
+    );
+  } else if (!actualRef) {
+    problems.push("could not derive a Supabase project ref from the configured URL");
+  } else if (expectedRef !== actualRef) {
+    problems.push(
+      `configured Supabase project is "${actualRef}" but PACEMATE_LOADTEST_EXPECTED_PROJECT_REF is "${expectedRef}"`,
+    );
+  }
+
+  const isolatedSchoolId = env.PACEMATE_LOADTEST_SCHOOL_ID;
+  const declaredNonProduction = env.PACEMATE_LOADTEST_TARGET_KIND === "non-production";
+
+  if (isKnownProduction) {
+    // Nothing the environment can say makes this project non-production.
+    if (declaredNonProduction && !isolatedSchoolId) {
+      problems.push(
+        `project "${actualRef}" is a KNOWN PRODUCTION project; PACEMATE_LOADTEST_TARGET_KIND=non-production is self-asserted and is ignored here`,
+      );
+    }
+    if (!isolatedSchoolId) {
+      problems.push(
+        `project "${actualRef}" is a KNOWN PRODUCTION project; the only permitted path is a dedicated test tenant whose slug starts with "${TEST_TENANT_SLUG_PREFIX}", named via PACEMATE_LOADTEST_SCHOOL_ID`,
+      );
+    }
+  } else if (!declaredNonProduction && !isolatedSchoolId) {
+    problems.push(
+      'target is not declared non-production; set PACEMATE_LOADTEST_TARGET_KIND=non-production, or name a marked test tenant with PACEMATE_LOADTEST_SCHOOL_ID',
+    );
+  }
+
+  return {
+    allowed: problems.length === 0,
+    problems,
+    projectRef: actualRef,
+    isKnownProduction,
+    isolatedSchoolId: isolatedSchoolId ?? null,
+    declaredNonProduction,
+    // A claimed tenant is never trusted on its own; the caller must confirm it.
+    requiresTenantVerification: Boolean(isolatedSchoolId),
+  };
+}
+
+/**
+ * Server-side confirmation that a claimed tenant really is a disposable test
+ * tenant. Reads the row back and checks the marker the database holds — a UUID
+ * on the command line proves nothing.
+ */
+export async function verifyIsolatedTenant(rest, schoolId) {
+  const rows = await rest.select("schools", `select=id,name,slug&id=eq.${schoolId}`);
+  const school = rows[0];
+
+  if (!school) {
+    return { verified: false, reason: `no schools row with id ${schoolId}` };
+  }
+  if (typeof school.slug !== "string" || !school.slug.startsWith(TEST_TENANT_SLUG_PREFIX)) {
+    return {
+      verified: false,
+      reason: `tenant "${school.name}" (slug ${school.slug ?? "null"}) does not carry the test marker "${TEST_TENANT_SLUG_PREFIX}" — naming a real tenant's UUID does not make it isolated`,
+    };
+  }
+  return { verified: true, school };
+}
+
+export async function assertSafeToMutate(env, { supabaseUrl, baseUrl, rest }) {
+  const target = evaluateTargetGuard(env, baseUrl);
+  const mutation = evaluateMutationGuard(env, supabaseUrl);
+  const problems = [...target.problems, ...mutation.problems];
+
+  // Confirm the claimed tenant against the database before anything is written.
+  // Only attempted when the synchronous checks already passed, so a refusal is
+  // never masked by a lookup error.
+  if (!problems.length && mutation.requiresTenantVerification) {
+    if (!rest) {
+      problems.push("cannot verify the claimed test tenant: no database client was provided");
+    } else {
+      const verification = await verifyIsolatedTenant(rest, mutation.isolatedSchoolId);
+      if (!verification.verified) {
+        problems.push(verification.reason);
+      }
+    }
+  }
+
+  if (problems.length) {
+    throw new Error(
+      [
+        "Refusing to run: this harness creates auth users, profiles and real bookings.",
+        "Cleanup afterwards is not a safety mechanism — these checks run first.",
+        "",
+        ...problems.map((problem) => `  - ${problem}`),
+        "",
+        "See docs/upgrade/stage-08/LOAD_TEST_PLAN.md for the intended setup.",
+      ].join("\n"),
+    );
+  }
+
+  return mutation;
+}
+
+export function assertSafeTarget(env, baseUrl) {
+  const target = evaluateTargetGuard(env, baseUrl);
+  if (!target.allowed) {
+    throw new Error(
+      [
+        `Refusing to send credentials to ${baseUrl}.`,
+        "",
+        ...target.problems.map((problem) => `  - ${problem}`),
+      ].join("\n"),
+    );
+  }
+  return target;
+}

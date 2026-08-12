@@ -51,6 +51,10 @@ function makeDeferredFakeSupabase() {
       eq: () => builder,
       in: () => builder,
       or: () => builder,
+      // Range filters: the busy feed is bounded to the slot horizon (Stage 8
+      // P1-1). The query inventory is unchanged — same tables, same count.
+      gte: () => builder,
+      lt: () => builder,
       order: () => builder,
       limit: () => builder,
       then: (resolve) => {

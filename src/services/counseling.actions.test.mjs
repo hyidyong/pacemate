@@ -18,6 +18,13 @@ function toDataUrl(code) {
   return `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
 }
 
+const OBSERVABILITY_LOG_STUB = toDataUrl(
+  "export const logEvent = () => {}; export const buildLogRecord = () => ({}); export const classifyPostgresError = () => 'fault';",
+);
+const REQUEST_CONTEXT_STUB = toDataUrl(
+  "export const getRequestId = async () => undefined;",
+);
+
 const SERVER_STUB = toDataUrl(
   "export const createSupabaseServerClient = async () => globalThis.__stage5SessionClient;",
 );
@@ -67,6 +74,8 @@ function loadModules() {
         ['from "@/lib/tenant"', `from ${JSON.stringify(tenantUrl)}`],
         ['from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`],
         ['from "@/lib/supabase/admin"', `from ${JSON.stringify(ADMIN_STUB)}`],
+        ['from "@/lib/observability/log"', `from ${JSON.stringify(OBSERVABILITY_LOG_STUB)}`],
+        ['from "@/lib/observability/request-context"', `from ${JSON.stringify(REQUEST_CONTEXT_STUB)}`],
       ],
     );
     const actionsUrl = await compileToDataUrl(
@@ -82,6 +91,8 @@ function loadModules() {
         ['from "@/services/counseling.service"', `from ${JSON.stringify(serviceUrl)}`],
         ['from "@/services/notifications.create.service"', `from ${JSON.stringify(NOTIFY_STUB)}`],
         ['from "@/services/session.service"', `from ${JSON.stringify(SESSION_SERVICE_STUB)}`],
+        ['from "@/lib/observability/log"', `from ${JSON.stringify(OBSERVABILITY_LOG_STUB)}`],
+        ['from "@/lib/observability/request-context"', `from ${JSON.stringify(REQUEST_CONTEXT_STUB)}`],
       ],
     );
     const [actions, service, domain] = await Promise.all([
@@ -110,9 +121,17 @@ function makeFakeDb(name) {
 
   function applyFilters(rows, filters) {
     return rows.filter((row) =>
-      filters.every((f) =>
-        f.op === "eq" ? readColumn(row, f.col) === f.val : f.val.includes(readColumn(row, f.col)),
-      ),
+      filters.every((f) => {
+        const value = readColumn(row, f.col);
+        if (f.op === "eq") return value === f.val;
+        if (f.op === "in") return f.val.includes(value);
+        // Range filters bound the busy feed to the slot horizon (Stage 8 P1-1).
+        // ISO-8601 UTC strings sort lexicographically, which is what PostgREST
+        // compares here too.
+        if (f.op === "gte") return String(value) >= String(f.val);
+        if (f.op === "lt") return String(value) < String(f.val);
+        throw new Error(`unsupported filter op in fake client: ${f.op}`);
+      }),
     );
   }
 
@@ -124,6 +143,8 @@ function makeFakeDb(name) {
       limit: () => builder,
       eq: (col, val) => (q.filters.push({ op: "eq", col, val }), builder),
       in: (col, val) => (q.filters.push({ op: "in", col, val }), builder),
+      gte: (col, val) => (q.filters.push({ op: "gte", col, val }), builder),
+      lt: (col, val) => (q.filters.push({ op: "lt", col, val }), builder),
       insert: (values) => ((q.op = "insert"), (q.values = values), builder),
       update: (values) => ((q.op = "update"), (q.values = values), builder),
       single: () => ((q.single = true), builder),

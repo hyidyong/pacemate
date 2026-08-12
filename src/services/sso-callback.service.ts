@@ -7,6 +7,7 @@ import {
   parseSsoProviderRegistry,
   type SsoProviderRegistry,
 } from "@/lib/sso/provider-registry";
+import { getRequestId } from "@/lib/observability/request-context";
 import { emitSsoAuditEvent, hashSsoSubject } from "@/lib/sso/sso-audit";
 import {
   evaluateAccountLink,
@@ -96,6 +97,9 @@ export function buildSsoIdentitySnapshot(user: User | null | undefined): SsoIden
 
 export async function processSsoCallback(code: string): Promise<SsoCallbackResult> {
   let supabase: Awaited<ReturnType<typeof createSupabaseServerClient>> | null = null;
+  // Server-minted correlation id, resolved once so every identity event from
+  // this callback — including the early denies — can be joined to the request.
+  const requestId = await getRequestId();
 
   const denied = async (
     reason: SsoDenyReason,
@@ -107,7 +111,7 @@ export async function processSsoCallback(code: string): Promise<SsoCallbackResul
       await supabase.auth.signOut().catch(() => undefined);
     }
     await destroyDemoSession().catch(() => undefined);
-    emitSsoAuditEvent({ event: "sso_login_denied", reason, ...context });
+    emitSsoAuditEvent({ event: "sso_login_denied", reason, requestId, ...context });
     return { ok: false, redirectTo: `/login?error=sso_${reason}` };
   };
 
@@ -144,7 +148,7 @@ export async function processSsoCallback(code: string): Promise<SsoCallbackResul
   const subjectHash = identity.subject
     ? hashSsoSubject(identity.providerRef, identity.subject)
     : undefined;
-  const auditContext = { providerSlug: provider?.slug, subjectHash };
+  const auditContext = { providerSlug: provider?.slug, subjectHash, requestId };
 
   const admin = createSupabaseAdminClient();
 

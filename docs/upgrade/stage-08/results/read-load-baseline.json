@@ -1,0 +1,181 @@
+{
+  "baseUrl": "http://127.0.0.1:3000",
+  "generatedAt": "2026-08-12T15:54:30.062Z",
+  "results": [
+    {
+      "scenario": "dashboard",
+      "path": "/dashboard",
+      "role": "student",
+      "tier": "baseline",
+      "concurrency": 1,
+      "requests": 30,
+      "ok": 30,
+      "failed": 0,
+      "errorRatePct": 0,
+      "throughputRps": 2.24,
+      "latencyMs": {
+        "min": 406.3,
+        "p50": 446.1,
+        "p95": 512.8,
+        "p99": 527.8,
+        "max": 527.8,
+        "mean": 446.9
+      },
+      "statusCounts": {
+        "200": 30
+      },
+      "wallClockMs": 13408,
+      "medianBytes": 92673
+    },
+    {
+      "scenario": "counseling",
+      "path": "/counseling",
+      "role": "student",
+      "tier": "baseline",
+      "concurrency": 1,
+      "requests": 30,
+      "ok": 30,
+      "failed": 0,
+      "errorRatePct": 0,
+      "throughputRps": 3.5,
+      "latencyMs": {
+        "min": 193.5,
+        "p50": 224.4,
+        "p95": 868.1,
+        "p99": 1420.1,
+        "max": 1420.1,
+        "mean": 285.6
+      },
+      "statusCounts": {
+        "200": 30
+      },
+      "wallClockMs": 8568,
+      "medianBytes": 54368
+    },
+    {
+      "scenario": "mypage",
+      "path": "/mypage",
+      "role": "student",
+      "tier": "baseline",
+      "concurrency": 1,
+      "requests": 30,
+      "ok": 30,
+      "failed": 0,
+      "errorRatePct": 0,
+      "throughputRps": 3.95,
+      "latencyMs": {
+        "min": 209.1,
+        "p50": 244.7,
+        "p95": 278,
+        "p99": 386,
+        "max": 386,
+        "mean": 253.3
+      },
+      "statusCounts": {
+        "200": 30
+      },
+      "wallClockMs": 7600,
+      "medianBytes": 90680
+    },
+    {
+      "scenario": "courses",
+      "path": "/courses",
+      "role": "student",
+      "tier": "baseline",
+      "concurrency": 1,
+      "requests": 30,
+      "ok": 30,
+      "failed": 0,
+      "errorRatePct": 0,
+      "throughputRps": 5.06,
+      "latencyMs": {
+        "min": 173,
+        "p50": 194.9,
+        "p95": 230.4,
+        "p99": 256.4,
+        "max": 256.4,
+        "mean": 197.5
+      },
+      "statusCounts": {
+        "200": 30
+      },
+      "wallClockMs": 5924,
+      "medianBytes": 67431
+    },
+    {
+      "scenario": "professor",
+      "path": "/professor",
+      "role": "professor",
+      "tier": "baseline",
+      "concurrency": 1,
+      "requests": 30,
+      "ok": 30,
+      "failed": 0,
+      "errorRatePct": 0,
+      "throughputRps": 2.85,
+      "latencyMs": {
+        "min": 299.7,
+        "p50": 344.2,
+        "p95": 492.4,
+        "p99": 541.8,
+        "max": 541.8,
+        "mean": 351.1
+      },
+      "statusCounts": {
+        "200": 30
+      },
+      "wallClockMs": 10532,
+      "medianBytes": 169334
+    },
+    {
+      "scenario": "admin",
+      "path": "/admin",
+      "role": "admin",
+      "tier": "baseline",
+      "concurrency": 1,
+      "requests": 30,
+      "ok": 30,
+      "failed": 0,
+      "errorRatePct": 0,
+      "throughputRps": 5.28,
+      "latencyMs": {
+        "min": 159.4,
+        "p50": 187.7,
+        "p95": 211.3,
+        "p99": 270.8,
+        "max": 270.8,
+        "mean": 189.3
+      },
+      "statusCounts": {
+        "200": 30
+      },
+      "wallClockMs": 5678,
+      "medianBytes": 42942
+    },
+    {
+      "scenario": "login",
+      "path": "/login",
+      "role": null,
+      "tier": "baseline",
+      "concurrency": 1,
+      "requests": 30,
+      "ok": 30,
+      "failed": 0,
+      "errorRatePct": 0,
+      "throughputRps": 68.72,
+      "latencyMs": {
+        "min": 7.2,
+        "p50": 14.9,
+        "p95": 18.5,
+        "p99": 22.6,
+        "max": 22.6,
+        "mean": 14.5
+      },
+      "statusCounts": {
+        "200": 30
+      },
+      "wallClockMs": 437,
+      "medianBytes": 15987
+    }
+  ]
+}

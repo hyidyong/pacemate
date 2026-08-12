@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createTimeoutFetch } from "@/lib/supabase/fetch-timeout";
 
 let client: SupabaseClient | null = null;
 
@@ -13,7 +14,9 @@ function getSupabaseClient(): SupabaseClient {
       throw new Error("Missing Supabase environment variables");
     }
 
-    client = createClient(supabaseUrl, supabasePublishableKey);
+    client = createClient(supabaseUrl, supabasePublishableKey, {
+      global: { fetch: createTimeoutFetch() },
+    });
   }
 
   return client;
