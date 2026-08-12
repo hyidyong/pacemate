@@ -406,7 +406,7 @@ export function StudentRoadmapWorkspace({
             </article>
           ) : (
             <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
-              강의계획서의 주차별 정보를 불러오지 못했습니다. 과목 정보를 확인한 뒤 다시 시도해 주세요.
+              이 주차의 로드맵이 아직 없습니다. 상단의 로드맵 생성 버튼으로 만들 수 있어요.
             </div>
           )}
         </>

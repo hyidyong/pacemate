@@ -77,6 +77,16 @@ export default async function ProfessorPage({
       </section>
 
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 sm:px-6 lg:pb-10">
+        {/* The demo fallback can resolve ANOTHER professor's identity for
+            this session (audit B-24). Until the identity linkage is fixed,
+            say so instead of silently impersonating. */}
+        {data.professor && profile && data.professor.profile_id !== profile.id ? (
+          <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+            {profile.role === "assistant"
+              ? `조교 계정으로 ${data.professor.name} 교수님의 워크스페이스를 관리하고 있습니다.`
+              : `데모 안내: 이 계정과 연결된 교수 정보가 없어 ${data.professor.name} 교수의 데이터를 표시하고 있습니다.`}
+          </p>
+        ) : null}
         {data.professor ? <ProfessorProfileSummary professor={data.professor} courses={data.courses} /> : null}
 
         {data.professor ? (

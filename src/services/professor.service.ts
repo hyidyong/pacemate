@@ -20,6 +20,10 @@ export type ProfessorCourse = {
 
 export type ProfessorProfile = {
   id: string;
+  /** Linked auth profile; null/mismatched means the demo first-professor
+      fallback resolved this identity (Stage 4, audit B-24 — surfaced in UI,
+      root fix deferred to the identity-linkage work). */
+  profile_id?: string | null;
   name: string;
   office: string | null;
   email: string | null;
@@ -173,7 +177,7 @@ async function getCurrentProfessor(profile: DemoProfile | null) {
   if (profile?.role === "professor") {
     const { data } = await supabase
       .from("professors")
-      .select("id, name, office, email, bio, department:departments(name)")
+      .select("id, profile_id, name, office, email, bio, department:departments(name)")
       .eq("profile_id", profile.id)
       .maybeSingle();
 
@@ -184,7 +188,7 @@ async function getCurrentProfessor(profile: DemoProfile | null) {
 
   const { data } = await supabase
     .from("professors")
-    .select("id, name, office, email, bio, department:departments(name)")
+    .select("id, profile_id, name, office, email, bio, department:departments(name)")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
