@@ -11,6 +11,9 @@ const cardServices = [
   "./company-law-offering.server.ts",
   "./course-term-completion-eligibility.server.ts",
   "./student-learning-recommendations.server.ts",
+  "./professor-course-progress-report.server.ts",
+  "./professor-anonymous-weekly-aggregate.server.ts",
+  "./professor-questions.server.ts",
 ];
 
 test("the identity resolver is request-scoped via React cache()", async () => {
