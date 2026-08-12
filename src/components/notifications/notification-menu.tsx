@@ -87,6 +87,22 @@ export function NotificationMenu({
     // the desktop instance should subscribe and surface live toasts.
     if (!enableRealtime || !profileId) return;
 
+    // Realtime evaluates RLS as the role the SOCKET authenticates with, which
+    // is not automatically the role the HTTP client uses. Hand it the current
+    // access token before subscribing, and again whenever the session changes,
+    // so a refresh does not silently downgrade the channel to `anon`.
+    let cancelled = false;
+    const authorise = async () => {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) supabase.realtime.setAuth(token);
+    };
+    void authorise();
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      if (session?.access_token) supabase.realtime.setAuth(session.access_token);
+    });
+
     const channel = supabase
       .channel(`in-app-notifications:${profileId}:${channelInstanceId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_notifications", filter: `recipient_id=eq.${profileId}` }, (payload) => {
@@ -98,7 +114,11 @@ export function NotificationMenu({
         setToast(next);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      authListener?.subscription?.unsubscribe();
+      supabase.removeChannel(channel);
+    };
   }, [channelInstanceId, enableRealtime, profileId]);
   useEffect(() => {
     if (!toast) return;

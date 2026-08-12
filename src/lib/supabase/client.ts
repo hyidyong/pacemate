@@ -1,5 +1,16 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import { createTimeoutFetch } from "@/lib/supabase/fetch-timeout";
+
+// Stage 9 (Codex, Realtime item). This was a bare `createClient`, which never
+// reads the Supabase auth cookie — so the Realtime socket connected as `anon`.
+// That was invisible until Stage 8 removed anon's SELECT policy on
+// user_notifications, at which point live notification delivery stopped
+// silently (page loads and the bell are server-rendered, so nothing looked
+// broken). `createBrowserClient` from @supabase/ssr reads the same cookies the
+// server session uses, so the socket authenticates as the signed-in user and
+// the tenant-scoped SELECT policy applies to it — the RLS fix stays intact and
+// the client is corrected instead.
 
 let client: SupabaseClient | null = null;
 
@@ -14,7 +25,7 @@ function getSupabaseClient(): SupabaseClient {
       throw new Error("Missing Supabase environment variables");
     }
 
-    client = createClient(supabaseUrl, supabasePublishableKey, {
+    client = createBrowserClient(supabaseUrl, supabasePublishableKey, {
       global: { fetch: createTimeoutFetch() },
     });
   }
