@@ -17,9 +17,18 @@
 // this Next build when driven from outside the client runtime. Business state
 // is the stronger evidence regardless — an HTTP 200 never proved a booking.
 //
-// Every row it creates is removed in cleanup(), including on failure. The only
-// Supabase project available is LIVE, so the fixture footprint is deliberately
-// small and marker-tagged.
+// SAFETY (review finding 4). This harness PROVISIONS auth users and profiles
+// and issues real booking mutations, so it FAILS CLOSED: lib/safety.mjs must
+// approve the target before anything is created. Cleanup is NOT a safety
+// mechanism — it does nothing if the process is killed, if cleanup itself
+// fails, or if the run was pointed at the wrong project. Rows are still
+// marker-tagged and torn down, but that is hygiene, not protection.
+//
+// Required before any mutation:
+//   PACEMATE_LOADTEST_ALLOW_MUTATIONS=1          deliberate destructive opt-in
+//   PACEMATE_LOADTEST_EXPECTED_PROJECT_REF=<ref> must equal the configured project
+//   and either PACEMATE_LOADTEST_TARGET_KIND=non-production
+//          or PACEMATE_LOADTEST_SCHOOL_ID=<uuid> an explicitly isolated tenant
 //
 // Usage:
 //   node scripts/loadtest/run-booking-contention.mjs --students=12
@@ -34,9 +43,10 @@ import { loginVirtualUser } from "./lib/auth-session.mjs";
 import { loadActionIds, invokeServerAction, bodyMentionsStorageFailure } from "./lib/server-action.mjs";
 import { extractSlotIdsFromCounselingHtml, newRunId, LOADTEST_MARKER } from "./lib/fixtures.mjs";
 import { summarize, formatSummary } from "./lib/stats.mjs";
+import { assertSafeToMutate } from "./lib/safety.mjs";
 
 const args = parseArgs(process.argv.slice(2));
-const BASE_URL = args.baseUrl ?? "http://127.0.0.1:3000";
+const BASE_URL = args.baseUrl ?? "http://127.0.0.1:3000"; // loopback by default (finding 5)
 const STUDENT_COUNT = Number(args.students ?? 12);
 const PASSWORD = "loadtest-Aa1!-temporary";
 
@@ -48,12 +58,32 @@ async function main() {
   const actionIds = loadActionIds();
   const runId = newRunId();
 
+  // Review finding 4: fail closed BEFORE anything is provisioned or booked.
+  // Cleanup in the finally block is not protection — it does nothing if the
+  // process is killed, if cleanup errors, or if the operator aimed this at the
+  // wrong project.
+  const guard = assertSafeToMutate(process.env, { supabaseUrl, baseUrl: BASE_URL });
+
   console.log(`Booking contention run ${runId} — ${STUDENT_COUNT} concurrent students`);
+  console.log(
+    `Target project ${guard.projectRef}` +
+      (guard.declaredNonProduction ? " (declared non-production)" : "") +
+      (guard.isolatedSchoolId ? ` (isolated tenant ${guard.isolatedSchoolId})` : ""),
+  );
   const created = { authUserIds: [], profileIds: [] };
   const findings = [];
 
   try {
-    const school = (await rest.select("schools", "select=id,name&limit=1"))[0];
+    // When an isolated tenant is named, use exactly that one — never "the first
+    // school", which on a shared project is a real university.
+    const school = guard.isolatedSchoolId
+      ? (await rest.select("schools", `select=id,name&id=eq.${guard.isolatedSchoolId}`))[0]
+      : (await rest.select("schools", "select=id,name&limit=1"))[0];
+    if (!school) {
+      throw new Error(
+        `No schools row found for the configured tenant${guard.isolatedSchoolId ? ` (${guard.isolatedSchoolId})` : ""}.`,
+      );
+    }
     const students = await provisionStudents({
       rest,
       supabaseUrl,

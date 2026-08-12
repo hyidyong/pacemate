@@ -20,9 +20,10 @@ import { loadEnvLocal } from "./lib/env.mjs";
 import { loginVirtualUser } from "./lib/auth-session.mjs";
 import { runClosedLoop, getPage } from "./lib/driver.mjs";
 import { summarize, formatSummary } from "./lib/stats.mjs";
+import { assertSafeTarget } from "./lib/safety.mjs";
 
 const args = parseArgs(process.argv.slice(2));
-const BASE_URL = args.baseUrl ?? "http://127.0.0.1:3000";
+const BASE_URL = args.baseUrl ?? "http://127.0.0.1:3000"; // loopback by default (finding 5)
 
 const TIERS = {
   smoke: { concurrency: 1, iterations: 5 },
@@ -44,6 +45,9 @@ const SCENARIOS = {
 
 async function main() {
   loadEnvLocal();
+  // Review finding 5: virtual users log in with real credentials, so a
+  // non-loopback target needs an explicit opt-in, https, and a declared host.
+  assertSafeTarget(process.env, BASE_URL);
   const demoUsers = JSON.parse(readFileSync("src/config/demo-users.json", "utf8"));
 
   // One real session per role. Read-path virtual users share a role's session:
