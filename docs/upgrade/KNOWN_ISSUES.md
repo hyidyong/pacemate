@@ -27,6 +27,30 @@ Stage 8 claims and are recorded here so the history is honest:
   exfiltration through the OpenAI prompt. Fixed by deriving authorization from
   the student's own enrollment joined to the course tenant.
 
+### External review round 2 — resolved
+
+Four findings; all four confirmed and fixed. Two revealed larger problems:
+
+- `student_courses.current_week` had **never been migrated** (present only in
+  `supabase/schema.sql`), so it was absent live. Beyond blocking the week
+  authorization, this meant the dashboard's weekly-missions query failed with
+  400 and the feature never rendered, and the enrollment advance could never
+  succeed. Migration `20260813020000` repairs the drift with a CHECK constraint.
+  This is the KI-015 drift family; other drifted columns in that note remain
+  unaudited.
+- `user_notifications` RLS was effectively `using (target_href <> '')`: with
+  only the public publishable key and no authentication, all 131 rows were
+  readable, and an authenticated student could read and update another tenant's
+  role broadcast. Migration `20260813030000` scopes SELECT/UPDATE to
+  `authenticated` with a predicate mirroring the application's.
+  **Consequence to watch:** anon now has no SELECT policy, so the realtime
+  notification channel (`notification-menu.tsx`, off by default and desktop
+  only) will no longer receive rows unless its client carries a user JWT. Page
+  loads are unaffected. Not re-verified in a browser — UNVERIFIED.
+- INSERT on `user_notifications` remains open to `anon` because the sessionless
+  `/support` flow creates notifications through the session client. That flow's
+  missing authorization is still open (below).
+
 Still open from that round:
 
 - The live 20-student booking-contention evidence predates the review-round
@@ -69,16 +93,19 @@ The following are recorded with evidence rather than silently carried:
 - **Escalations inbox is unbounded** and, on the assistant/admin branch, has no
   filter at all (professor-questions.server.ts:125-131). Stage 8 added the
   `(professor_id, created_at desc)` index for the professor branch only.
-- **Notification read/write scoping — UPDATED by the review round.** The app
-  layer is now tenant-scoped on BOTH sides: reads and writes share one
-  predicate (`notifications.ownership.ts`), so a user is never shown a
-  notification they cannot act on. What remains for Stage 9 is the DB layer —
-  the anon SELECT policy still exposes `user_notifications` to direct PostgREST
-  access regardless of the app filter (KI-019), so this is defence in depth, not
-  enforcement. The KI-016 "user_notifications partial unread index" candidate
-  becomes actionable now that a `school_id` filter exists on the read path, but
-  was still not added: it needs a measurement, and one partial index cannot
-  serve the `recipient_id OR role` disjunction — two would be required.
+- **Notification read/write scoping — RESOLVED at both layers** (updated again
+  in review round 2; the earlier "defence in depth, not enforcement" wording is
+  now false and has been removed). The app layer shares one predicate across
+  reads and writes (`notifications.ownership.ts`), and migration
+  `20260813030000` enforces the same rule in the database: SELECT and UPDATE are
+  scoped to `authenticated` with a tenant-aware predicate, so the direct
+  PostgREST path is closed too (verified live — anon reads 0 rows; cross-tenant
+  read and update both denied). `user_notifications` is therefore no longer part
+  of the KI-019 anon-read family; every OTHER table in that family still is.
+  The KI-016 "user_notifications partial unread index" candidate becomes
+  actionable now that a `school_id` filter exists on the read path, but was
+  still not added: it needs a measurement, and one partial index cannot serve
+  the `recipient_id OR role` disjunction — two would be required.
 - **`user_notifications.school_id` remains nullable** (D-018), so the Stage 8
   tenant-scoped bulk mark-read deliberately does not match untenanted rows.
   Live check at fix time: 0 such rows exist. If ungated writers later create
@@ -162,8 +189,11 @@ are NOT falsely asserted closed:
 - Anon direct-PostgREST access (AUDIT §7.5, A1/A2): the public publishable key
   + demo `using(true)`-class anon policies still expose profiles,
   student_profiles, student_courses, counseling_requests (SELECT),
-  user_notifications (SELECT/INSERT/UPDATE), student_mission_progress, and the
-  catalog to a crafted `curl`, independent of all app-layer scoping. This is
+  student_mission_progress, and the catalog to a crafted `curl`, independent of
+  all app-layer scoping. **`user_notifications` left this list in Stage 8**
+  (migration 20260813030000 scopes its SELECT/UPDATE to `authenticated` with a
+  tenant predicate; INSERT remains open to anon for the sessionless /support
+  flow). This is
   the KI-007/011/014 family — the Stage 9 RLS overhaul. Stage 6 deliberately
   did not patch one policy into that known-wrong family twice (D-014/D-016
   discipline).

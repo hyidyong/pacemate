@@ -152,7 +152,17 @@ cost grows with platform-wide unread volume.
 > exfiltrated through the prompt, plus progress rows written for a course they
 > do not own. Authorization is now derived from the student's own
 > `student_courses` enrollment joined to the course tenant, checked before the
-> syllabus read and before any OpenAI call, with the week bounded to 1..30.
+> syllabus read and before any OpenAI call.
+>
+> **Second correction (review round 2).** Bounding the week to 1..30 was still
+> not authorization — any in-range value was caller-supplied, so an enrolled
+> student could generate or overwrite progress at weeks they had not reached.
+> The authoritative week lives on the enrollment row, and verifying this
+> uncovered that `student_courses.current_week` had never been migrated
+> (present only in `schema.sql`), which also meant the dashboard's
+> weekly-missions query was failing with 400 live. The column now exists with a
+> CHECK constraint, and the caller's week is only an equality token against the
+> stored value.
 
 ### P0-2 — two AI server actions have no authorization at all
 `src/services/ai-tutor.actions.ts:24` (`generateWeeklyGuide`) and `:100`

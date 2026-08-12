@@ -39,6 +39,66 @@ were materially different from their description:
 Review-round commits: `f44e08a` (F1), `064ce21` (F2), `33d1412` (F3),
 `0f27ba0` (F4+F5), `e39529e` (F6).
 
+## External review round 2 (PR #42)
+
+Four findings remained after round 1. All four were verified and **all four were
+confirmed**; two exposed problems larger than the finding described.
+
+- **F2 — the week was still caller-supplied.** Bounding it to 1..30 rejected
+  only absurd input; any in-range value let an enrolled student generate or
+  overwrite progress at weeks they had not reached. Verifying this uncovered the
+  real cause: `student_courses.current_week` — the intended authoritative source
+  — exists in `supabase/schema.sql` (~:957) but **no migration ever created
+  it**, so it was absent live (PostgREST 42703). Two further live consequences:
+  the dashboard's weekly-missions query selected that column and failed with
+  400, so the feature never rendered at all, and the "advance the enrollment"
+  write could never succeed. Migration adds the column plus a CHECK matching the
+  authorized range; the caller's week is now only an equality token against the
+  stored value, and the advance is a compare-and-set on the week it authorized.
+- **F3 — the app predicate was decoration.** Verified before the fix: with only
+  the public publishable key and **no authentication at all**, a plain PostgREST
+  GET returned all 131 notification rows including titles, and an authenticated
+  student could read *and update* another tenant's role broadcast. The live
+  policies were effectively `using (target_href <> '')`. A migration replaces
+  SELECT/UPDATE with policies scoped to `authenticated` whose predicate mirrors
+  `notifications.ownership.ts` exactly. INSERT is deliberately untouched because
+  notifications are created through the session client, which runs as `anon` for
+  the sessionless `/support` flow.
+- **F4 — safety was self-asserted.** Both reported bypasses were reproduced:
+  declaring the production project non-production, and naming the real tenant's
+  UUID as "isolated". The production denylist is now compiled into the
+  repository, `TARGET_KIND` is ignored on a listed project, and a claimed tenant
+  must carry a test marker **read back from the database** before any write.
+- **F6 — completed.** SSO audit events carry the server-minted id, and
+  `instrumentation.ts` validates through the trusted helper instead of trusting
+  the header's provenance.
+
+**A completion claim from round 1 is corrected:** "the AI actions are
+authorized" was still overstated after round 1 — course and tenant were
+enforced, the week was not.
+
+Round-2 commits: `7a74ed1` (F2), `6527cf2` (F3), `0467db0` (F4), `0ab0543` (F6).
+
+### Live RLS verification (finding 3)
+
+`scripts/verify-notification-rls.mjs` runs five checks with a real user JWT plus
+one temporary probe tenant that is always removed:
+
+| Check | Before | After |
+|---|---|---|
+| anon can read notifications | 5+ rows (131 total) | **0 rows** |
+| student reads own direct notification | 1 row | 1 row |
+| student reads same-tenant role broadcast | 1 row | 1 row |
+| cross-tenant role broadcast readable | **1 row** | **0 rows** |
+| cross-tenant role broadcast updatable | **yes, is_read flipped** | **no, 0 rows patched** |
+
+Resulting live policies: `demo create notifications` (INSERT,
+`{anon,authenticated}` — unchanged), `notifications readable by recipient or
+same-tenant role` (SELECT, `{authenticated}`), `notifications updatable by
+recipient or same-tenant role` (UPDATE, `{authenticated}`). App re-checked after
+the change: login OK, `/notifications` and `/dashboard` render with no error
+fallback.
+
 ## Goal
 
 Evidence-based scalability and operational reliability appropriate for a
@@ -177,12 +237,16 @@ PostgREST `!inner` join-driver behaviour needs an `EXPLAIN` to confirm.
 New: `src/lib/observability/{log.ts,request-id.ts}`, `src/instrumentation.ts`,
 `src/lib/supabase/fetch-timeout.ts`, `scripts/loadtest/**` (harness),
 `supabase/migrations/20260813010000_stage8_hot_query_indexes.sql`,
+`supabase/migrations/20260813020000_student_courses_current_week.sql`,
+`supabase/migrations/20260813030000_user_notifications_rls.sql`,
+`scripts/verify-notification-rls.mjs`,
 `docs/upgrade/stage-08/**`.
 Modified: `notifications.actions.ts`, `ai-tutor.actions.ts`,
 `counseling.service.ts`, `counseling.actions.ts`, `counseling-slots.ts`,
 `demo-auth.service.ts`, `sso-audit.ts`, `middleware.ts`, the four Supabase
 client factories, and six test files (fake-client surface + loader stubs).
-Infrastructure: four indexes applied to the live database. **No new runtime
+Infrastructure: four indexes, the current_week drift repair, and the
+user_notifications RLS hardening applied to the live database. **No new runtime
 dependency**; shared JS unchanged at 102 kB.
 
 ## Tests / build results
@@ -191,15 +255,18 @@ Post-review figures (the authoritative set):
 
 | Check | Result |
 |---|---|
-| Full suite | 325 tests / 322 pass / **3 fail — the pre-existing KI-002 trio BY NAME** (Stage 8 baseline 289/286/3; +36 Stage 8 tests, all green) |
-| Harness guard suite | 9/9 GREEN (`scripts/loadtest/lib/safety.test.mjs`) |
+| Full suite | 333 tests / 330 pass / **3 fail — the pre-existing KI-002 trio BY NAME** (Stage 8 baseline 289/286/3; +44 Stage 8 tests, all green) |
+| Harness + migration guards | 26/26 GREEN (`scripts/loadtest/lib/safety.test.mjs`, `supabase/migrations/user_notifications_rls.test.mjs`) |
 | Typecheck | clean |
 | Lint | baseline (1 pre-existing `no-img-element` warning) |
-| Build | PASS — BUILD_ID `nRh8iT37UaF7_Han63b73`, all bundle budgets met |
+| Build | PASS — BUILD_ID `X9_LDAP7cnQIumJPbpY3N`, all bundle budgets met |
 | Stage 2 availability invariants | 11/11 GREEN |
 | Stage 5 booking/concurrency (offline) | 26/26 GREEN |
 | Stage 6 tenant isolation | 17/17 GREEN (incl. the notification cross-tenant suite) |
+| Stage 8 targeted | 56/56 GREEN |
+| Live notification RLS | 5/5 PASS (see round 2 above) |
 | Stage 7 auth/SSO | 56/56 GREEN |
+| `git diff --check` | clean |
 | Booking contention (live, 20 students) | 10/10 PASS — last run BEFORE the review round; **not re-run this round**, see below |
 | Live DB teardown | 0 leftover fixtures; 27 profiles / 3 requests / 1 school |
 
