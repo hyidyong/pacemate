@@ -2,54 +2,74 @@
 
 ## Current Stage
 
-Stage 8 / 10
-Scale / Reliability / Observability
-Status: COMPLETE on branch `upgrade/stage-8` (2026-08-13) — awaiting PR
-review/merge. Base: `main` @ 9eeaf78 (Stage 7 PR #41 merged 2026-08-13).
-See docs/upgrade/stage-08/HANDOFF.md.
+Stage 9 / 10
+Security / Privacy / Audit / Recovery
+Status: IN PROGRESS — work complete on branch `upgrade/stage-9` (2026-08-14),
+awaiting PR review/merge. Base: `main` @ `fd44172` (Stage 8 PR #42 merged
+2026-08-12, verified). See docs/upgrade/stage-09/HANDOFF.md.
 
-Next stage: Stage 9 — NOT started. Stage 9 begins only after the Stage 8 PR
-merges, from the HANDOFF "Stage 9 inputs" section.
+Next stage: Stage 10 — NOT started. Stage 10 begins only after the Stage 9 PR
+merges, from the HANDOFF "Stage 10 inputs" section.
 
-## What Stage 8 delivered
+## What Stage 9 delivered
 
-Evidence-based scalability and operational reliability, with no new
-infrastructure (D-022) and log-based observability (D-023).
+The platform's authorization model was a set of `demo anon ... using (true)`
+policies from July, because two structural facts made the intended model inert:
+the browser holds a Supabase publishable key (so PostgREST is directly
+reachable), and a Next.js server action runs before any page guard.
 
-Fixed: a cross-tenant notification write (`markAllNotificationsRead` updated
-role-addressed rows in every university); two AI server actions that took
-`studentId` from the caller with no authorization and no OpenAI timeout; the
-unbounded, monotonically growing counseling busy feed; the absence of any
-request timeout on all four Supabase clients; four missing indexes on named hot
-queries.
+Measured, not asserted: a direct-Data-API probe against two disposable tenants
+scored **26 failures out of 67 checks before, 0 after**. Unauthenticated, an
+attacker could read every profile, student record, enrolment and syllabus;
+rewrite any profile; create a profile with `role=admin`; fabricate or delete
+counseling availability; and deliver a notification to any user. Four plaintext
+accounts including the administrator shipped in the production client bundle.
 
-Added: a zero-dependency load harness (`scripts/loadtest/`) that drives real
-sessions and server actions and validates BUSINESS STATE, not HTTP 200; and a
-structured logging foundation with a field allowlist, a conflict-vs-fault
-taxonomy, correlation ids, and Next's `onRequestError`.
+Root cause of the whole family: every authenticated RLS policy compared
+`auth.uid()` to a column holding `profiles.id`, so the authenticated layer had
+never worked and the browser fell through to `anon`. Fixed at the identity layer
+first (D-024), then the anon surface removed — `anon` now holds exactly one
+privilege in `public`: SELECT on `schools`.
 
-## Tested capacity (precise)
+Also delivered: a durable append-oriented audit trail (D-025), the schema-drift
+repair that makes the migration chain rebuildable (D-026), tenant suspension
+enforced at request time, and a reusable live security probe harness with
+deterministic teardown.
 
-10 concurrent virtual users across six authenticated routes, 0% errors, p99
-≤ 1377 ms, single local production instance against live Supabase; 20
-concurrent booking mutations with all ten Stage 5 invariant checks intact.
+## Verified this stage
 
-NOT TESTED (implemented in the harness, blocked on the absence of a
-non-production database): hundreds/thousands of concurrent users, stress,
-breaking point, recovery, sustained soak, Vercel multi-instance behaviour.
-Nothing beyond the tested numbers is claimed.
+333 tests / 330 pass / **3 fail — the pre-existing KI-002 trio by name**;
+typecheck clean; lint at baseline; build PASS with budgets met and shared JS
+unchanged at 102 kB; 0 browser console errors and 0 server errors across
+rendered QA of login, dashboard, counseling, notifications, courses and support.
+
+## NOT verified / BLOCKED
+
+- **No verified recovery point of any kind.** PITR off, backup list empty, no
+  backup mechanism in the repo. No RPO/RTO is claimed.
+- **Full-chain schema rebuild — BLOCKED — NON-PRODUCTION DATABASE REQUIRED.**
+  The drift repair is reasoned and unit-guarded, not proven by execution.
+- **Realtime notifications are silently non-delivering** since Stage 8 and were
+  deliberately not fixed by weakening RLS.
+- The audit trail's three application emit paths are code-wired and typechecked
+  but were not triggered at runtime this session.
+- SSO end-to-end against a real IdP remains BLOCKED (KI-020).
+
+Everything else deferred is in KI-022, with the reason.
 
 ## Non-goals (this stage)
 
-- Redis / queues / microservices / Kubernetes / APM vendor / new pooler
-- Stage 9 RLS + privacy overhaul (anon-policy family, notification read
-  scoping, professor report scoping)
+- Rate limiting (KI-021 reasoning re-checked and unchanged)
+- Composite foreign keys for tenant consistency (schema change across seven
+  tables; no rehearsal database)
+- `next` patch bump (would make an RLS regression un-attributable)
+- Narrowing AI prompt payloads (changes what students are shown)
 - Stage 10 CI/CD
-- UI/UX changes (Stage 4 preserved — no user-visible copy or layout changed)
-- Rate limiting (deliberately deferred with reasoning — KI-021)
+- UI/UX changes (Stage 4 preserved — the only visual difference is the QA demo
+  panel not rendering without its flag)
 
 ## Completion rule
 
-Stage 8 work completes on the branch only; merging requires external review
-and human approval. Never merge automatically. Never start Stage 9
-automatically. Repository state is the source of truth.
+Stage 9 work completes on the branch only; merging requires external review and
+human approval. Never merge automatically. Never start Stage 10 automatically.
+Repository state is the source of truth.

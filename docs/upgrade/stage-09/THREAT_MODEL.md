@@ -1,0 +1,156 @@
+# Stage 9 — Threat Model
+
+Scope: the merged platform at `main` @ `fd44172` (Stage 8). Written before the
+hardening work, revised with what the probes actually found.
+
+## 1. The one structural fact that shapes everything
+
+**The browser holds a Supabase publishable key and can talk to PostgREST
+directly.** `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is in the client bundle by
+design — it is a public identifier, not a secret. It means every table the
+`anon` role can reach is reachable by `curl` from anywhere, with no session, no
+UI, and no server action involved.
+
+Consequently the application server is **not** a boundary for anything the
+database exposes. Before Stage 9 the platform's authorization model was
+effectively:
+
+```
+browser ──(publishable key)──> PostgREST ──> `demo anon ... using (true)` ──> data
+```
+
+and the Next server sat beside that path, not in front of it.
+
+**Second structural fact:** a Next.js server action is a `POST` to a route with
+a `Next-Action` header, and the action body runs *before* any page renders. The
+page-level `requireRoles(...)` guards therefore never protected any action. The
+action ids are in `/_next/static/chunks/**`, which is served without auth.
+
+Together these two facts mean "the UI does not show it" and "the page redirects
+you" were both load-bearing in places where only a real check would do.
+
+## 2. Actors and capabilities
+
+| Actor | Realistic capability |
+|---|---|
+| Anonymous internet user | Has the publishable key (read it from the bundle). Can issue arbitrary PostgREST requests and arbitrary server-action POSTs. Can enumerate ids returned by any readable table. |
+| Authenticated student | Everything above, plus a real GoTrue JWT and an 8h HMAC app cookie. Knows their own ids; can learn others' from any readable table. |
+| Professor | As above, plus write access to their own courses, availability, plans, and their students' counseling requests. |
+| Assistant | As above, tenant-wide staff reach over counseling and the question workflow. Notably has **no** `professors` row, which several code paths did not anticipate. |
+| Tenant administrator | Broadcast to every profile in the tenant; approve curriculum revisions that publish into every student's roadmap. |
+| Platform operator | Holds `SUPABASE_SERVICE_ROLE_KEY` and the Supabase/Vercel dashboards. No platform-level in-app identity exists — correctly, there is no "superadmin" role in `user_role`. |
+| Compromised authenticated account | An attacker with a valid session. The app session is irrevocable for up to 8h (no server-side store), so containment is slower than revocation would suggest. |
+| Malicious user of another university | The multi-tenant adversary. Only one tenant exists live, so every cross-tenant claim in this stage was tested against **provisioned probe tenants**, not asserted. |
+
+## 3. Assets, ranked by what losing them costs
+
+1. **Identity and privilege** — `profiles.role`, `profiles.auth_user_id`,
+   `profiles.school_id`. Whoever can write these owns every other control.
+2. **Counseling content** — `counseling_requests.topic`, `professor_note`.
+   Personal, sometimes sensitive, and the product's core workflow.
+3. **Scheduling availability** — `professor_availability`. CLAUDE.md names this
+   correctness-critical; it is also an availability weapon (close every window
+   and counseling stops platform-wide).
+4. **Student learning records** — `student_weekly_progress.private_note`,
+   `student_mission_progress.actual_progress_feedback`, `student_profiles`
+   (career goals, self-declared weaknesses, free-text transcript).
+5. **Course material** — `syllabi.raw_extracted_text`, weekly plans. Tenant
+   assets, and the grounding corpus the AI tutor cites.
+6. **Notifications** — a first-party channel into every user's UI, with a
+   clickable `target_href`.
+7. **Secrets** — service-role key, `PACEMATE_SESSION_SECRET`, OpenAI key.
+8. **Audit history** — did not exist durably before this stage.
+
+## 4. Trust boundaries
+
+| Boundary | Pre-Stage-9 state |
+|---|---|
+| browser → Next server | Real, but bypassable: actions ran without the page guards. |
+| browser → Supabase Data API | **Effectively absent.** `anon` could read 7 tables in full and write 6. |
+| server action → Supabase | Mixed: some actions used the *anon browser client* server-side. |
+| RLS | Present but largely inert: most `authenticated` predicates compared `auth.uid()` to `profiles.id` and matched nobody. |
+| SECURITY DEFINER RPC | Sound (Stage 6 hardened them); two helpers were needlessly exposed as public RPC endpoints. |
+| service-role client | Widely used; mostly after a real check, with a handful of substitutions. |
+| SSO provider → callback | Sound (Stage 7), re-verified. |
+| anonymous `/support` | An unauthenticated INSERT into a general-purpose notification table. |
+| Realtime | Subscribes as `anon`; Stage 8's fix silently stopped delivery. |
+| operational scripts | Two service-role scripts with no guard at all. |
+
+## 5. Prioritised attack paths (what an attacker would actually do)
+
+**AP-1 — Own the platform from a terminal, no account.**
+Read the publishable key from the bundle → `PATCH /rest/v1/profiles?id=eq.<any>`
+setting `role` or `auth_user_id`. The policy predicate was
+`identifier <> '' and name <> ''`. This is privilege escalation and account
+takeover in one request. *Confirmed live (a probe profile was rewritten by an
+unauthenticated PATCH; an anonymous POST created a profile with `role=admin`,
+HTTP 201).*
+
+**AP-2 — Harvest the university.**
+`GET /rest/v1/profiles?select=*` → 27 rows with names, login emails, roles and
+tenant. Join `student_profiles` (career goals, weaknesses) and `student_courses`
+(timetables). *Confirmed live.*
+
+**AP-3 — Switch counseling off.**
+`GET professor_availability` to enumerate ids → `PATCH is_active=false` on all
+of them; or `POST` fabricated windows. Also reachable through two server actions
+that took `professorId` from the form with no session at all.
+*Confirmed live (both the toggle and the insert).*
+
+**AP-4 — Publish curriculum content to every student.**
+`updateRoadmapRevisionStatus` had no role check, and the anon policy allowed the
+`approved` transition, so an unauthenticated POST could approve any revision —
+whose `proposed_patch` is merged into the rendered roadmap. Compounded by an
+anon INSERT that could create the revision in the first place.
+
+**AP-5 — Phish inside the product.**
+`POST /rest/v1/user_notifications` with any `recipient_id` and any
+`target_href`, unauthenticated. It renders as a first-party notice.
+*Confirmed live.*
+
+**AP-6 — Read another university's material through the AI tutor.**
+Enrol in a foreign course (`addCourseToSchedule` never checked the tenant, and
+wrote with the service role), then ask the tutor about it: its syllabus, weekly
+plans, notices and FAQs are loaded into the prompt and returned with citations.
+
+**AP-7 — Poison the tutor's grounding corpus.**
+`addProfessorFaq` had no session check and wrote `approved_at` immediately, and
+approved FAQs are retrieved as "교수 공식 Q&A" evidence for other students.
+
+**AP-8 — Sign in as the administrator.**
+`curl .../_next/static/chunks/app/login/page-*.js | grep pacemate.edu` returned
+four accounts with plaintext passwords, including `admin1@pacemate.edu`.
+
+**AP-9 — Read the whole platform as an assistant.**
+Every assistant fell through `getCurrentProfessor`'s "first professor in the
+table" fallback and was shown that professor's counseling caseload, with student
+names and identifiers, across tenants.
+
+## 6. Deliberately out of scope
+
+- Denial of service by volume, and rate limiting generally (KI-021 reasoning
+  still holds: the concrete abuse vectors were authorization holes, per-IP is
+  wrong behind campus NAT, and an in-memory limiter on serverless is theatre).
+- Attacks requiring the service-role key or the Supabase/Vercel dashboard —
+  those are credential-compromise scenarios, covered by RECOVERY_RUNBOOK.md §3.
+- Physical and social-engineering attacks.
+- Supply-chain compromise of npm packages beyond the dependency review.
+
+## 7. The model Stage 9 implements
+
+```
+trusted identity            GoTrue JWT, verified; profiles.auth_user_id is the join
+  ↓
+tenant membership           profiles.school_id, via app_private.current_school_id()
+  ↓
+role / authorization        checked in the server action, not the page
+  ↓
+server/domain validation    ownership and legal state re-derived, never accepted
+  ↓
+database / RLS              the same rule again, at the boundary an attacker
+                            actually reaches
+  ↓
+auditable result            public.security_events for privileged actions
+```
+
+Frontend visibility is never a boundary. Neither is a page guard.

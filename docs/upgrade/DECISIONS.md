@@ -1,5 +1,105 @@
 # Architectural Decisions
 
+## D-024 — Identity is `profiles.auth_user_id`, resolved by private SECURITY DEFINER helpers; the anon role is an explicit one-table allowlist
+
+Status: Accepted (Stage 9, 2026-08-14)
+
+Context: every authenticated RLS policy written before this stage compared
+`auth.uid()` (the GoTrue user id) to a column holding `profiles.id`. Measured
+live: 27 profiles, 4 with `id = auth_user_id`, 19 with no auth user; 0 of 3
+professors where `profiles.auth_user_id = professors.profile_id`. Those
+predicates matched almost nobody. The application worked only because the same
+tables also carried `demo anon ... for all` policies, so the browser fell
+through to the `anon` role. The probe proved it: before the fix a signed-in
+student could not read their own `student_profiles` row.
+
+Decision: one definition of "who is calling", in a schema PostgREST does not
+expose. `app_private.current_profile_id()`, `current_school_id()`,
+`current_user_role()`, `current_professor_id()` — all SECURITY DEFINER with
+`set search_path = ''`, EXECUTE granted to `authenticated` only, resolving
+through `profiles.auth_user_id`. Every repaired policy goes through them.
+`is_professor_of_offering` / `is_student_of_offering` moved into the same schema
+(closing KI-011). The `anon` role then keeps exactly one privilege in `public`:
+SELECT on `schools`, the tenant registry a caller needs before it has an
+identity. The migration asserts that as a postcondition rather than trusting the
+statements above it.
+
+Reason: the ordering is forced. Dropping the anon policies first would have left
+a platform where nobody could read their own data, because the authenticated
+layer had never worked. Repairing identity first makes the authenticated layer
+real, and only then is the anon surface removable.
+
+Consequences: any future policy that writes `auth.uid() = <some profile id
+column>` is a bug; `supabase/migrations/stage9_rls.test.mjs` fails the build if
+that shape returns. Server-side code may no longer use the anon browser client —
+reads go through the session client, and writes that legitimately need a bypass
+go through the service role after an explicit check. A session holding only the
+app cookie without a live GoTrue session now resolves to no profile and is
+redirected to login; that is fail-closed and intended.
+
+## D-025 — Security audit records are a separate, append-oriented table written through the existing logging chokepoints; not tamper-proof, and honestly scoped
+
+Status: Accepted (Stage 9, 2026-08-14)
+
+Context: Stage 8 (D-023) gave the platform structured operational logging to
+stdout. That answers "is the system healthy"; it does not answer "who bound this
+external identity to this profile, and when", which is asked months later. Some
+privileged actions — tenant-wide admin broadcasts, curriculum approvals, hard
+deletes — emitted no record at all.
+
+Decision: `public.security_events`, written only through the two functions that
+already exist as chokepoints (`emitSsoAuditEvent`, and `recordSecurityEvent`
+wrapping `logEvent`), so no call site changes shape. Scope is deliberately
+narrow: events that change identity, privilege, tenant configuration or
+correctness-critical state — never page requests, never per-denial rows. No
+client role holds INSERT, UPDATE or DELETE, and no non-SELECT policy exists;
+reads are limited to a tenant admin's own tenant. `detail` is a short
+classification string bounded to 200 characters so the column cannot become an
+accidental PII sink. The write is best-effort: the operational line is emitted
+first and unconditionally, and a failed insert degrades to `audit.write_failed`
+rather than breaking the audited action.
+
+Reason: option A (platform logs only) was rejected because retention is outside
+our control, events cannot be queried by tenant, and it does nothing for actions
+that emit nothing. Option B costs one table and no call-site churn.
+
+Consequences: the trail is best-effort, not guaranteed, and **is not claimed to
+be tamper-proof** — there is no hash chain and no signature. A compromised
+service-role key can write false rows; it cannot quietly edit or delete true
+ones through anything the browser reaches. History begins 2026-08-14.
+
+## D-026 — Hand-applied schema is repaired at its first point of use, even when that means amending an already-applied migration
+
+Status: Accepted (Stage 9, 2026-08-14)
+
+Context: ten columns existed in the live database and in `supabase/schema.sql`
+but were created by no migration — `posts.school_id`, `board_key`,
+`display_mode`, `anonymous_alias`, `view_count`, `is_resolved`,
+`resolved_by_post_id`, and `counseling_requests.suggested_start`,
+`suggested_end`, `location`. Seven are load-bearing in `src/`, and
+`posts.school_id` is the tenant column that `20260812070000` asserts on and
+`20260813010000` indexes. A database built from the chain therefore aborted at
+migration 41 of 55, which is why no staging environment and no restore rehearsal
+were ever possible.
+
+Decision: the nine columns nothing depends on are added by a new idempotent
+migration (`20260814020000`). `posts.school_id` is added by an
+`add column if not exists` inserted into `20260812070000` itself — the first
+migration that depends on it — because a column created later cannot help a
+fresh rebuild. That edit is a strict no-op on any database where the migration
+has already run, and it does not change what the migration does.
+
+Reason: the alternative (accepting the break) leaves the project with no
+disaster-recovery path and no way to create a non-production database, which is
+the precondition for almost every other deferred item.
+
+Consequences: an already-applied migration file was amended, which is normally
+avoided; the reason is written at the top of that file and guarded by
+`stage9_rls.test.mjs`, which asserts the column is added before it is asserted
+on. **The rebuild itself is UNVERIFIED** — Docker is unavailable, there is no
+`supabase/config.toml`, and the only project is live production. The repair is
+reasoned and unit-guarded, not proven by execution.
+
 ## D-022 — Scalability is bounded queries, bounded requests, and evidence-justified indexes; no new infrastructure
 
 Status: Accepted (Stage 8, 2026-08-13)

@@ -3,6 +3,161 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-022 — Stage 9 security/privacy/recovery: findings deferred, blocked, or bounded
+
+Status: OPEN (documented 2026-08-14; full evidence in docs/upgrade/stage-09/).
+Stage 9 closed 8 P0 and 12 P1 findings (IMPLEMENTATION_PLAN.md §2). What
+follows is what it did NOT close, with the reason.
+
+### BLOCKED on something outside the repository
+
+- **There is no verified recovery point of any kind.** `supabase backups list`
+  returns `pitr_enabled: false` and `backups: []`; no dump script, cron or CI
+  exists anywhere in the repo; there are no down migrations. Whether plan-tier
+  daily logical backups exist is **BLOCKED — Supabase dashboard → Project
+  Settings → Database → Backups**. No RPO/RTO is claimed. RECOVERY_RUNBOOK.md
+  §7 lists the five prerequisites.
+- **The schema-drift repair is UNVERIFIED end to end.** `20260814020000` plus
+  the guard in `20260812070000` should make the chain rebuildable, but Docker is
+  not running, there is no `supabase/config.toml`, and the only Supabase project
+  is live production, so a fresh rebuild has never been executed. Guarded by
+  unit assertions only.
+- **Demo account passwords must be rotated.** `src/config/demo-users.json` holds
+  four plaintext passwords including `admin1@pacemate.edu`. The client-bundle
+  exposure is closed and verified absent from `.next/static/**`, but the
+  credentials were public for the lifetime of every prior deployment. Operator
+  action — RECOVERY_RUNBOOK.md §3.4. Consider deleting the `admin1@` demo
+  account outright.
+- **SSO end-to-end remains BLOCKED** (KI-020, unchanged): no institution
+  configuration exists. The app-side boundary is covered by 43 green tests.
+
+### Deferred with reasoning
+
+- **No composite foreign keys for tenant consistency.** A course in university A
+  can still be linked to a professor in university B at the DATABASE level; the
+  same is true for offerings, counseling requests, weekly progress, and
+  notification `school_id`. Stage 9 closed every reachable application and RLS
+  path, but the structural fix is `unique (id, school_id)` + composite FKs
+  across seven tables with backfill — not something to attempt in the same stage
+  as an RLS overhaul, with one live tenant and no rehearsal database.
+- **No erasure path, no retention, no export.** `deleteAiTutorSession` is the
+  only user-invocable deletion of personal content in the application. A correct
+  account-deletion action needs an audit of cascade behaviour across ~20 FK
+  relationships (`schema.sql` mixes `cascade` and `set null`) plus the
+  `syllabus-files` bucket, rehearsed on a non-production database that does not
+  exist. P1, first candidate once a scratch project exists.
+- **`pdf-parse@1.1.1` vendors pdf.js v1.10.100 (2018)** — verified in
+  `node_modules/pdf-parse/lib/pdf-parse.js:42`. Unmaintained since 2021; that
+  vintage predates CVE-2024-4367. Professor-uploaded PDFs are parsed
+  (`syllabus-ingestion.service.ts:125`) in a process holding
+  `SUPABASE_SERVICE_ROLE_KEY`, with **no page cap** (`max` defaults to 0) and
+  **no timeout**. Two-line mitigation available without a dependency change:
+  pass `{ max: 40 }` and wrap in a `Promise.race` timeout. Requires a professor
+  account and an owned offering, which bounds likelihood, not blast radius.
+- **`next` 15.5.20 → 15.5.21 not applied.** GHSA-955p-x3mx-jcvp
+  (unauthenticated disclosure of internal Server Function endpoints) is directly
+  relevant to an app that authorizes at the action boundary. Deferred because a
+  framework bump landing alongside an RLS overhaul makes any regression
+  un-attributable. First Stage 10 action. The other five audit findings
+  (postcss, sharp, nanoid, js-yaml, brace-expansion) are dev-only or
+  non-reachable — defer.
+- **Realtime notifications have not been delivering since Stage 8.**
+  `notification-menu.tsx` subscribes through a bare `createClient(url,
+  publishableKey)` that never reads the auth cookie, so the socket authenticates
+  as `anon` — which has had no SELECT policy on `user_notifications` since
+  `20260813030000`. Page loads and the bell are unaffected, so the failure is
+  silent. Stage 9 deliberately did NOT weaken RLS to fix it. The repair is
+  client-side: `createBrowserClient` from `@supabase/ssr` plus
+  `supabase.realtime.setAuth(token)` before `.subscribe()`. The channel is off
+  by default (`enableRealtime`, desktop only). UNVERIFIED in a browser.
+- **Rate limiting still not implemented.** KI-021's reasoning was re-checked and
+  holds. `/support` is now a constrained boundary rather than an open INSERT,
+  which was the actual defect; volume control needs a shared store.
+
+### Recorded with evidence, bounded impact
+
+- **Raw `PostgrestError` objects are still logged around sensitive tables.**
+  `professor.service.ts:299,324` (a query selecting counseling `topic` plus
+  `student:profiles(name, identifier)`), `personalized-weekly-roadmap.server.ts:551`
+  (selects `private_note`), `ai-tutor.actions.ts:165,182,225`,
+  `course-settings.actions.ts:121,225`, `student-community.actions.ts:222,305,355`,
+  `session.service.ts:72,92`. Postgres `detail`/`hint` can embed row values.
+  `admin-notifications.actions.ts` was converted this stage as the pattern to
+  follow; the rest is a mechanical substitution against `classifyPostgresError`.
+- **The log allowlist governs 6 of ~116 `console.*` sites.** `logEvent` enforces
+  it at runtime, but the cheap path — raw `console.error(err)` — is unguarded
+  and `.eslintrc.json` sets no `no-console` rule. Adding that rule with a narrow
+  override is the mechanism the allowlist currently lacks.
+- **Over-broad AI prompt payloads.** `personalized-weekly-roadmap.server.ts:361,401`
+  passes the whole onboarding row (career goal, interests, weaknesses, free-text
+  completed-courses transcript) to OpenAI; `ai-tutor.actions.ts:139`
+  interpolates `interests` and `target_career` into a syllabus-progress prompt
+  that does not need them. The consent mechanism to extend already exists in the
+  same file (`use_private_note_for_ai`). Not changed because narrowing alters
+  what students are shown.
+- **Service-role sites that still substitute for authorization** (no live
+  exploit; each has a single well-behaved caller):
+  `student-weekly-progress.server.ts:31,106` (resolves a course by name
+  globally; trusts a `studentId` parameter), `weekly-roadmap.server.ts:89`
+  (active term with no `school_id` filter — wrong the moment a second tenant
+  exists), `curriculum-query.server.ts` (no `server-only` marker, department
+  matched by display name across schools), `course-notices.server.ts:9`
+  (trusts `studentId`), `syllabus-ingestion.service.ts:72,86,105`.
+  Also `updateStudentWeeklyProgress` writes without an enrolment check, unlike
+  its sibling in `student-roadmap.actions.ts`.
+- **Two unguarded service-role scripts.** `scripts/ensure-demo-operator-auth.mjs`
+  and `scripts/verify-notification-rls.mjs` mutate live data with no
+  environment guard — the Stage 8 protection stops at the `scripts/loadtest/`
+  directory boundary. `scripts/security/` has its own guard
+  (`probe-guard.mjs`, 9 tests).
+- **Client storage bleeds across accounts on shared devices** (carried from
+  KI-019): `pacemate_student_todos`, `_todo_done`,
+  `pacemate.dismissed-course-notices.v1` are unkeyed and never cleared on
+  logout; the zustand `cachedSessions` store (AI question titles) survives the
+  client-side logout navigation.
+- **`supabase/schema.sql` is stale and partly corrupt** and must stop being
+  cited as authoritative. Beyond KI-005's duplicate `day_of_week`, commit
+  `570d7df` injected that column into four more tables that do not have it live;
+  the file has a `$$$` delimiter typo, mojibake comments, two tables that do not
+  exist (`timetables`, `course_weekly_missions`), a `profiles.password_hash`
+  column that does not exist, and it omits 25 live tables. Stage 9 used the live
+  database as ground truth throughout and did not rely on this file.
+- **`profiles.password_hash` is a dead column** — zero references in `src/` or
+  any migration. A credential-shaped column with no owner is a trap; drop it
+  after confirming it is empty.
+- **The audit trail's application emit paths are UNVERIFIED at runtime.** The
+  table's security properties are verified live (5/5) and the three call sites
+  (`sso.*`, `admin.broadcast_sent`, `admin.revision_*`) are code-wired and
+  typechecked, but no run this session triggered an SSO event, a tenant
+  broadcast, or a revision approval.
+- **The in-session revocation limit is unchanged.** The HMAC app session remains
+  valid until its 8h expiry; there is no server-side store, so the only mass
+  revocation is rotating `PACEMATE_SESSION_SECRET`. Tenant *suspension* is now
+  enforced at request time (new this stage), but per-user revocation is not.
+
+### Resolved by Stage 9 — corrections to earlier notes
+
+- **KI-014 is CLOSED**, and was worse than recorded: availability writes were
+  reachable with no session at all, and the anon RLS policy provided no
+  backstop. Both actions now authorize; `anon` has no privilege on the table.
+- **KI-011 is CLOSED** — the SECURITY DEFINER helpers moved to `app_private`
+  with `search_path = ''` and are no longer PostgREST RPC endpoints.
+- **KI-007 is CLOSED** — the pre-mapping identity predicates are repaired
+  platform-wide (D-024), not just for login.
+- **KI-019's anon-read family is CLOSED** — `anon` now holds exactly one
+  privilege in `public`: SELECT on `schools`.
+- **KI-006's remaining open item is CLOSED** — `supabase migration list
+  --linked` shows all 55 local migrations with matching remote entries;
+  `20260812000000` is recorded and no `migration repair` is pending.
+- **KI-015's schema-drift claims are CONFIRMED and repaired** (D-026); the note
+  understated the problem — seven `posts` columns were affected, not only the
+  three `counseling_requests` ones.
+- **One discovery-agent claim was WRONG and no change was made:**
+  `answer_professor_questions` was reported as letting any assistant answer any
+  tenant's questions. The report cited the superseded 2026-07-14 definition; the
+  live function is the Stage 6 rewrite, whose assistant branch already requires
+  a tenant match.
+
 ## KI-021 — Stage 8 scale/reliability: findings deferred by design
 
 Status: OPEN (documented 2026-08-13; full evidence in docs/upgrade/stage-08/).
