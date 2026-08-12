@@ -15,12 +15,50 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // another student's course week, and spend OpenAI credits without an account.
 // The acting student is now resolved server-side and the parameter is ignored;
 // the signature is preserved so the existing call sites and UI are untouched.
-async function resolveActingStudentId(): Promise<string | null> {
+async function resolveActingStudent() {
   const profile = await getDemoProfile();
-  if (!profile || profile.role !== "student") {
+  if (!profile || profile.role !== "student" || !profile.school_id) {
     return null;
   }
-  return profile.id;
+  return { id: profile.id, schoolId: profile.school_id };
+}
+
+// Review finding 2. Deriving studentId from the session closed the identity
+// hole but left courseId and currentWeek caller-supplied and unvalidated, so a
+// student could name ANOTHER UNIVERSITY'S course id: its syllabus text would be
+// read and sent to OpenAI (cross-tenant exfiltration through the prompt) and
+// progress rows written for a course they do not own.
+//
+// Authorization is now derived from the student's OWN enrollment, joined to the
+// course's tenant. `.limit(1).maybeSingle()` rather than a bare `maybeSingle()`
+// because student_courses is unique on (student_id, course_id, STATUS), so one
+// student legitimately has several rows for the same course (KI-012).
+async function authorizeCourseForStudent(
+  studentId: string,
+  schoolId: string,
+  courseId: string,
+): Promise<boolean> {
+  if (!courseId) return false;
+
+  const { data, error } = await supabase
+    .from("student_courses")
+    .select("course_id, course:courses!inner(id, school_id)")
+    .eq("student_id", studentId)
+    .eq("course_id", courseId)
+    .eq("course.school_id", schoolId)
+    .limit(1)
+    .maybeSingle();
+
+  return Boolean(data) && !error;
+}
+
+// A course week is a small positive integer. The caller supplied it verbatim,
+// so an absurd or fractional value would be written into
+// student_mission_progress and used to advance student_courses.current_week.
+const MAX_COURSE_WEEK = 30;
+
+function isValidWeek(week: number): boolean {
+  return Number.isInteger(week) && week >= 1 && week <= MAX_COURSE_WEEK;
 }
 
 // The OpenAI call previously had no timeout, so a slow upstream pinned the
@@ -47,8 +85,18 @@ export async function generateWeeklyGuide(
   currentWeek: number,
   feedback: string = "",
 ) {
-  const studentId = await resolveActingStudentId();
-  if (!studentId) {
+  const student = await resolveActingStudent();
+  if (!student) {
+    return null;
+  }
+  const studentId = student.id;
+
+  // Authorize BEFORE reading the syllabus or calling OpenAI: the course text
+  // becomes prompt content, so an unauthorized read is already a disclosure.
+  if (!isValidWeek(currentWeek)) {
+    return null;
+  }
+  if (!(await authorizeCourseForStudent(studentId, student.schoolId, courseId))) {
     return null;
   }
 
@@ -134,8 +182,19 @@ export async function submitProgressFeedback(
   currentWeek: number,
   feedback: string,
 ) {
-  const studentId = await resolveActingStudentId();
-  if (!studentId) {
+  const student = await resolveActingStudent();
+  if (!student) {
+    return;
+  }
+  const studentId = student.id;
+
+  // Same authorization gate as generateWeeklyGuide: this path writes progress
+  // AND advances student_courses.current_week, so an unowned courseId must not
+  // reach either statement.
+  if (!isValidWeek(currentWeek) || !isValidWeek(currentWeek + 1)) {
+    return;
+  }
+  if (!(await authorizeCourseForStudent(studentId, student.schoolId, courseId))) {
     return;
   }
 
