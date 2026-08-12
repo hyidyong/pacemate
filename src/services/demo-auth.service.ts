@@ -6,6 +6,7 @@ import {
   createDemoSession as createSignedDemoSession,
   destroyDemoSession,
 } from "@/lib/auth/demo-session";
+import { logEvent } from "@/lib/observability/log";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getRoleHomePath, type DemoProfile } from "@/services/session.service";
@@ -28,6 +29,16 @@ async function rejectLogin(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   errorCode: "invalid_password" | "read",
 ): Promise<never> {
+  // Stage 8 P2: password-login denials previously left ZERO server-side trace,
+  // so credential stuffing against this form was undetectable in logs. The
+  // reason code is recorded; the submitted identifier deliberately is not (it
+  // is the user's email — see lib/observability/log.ts).
+  logEvent({
+    event: "auth.login_denied",
+    outcome: "denied",
+    route: "/login",
+    detail: errorCode,
+  });
   await supabase.auth.signOut().catch(() => undefined);
   await destroyDemoSession();
   redirect(`/login?error=${errorCode}`);

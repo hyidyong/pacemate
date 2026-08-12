@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCounselingSlotId } from "@/lib/counseling-slots";
+import { logEvent } from "@/lib/observability/log";
 import { tryResolveTenantContext } from "@/lib/tenant";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -79,7 +80,20 @@ export async function createCounselingRequest(formData: FormData) {
   let availableSlots;
   try {
     availableSlots = await getAvailableCounselingSlots(tenant.tenantId);
-  } catch {
+  } catch (error) {
+    // Stage 8 P2. This catch used to be silent, and it returns the
+    // business-conflict message — so a Supabase outage during booking was
+    // invisible to operators AND told the student "that slot is taken", which
+    // is false. The user-facing copy is unchanged (Stage 4 charter); what
+    // changes is that the fault is now recorded AS a fault.
+    logEvent({
+      event: "booking.availability_unavailable",
+      outcome: "fault",
+      route: "/counseling",
+      tenantId: tenant.tenantId,
+      profileId: profile.id,
+      detail: error instanceof Error ? error.name : "UnknownError",
+    });
     return { ok: false, message: SLOT_NOT_AVAILABLE_MESSAGE };
   }
 
@@ -115,6 +129,17 @@ export async function createCounselingRequest(formData: FormData) {
     .single();
 
   if (error && CONFLICT_ERROR_CODES.has(error.code)) {
+    // A conflict is the constraint doing its job under contention, not a fault.
+    // Logged at warn with outcome=conflict so the booking conflict RATE is
+    // measurable without conflicts polluting the fault rate that should page.
+    logEvent({
+      event: "booking.slot_conflict",
+      outcome: "conflict",
+      route: "/counseling",
+      tenantId: tenant.tenantId,
+      profileId: profile.id,
+      code: error.code,
+    });
     // Someone consumed the slot between revalidation and the INSERT. The data
     // changed underneath this client, so refresh both consumers either way.
     // If the winner is the caller's own in-flight duplicate, acknowledge it.
@@ -128,13 +153,15 @@ export async function createCounselingRequest(formData: FormData) {
   }
 
   if (error || !data) {
-    console.error("[counseling] counseling request insert failed", {
-      operation: "createCounselingRequest",
-      table: "counseling_requests",
+    // Structured now, and deliberately WITHOUT error.details/hint: Postgres
+    // detail strings can embed row values (an identifier is an email address).
+    logEvent({
+      event: "booking.storage_failure",
+      outcome: "fault",
+      route: "/counseling",
+      tenantId: tenant.tenantId,
+      profileId: profile.id,
       code: error?.code ?? "missing_insert_result",
-      message: error?.message ?? "Insert returned no row",
-      details: error?.details ?? null,
-      hint: error?.hint ?? null,
     });
     return { ok: false, message: "상담 신청을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." };
   }

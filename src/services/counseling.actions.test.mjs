@@ -18,6 +18,10 @@ function toDataUrl(code) {
   return `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
 }
 
+const OBSERVABILITY_LOG_STUB = toDataUrl(
+  "export const logEvent = () => {}; export const buildLogRecord = () => ({}); export const classifyPostgresError = () => 'fault';",
+);
+
 const SERVER_STUB = toDataUrl(
   "export const createSupabaseServerClient = async () => globalThis.__stage5SessionClient;",
 );
@@ -67,6 +71,7 @@ function loadModules() {
         ['from "@/lib/tenant"', `from ${JSON.stringify(tenantUrl)}`],
         ['from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`],
         ['from "@/lib/supabase/admin"', `from ${JSON.stringify(ADMIN_STUB)}`],
+        ['from "@/lib/observability/log"', `from ${JSON.stringify(OBSERVABILITY_LOG_STUB)}`],
       ],
     );
     const actionsUrl = await compileToDataUrl(
@@ -82,6 +87,7 @@ function loadModules() {
         ['from "@/services/counseling.service"', `from ${JSON.stringify(serviceUrl)}`],
         ['from "@/services/notifications.create.service"', `from ${JSON.stringify(NOTIFY_STUB)}`],
         ['from "@/services/session.service"', `from ${JSON.stringify(SESSION_SERVICE_STUB)}`],
+        ['from "@/lib/observability/log"', `from ${JSON.stringify(OBSERVABILITY_LOG_STUB)}`],
       ],
     );
     const [actions, service, domain] = await Promise.all([
