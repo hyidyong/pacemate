@@ -1512,26 +1512,35 @@ function PendingCounselingSub({
   }
 
   function handleReject(request: ProfessorCounselingRequest) {
-    if (!rejectNote) {
+    // The server rejects a reject without BOTH a note and a suggested time
+    // (professor.actions.ts) — surface that before the round trip instead of
+    // silently dropping an unparseable time (audit B-2).
+    if (!rejectNote.trim()) {
       showToast("거절 사유를 입력해 주세요.", false);
       return;
     }
+    // The datetime-local input yields a KST wall-clock time; parse it as such
+    // no matter what timezone the browser runs in.
+    const suggestedDate = parsePacemateWallClock(suggestedTime);
+    if (!suggestedDate) {
+      showToast("추천 시간을 선택해 주세요.", false);
+      return;
+    }
+
     const formData = new FormData();
     formData.set("requestId", request.id);
     formData.set("status", "rejected");
     formData.set("professorNote", rejectNote);
-
-    if (suggestedTime) {
-      // The professor types a KST wall-clock time; parse it as such no matter
-      // what timezone the browser runs in.
-      const suggestedDate = parsePacemateWallClock(suggestedTime);
-      if (suggestedDate) {
-        formData.set("suggestedStart", suggestedDate.toISOString());
-        const endDate = new Date(suggestedDate);
-        endDate.setMinutes(endDate.getMinutes() + 30);
-        formData.set("suggestedEnd", endDate.toISOString());
-      }
-    }
+    formData.set("suggestedStart", suggestedDate.toISOString());
+    // Suggest a window of the same length the student originally booked —
+    // the hard-coded 30 minutes ignored the professor's slot size (KI-015).
+    const requestedDurationMs =
+      new Date(request.requested_end).getTime() - new Date(request.requested_start).getTime();
+    const durationMs =
+      Number.isFinite(requestedDurationMs) && requestedDurationMs > 0
+        ? requestedDurationMs
+        : 30 * 60 * 1000;
+    formData.set("suggestedEnd", new Date(suggestedDate.getTime() + durationMs).toISOString());
 
     runAction(updateCounselingStatus, formData, () => {
       setLocalPending((prev) => prev.filter((r) => r.id !== request.id));
@@ -1578,25 +1587,27 @@ function PendingCounselingSub({
 
               {rejectingId === request.id ? (
                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100 flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-sm font-semibold text-emerald-950">거절 사유</span>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-semibold text-emerald-950">거절 사유 (필수)</span>
                     <textarea
                       rows={2}
+                      required
                       value={rejectNote}
                       onChange={(e) => setRejectNote(e.target.value)}
                       placeholder="거절 사유를 입력하세요"
                       className="w-full border border-gray-200 rounded-md p-2 text-sm text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-sm font-semibold text-emerald-950">추천 시간 제안 (선택)</span>
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-sm font-semibold text-emerald-950">추천 시간 제안 (필수)</span>
                     <input
-                      placeholder="예: 2026-07-14 11:00"
+                      type="datetime-local"
+                      required
                       value={suggestedTime}
                       onChange={(e) => setSuggestedTime(e.target.value)}
                       className="w-full border border-gray-200 rounded-md p-2 text-sm text-emerald-950 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
-                  </div>
+                  </label>
                   <div className="flex justify-end gap-2 mt-2">
                     <button
                       className="px-4 py-2 text-sm font-medium rounded-md border border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
@@ -1611,7 +1622,7 @@ function PendingCounselingSub({
                     </button>
                     <button
                       className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-800 hover:bg-emerald-900 shadow-sm disabled:opacity-50"
-                      disabled={isPending}
+                      disabled={isPending || !rejectNote.trim() || !suggestedTime}
                       onClick={() => handleReject(request)}
                       type="button"
                     >
