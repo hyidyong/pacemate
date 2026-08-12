@@ -9,7 +9,7 @@
  */
 
 import { logEvent } from "@/lib/observability/log";
-import { REQUEST_ID_HEADER } from "@/lib/observability/request-id";
+import { REQUEST_ID_HEADER, isSafeRequestId } from "@/lib/observability/request-id";
 
 export function register() {
   // No startup work needed; the hook below is the payload. Next requires this
@@ -32,8 +32,14 @@ export function onRequestError(
   request: RequestErrorPayload,
   context: ErrorContext,
 ) {
+  // Middleware overwrites this header on every matched request, but
+  // onRequestError can fire for requests that never reached it, so the value is
+  // validated through the same trusted helper rather than trusted because of
+  // where it appeared. An unsafe value is dropped, not sanitized into something
+  // ambiguous (review finding 6).
   const header = request.headers?.[REQUEST_ID_HEADER];
-  const requestId = Array.isArray(header) ? header[0] : header;
+  const candidate = Array.isArray(header) ? header[0] : header;
+  const requestId = isSafeRequestId(candidate) ? candidate : undefined;
 
   logEvent({
     event: "server.unhandled_error",

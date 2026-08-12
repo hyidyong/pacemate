@@ -19,6 +19,9 @@ function toDataUrl(code) {
 const OBSERVABILITY_LOG_STUB = toDataUrl(
   "export const logEvent = () => {}; export const buildLogRecord = () => ({}); export const classifyPostgresError = () => 'fault';",
 );
+const REQUEST_CONTEXT_STUB = toDataUrl(
+  "export const getRequestId = async () => undefined;",
+);
 
 const SERVER_STUB = toDataUrl(
   "export const createSupabaseServerClient = async () => globalThis.__ssoServerClient;",
@@ -58,6 +61,7 @@ function loadModules() {
       ['from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`],
       ['from "@/services/session.service"', `from ${JSON.stringify(SESSION_SERVICE_STUB)}`],
       ['from "@/lib/observability/log"', `from ${JSON.stringify(OBSERVABILITY_LOG_STUB)}`],
+      ['from "@/lib/observability/request-context"', `from ${JSON.stringify(REQUEST_CONTEXT_STUB)}`],
     ]) {
       source = source.split(from).join(to);
     }

@@ -25,6 +25,7 @@ export type SsoAuditEvent = {
   schoolId?: string;
   providerSlug?: string;
   subjectHash?: string;
+  requestId?: string;
 };
 
 // Stable pseudonymous handle for an external subject: correlates one
@@ -43,6 +44,10 @@ const ALLOWED_FIELDS = [
   "schoolId",
   "providerSlug",
   "subjectHash",
+  // Server-minted correlation id (never a client value — see
+  // lib/observability/request-id.ts). Lets an identity event be joined to the
+  // request that produced it.
+  "requestId",
 ] as const;
 
 export function emitSsoAuditEvent(event: SsoAuditEvent): void {
@@ -62,6 +67,7 @@ export function emitSsoAuditEvent(event: SsoAuditEvent): void {
   logEvent({
     event: `sso.${record.event ?? "unknown"}`,
     outcome: record.event === "sso_login_denied" ? "denied" : "ok",
+    requestId: record.requestId,
     profileId: record.profileId,
     tenantId: record.schoolId,
     detail: [record.reason, record.providerSlug, record.subjectHash]
