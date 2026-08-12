@@ -1,5 +1,91 @@
 # Architectural Decisions
 
+## D-015 — The tenant is the existing `schools` row; membership is `profiles.school_id` (single-tenant), resolved through one chokepoint
+
+Status: Accepted (Stage 6, 2026-08-12)
+
+Context: the schema already had a `schools` table (one live row, 계명대학교)
+and six `school_id` columns of varying nullability, plus single-tenant
+assumptions in code (auto-assign the first school, client-supplied post
+school_id, first-row professor fallback). No parallel tenant entity was
+justified.
+
+Decision: tenant_id ≡ `schools.id` (immutable uuid — never the display name,
+never a client value). Membership is Design 1: one profile belongs to one
+tenant via `profiles.school_id` (backfilled + NOT NULL). Design 2 (a
+`tenant_memberships` join for multi-affiliation) was evaluated and deferred to
+Stage 7. The single guard against a costly future migration is
+`resolveTenantContext(profile)` (src/lib/tenant.ts) — the one authoritative
+chokepoint every tenant-scoped read derives its filter from, so Design 1→2
+becomes a resolver change, not a call-site sweep. `schools.status` (+ a
+reserved `slug`) were added as the only new tenant fields. Consequence:
+`profiles.identifier` stays GLOBALLY unique for Stage 6 (login resolves by
+identifier with no tenant predicate); tenant-qualified identifiers are the
+documented Stage 7 breaking point.
+
+## D-016 — Tenant isolation is enforced primarily at the trusted server boundary, with a DB backstop where it does not fight the demo-era anon policies
+
+Status: Accepted (Stage 6, 2026-08-12)
+
+Context: the public publishable key plus wide-open `anon` demo RLS policies
+(profiles/student_*/counseling read/user_notifications/mission_progress) are
+load-bearing for the app's own read/write paths and are owned by the Stage 9
+RLS overhaul (KI-007/011/014). A full DB-level tenant lockdown in Stage 6
+would either break those paths or duplicate Stage 9.
+
+Decision: the authoritative Stage 6 boundary is the trusted server layer —
+every tenant-scoped read/write derives its filter from
+`resolveTenantContext`, and the counseling status/details writes carry an
+ownership+tenant predicate in the same CAS statement. Two DB backstops were
+added where they do NOT touch the known-wrong anon family: a tenant WITH CHECK
+on the counseling INSERT policy (authenticated, D-011 era — live-verified to
+REJECT a crafted authenticated cross-tenant insert) and a tenant predicate in
+the `answer_professor_questions` RPC (assistant branch). The dead
+hardcoded-email anon UPDATE policy on counseling_requests was dropped. Per the
+D-014 discipline, Stage 6 does NOT patch the anon/pre-mapping policy family
+twice — the residual direct-PostgREST anon vectors are documented (KI-019) for
+Stage 9, never falsely asserted closed.
+
+## D-017 — The Stage 5 overbooking constraint stays byte-identical; tenancy is derived, not denormalized onto counseling_requests
+
+Status: Accepted (Stage 6, 2026-08-12)
+
+Context: Stage 6 §12 required re-evaluating every Stage 5 constraint for
+tenant semantics.
+
+Decision: `counseling_requests_no_active_overlap` (EXCLUDE USING gist,
+professor_id WITH =) is UNCHANGED. professor_id is a globally-unique uuid PK,
+so the constraint is inherently tenant-local — a University A booking can
+never conflict with a University B slot. Adding a tenant column to the
+exclusion key would WEAKEN it (a NULL/differing tenant exempts the row pair →
+overbooking), so counseling_requests gets NO denormalized tenant column;
+tenancy is derived through professor_id → professors.school_id. Verified
+live: the constraint definition is byte-identical post-migration, and the
+authenticated cross-tenant/same-tenant probe behaved correctly with the
+constraint intact.
+
+## D-018 — Notification tenancy is a nullable column stamped best-effort; the concrete broadcast leak is closed in app code
+
+Status: Accepted (Stage 6, 2026-08-12)
+
+Context: `user_notifications` broadcast rows (recipient_id NULL) have no
+parent to derive tenancy from, so the table needs its own school_id. A hard
+NOT NULL was tried and reverted (migration M7): several notification writers
+are ungated actions that can run with a null acting profile (support,
+roadmap-feedback, admin-approval — Stage 9 territory), so NOT NULL would
+silently break their gracefully-degraded notifications.
+
+Decision: `user_notifications.school_id` is NULLABLE + backfilled + indexed.
+The notification service stamps it best-effort — an explicit tenant wins, else
+it is resolved from the recipient's profile; a legacy/ungated broadcast may
+leave it NULL (Stage 9). The CONCRETE cross-tenant leak — the admin broadcast
+fanning recipients to every university — is closed directly in
+`sendAdminBroadcastNotification` (recipient query scoped to the admin's
+tenant + school_id stamped). Full write-side tenant coverage + NOT NULL +
+tenant-scoped notification-read RLS is folded into the Stage 9 notification
+overhaul (the anon SELECT policy means read isolation is not DB-enforceable
+until then regardless).
+
 ## D-011 — The busy feed reads with service-role authority; the GiST constraint stays the sole overbooking enforcer
 
 Status: Accepted (Stage 5, 2026-08-12)

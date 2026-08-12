@@ -78,6 +78,41 @@ async function getCurrentProfessorForAction(profileId?: string | null) {
   return data;
 }
 
+// Stage 6: the set of counseling requests a professor/assistant may mutate is
+// bounded by tenant. A professor may touch only their own professor's requests
+// (also closing the KI-014 ownership hole for this path); an assistant may
+// touch any professor's request WITHIN their own school. Returns the
+// professor_id filter to constrain the write, or null to fail closed (no
+// tenant, or a professor with no linked professors row — replacing the old
+// first-row fallback for this action, AUDIT X4/X12).
+async function resolveCounselingWriteProfessorIds(
+  profile: { id: string; role: string; school_id: string | null } | null,
+): Promise<string[] | null> {
+  const tenantId = profile?.school_id;
+  if (!profile || !tenantId) {
+    return null;
+  }
+
+  if (profile.role === "professor") {
+    const professor = await getCurrentProfessorForAction(profile.id);
+    return professor?.id ? [professor.id] : null;
+  }
+
+  // assistant (already role-gated by the caller): every professor in the tenant.
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("professors")
+    .select("id")
+    .eq("school_id", tenantId);
+
+  if (error) {
+    return null;
+  }
+
+  const ids = (data ?? []).map((row) => row.id as string);
+  return ids.length ? ids : null;
+}
+
 async function resolveOwnedCourse(courseValue: string, profileId?: string | null) {
   const [courseCode, courseId] = courseValue.split("|");
 
@@ -232,6 +267,14 @@ export async function updateCounselingStatus(formData: FormData) {
     return { ok: false, message: "거절 사유와 추천 시간대를 입력해 주세요." };
   }
 
+  // Stage 6: constrain the write to the caller's own tenant (and, for a
+  // professor, their own requests). A foreign-tenant requestId simply matches
+  // zero rows and returns the same controlled conflict as a lost CAS race.
+  const writableProfessorIds = await resolveCounselingWriteProfessorIds(profile);
+  if (!writableProfessorIds) {
+    return { ok: false, message: COUNSELING_STATUS_CONFLICT_MESSAGE };
+  }
+
   // Service role with the app-level role guard above: neither anon (select
   // revoked) nor authenticated (legacy auth.uid()=profiles.id policy) can
   // complete this update on the current schema.
@@ -245,6 +288,7 @@ export async function updateCounselingStatus(formData: FormData) {
       suggested_end: suggestedEnd || null,
     })
     .eq("id", requestId)
+    .in("professor_id", writableProfessorIds)
     .in("status", allowedFromStatuses)
     .select("id, student_id, topic, requested_start, suggested_start")
     .single();
@@ -313,17 +357,33 @@ export async function updateCounselingDetails(formData: FormData) {
     return { ok: false, message: "상담 일정을 찾을 수 없습니다." };
   }
 
+  // Stage 6: same tenant/ownership scope as updateCounselingStatus so a
+  // foreign-tenant requestId cannot have its note/location rewritten
+  // (AUDIT X4). This UPDATE has no CAS, so the ownership predicate IS its
+  // whole authorization.
+  const writableProfessorIds = await resolveCounselingWriteProfessorIds(profile);
+  if (!writableProfessorIds) {
+    return { ok: false, message: "상담 일정을 수정할 수 없습니다." };
+  }
+
   const supabase = createSupabaseAdminClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("counseling_requests")
     .update({
       professor_note: professorNote || null,
       location: location || null,
     })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .in("professor_id", writableProfessorIds)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
       return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+
+  if (!data) {
+    return { ok: false, message: "상담 일정을 수정할 수 없습니다. 최신 상태를 확인해 주세요." };
   }
 
   revalidatePath("/professor");

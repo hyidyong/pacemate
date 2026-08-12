@@ -28,6 +28,11 @@ export type UserNotificationCreateInput = {
   title: string;
   body: string;
   targetHref: string;
+  // Stage 6: the tenant this notification belongs to. Optional — when omitted
+  // for a recipient-addressed notification it is resolved from the recipient's
+  // profile; a broadcast (no recipient) should pass it explicitly. Left null
+  // only for legacy/ungated writers (Stage 9).
+  schoolId?: string | null;
 };
 
 export type NotificationCreateResult =
@@ -93,10 +98,14 @@ function normalizeNotificationInput(
     title,
     body,
     targetHref,
+    schoolId: input.schoolId ?? null,
   };
 }
 
-function toDatabaseNotification(input: UserNotificationCreateInput) {
+function toDatabaseNotification(
+  input: UserNotificationCreateInput,
+  schoolId: string | null,
+) {
   return {
     recipient_role: input.recipientRole,
     recipient_id: input.recipientId,
@@ -104,7 +113,42 @@ function toDatabaseNotification(input: UserNotificationCreateInput) {
     title: input.title,
     body: input.body,
     target_href: input.targetHref,
+    school_id: schoolId,
   };
+}
+
+// Stage 6: stamp the tenant on every notification. An explicit schoolId wins;
+// otherwise a recipient-addressed notification inherits its recipient's tenant
+// (one batched lookup). A broadcast with no explicit tenant is left null
+// (legacy/ungated writer — Stage 9). Never blocks notification creation.
+async function resolveSchoolIds(
+  supabase: SupabaseClient,
+  inputs: readonly UserNotificationCreateInput[],
+): Promise<(string | null)[]> {
+  const missing = Array.from(
+    new Set(
+      inputs
+        .filter((input) => !input.schoolId && input.recipientId)
+        .map((input) => input.recipientId as string),
+    ),
+  );
+
+  const schoolByProfile = new Map<string, string | null>();
+  if (missing.length) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, school_id")
+      .in("id", missing);
+    for (const row of data ?? []) {
+      schoolByProfile.set(row.id as string, (row.school_id as string | null) ?? null);
+    }
+  }
+
+  return inputs.map(
+    (input) =>
+      input.schoolId ??
+      (input.recipientId ? schoolByProfile.get(input.recipientId) ?? null : null),
+  );
 }
 
 export async function createUserNotification(
@@ -139,9 +183,10 @@ export async function createUserNotificationsWithClient(
   }
 
   try {
+    const schoolIds = await resolveSchoolIds(supabase, normalizedInputs);
     const { error } = await supabase
       .from("user_notifications")
-      .insert(normalizedInputs.map(toDatabaseNotification));
+      .insert(normalizedInputs.map((input, index) => toDatabaseNotification(input, schoolIds[index])));
 
     if (error) {
       return { ok: false, message: NOTIFICATION_CREATE_FAILED_MESSAGE };

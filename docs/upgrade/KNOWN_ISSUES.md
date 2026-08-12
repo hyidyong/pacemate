@@ -3,6 +3,59 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-019 — Stage 6 multi-tenancy: residual cross-tenant surfaces deferred by design
+
+Status: OPEN (documented 2026-08-12; full evidence in
+docs/upgrade/stage-06/TENANT_DATA_AUDIT.md §7.5/§8 and DESIGN.md). Stage 6
+enforced tenant isolation at the trusted server boundary for the counseling
+domain (booking, professor directory, status/details writes), the admin
+broadcast, community post writes/reads, and the assistant-answer RPC, plus a
+live-verified DB backstop on the counseling INSERT. The following remain and
+are NOT falsely asserted closed:
+
+- Anon direct-PostgREST access (AUDIT §7.5, A1/A2): the public publishable key
+  + demo `using(true)`-class anon policies still expose profiles,
+  student_profiles, student_courses, counseling_requests (SELECT),
+  user_notifications (SELECT/INSERT/UPDATE), student_mission_progress, and the
+  catalog to a crafted `curl`, independent of all app-layer scoping. This is
+  the KI-007/011/014 family — the Stage 9 RLS overhaul. Stage 6 deliberately
+  did not patch one policy into that known-wrong family twice (D-014/D-016
+  discipline).
+- Notification tenancy (D-018): `user_notifications.school_id` is nullable and
+  stamped best-effort; ungated writers (support, roadmap-feedback,
+  admin-approval, professor-questions broadcasts) may leave it NULL, and the
+  notification READ path is not yet tenant-scoped (the anon SELECT policy means
+  read isolation is not DB-enforceable until Stage 9). The concrete admin
+  broadcast recipient leak IS fixed.
+- Realtime notification channel (AUDIT §7.4): the `recipient_id` filter is
+  client-side over the anon SELECT policy; a crafted subscribe frame streams
+  other users' notifications. Full fix is the Stage 9 notification RLS.
+- Unscoped catalog/reviews reads (X7/X10, KI-016): course catalog
+  (course.service getCourseById / getCourseSummaries, student-community
+  getCourses) and course_reviews reads are not tenant-scoped. Lower-risk
+  (public reference content, 0 live reviews) and entangled with the anon-read
+  family; the community BOARD (getPosts) and post WRITES are scoped.
+- Professor report services (KI-016): read all offerings/progress, RLS-only,
+  no app tenant filter — Stage 9 defense-in-depth.
+- getRoadmapRequests / roadmap-revision reads (KI-017 B-31): unscoped;
+  roadmap_revision_requests targets are denormalized strings with no tenant
+  column (0 live rows).
+- Client state (AUDIT §7.2, X13): unkeyed localStorage
+  (pacemate_student_todos / _done / dismissed-course-notices) and the Zustand
+  chat store are not reset on logout → cross-account bleed on shared devices.
+  Not strictly a tenant-isolation gap (the app has no in-session tenant
+  switching, spec §19); a shared-device privacy follow-up.
+- Storage bucket `syllabus-files` policies are bucket-wide for all
+  authenticated users (AUDIT A3); storage path tenant-prefixing is Stage 7/8.
+- academic_terms NULL-school "global term" and course_equivalencies zero-UUID
+  bucket are accidental cross-tenant namespaces (0 affected live rows);
+  cleanup deferred to Stage 8.
+- professors(school_id, email) uniqueness not added (emails not guaranteed
+  present); documented.
+- schools.status is enforced in resolveTenantContext's contract but there is
+  no suspension flow in Stage 6; a suspended-tenant denial is a one-line
+  addition when Stage 7 builds suspension.
+
 ## KI-018 — Stage 5 concurrency findings deferred by design
 
 Status: OPEN (documented 2026-08-12; evidence in docs/upgrade/stage-05/DESIGN.md §13

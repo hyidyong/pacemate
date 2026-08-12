@@ -54,6 +54,7 @@ async function compileToDataUrl(url, replacements) {
 
 const domainUrl = new URL("../lib/counseling-slots.ts", import.meta.url).href;
 const uuidUrl = new URL("../lib/uuid.ts", import.meta.url).href;
+const tenantUrl = new URL("../lib/tenant.ts", import.meta.url).href;
 
 let modulesPromise;
 function loadModules() {
@@ -63,6 +64,7 @@ function loadModules() {
       [
         ['import "server-only";', ""],
         ['from "@/lib/counseling-slots"', `from ${JSON.stringify(domainUrl)}`],
+        ['from "@/lib/tenant"', `from ${JSON.stringify(tenantUrl)}`],
         ['from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`],
         ['from "@/lib/supabase/admin"', `from ${JSON.stringify(ADMIN_STUB)}`],
       ],
@@ -73,6 +75,7 @@ function loadModules() {
         ['"use server";', ""],
         ['from "next/cache"', `from ${JSON.stringify(CACHE_STUB)}`],
         ['from "@/lib/counseling-slots"', `from ${JSON.stringify(domainUrl)}`],
+        ['from "@/lib/tenant"', `from ${JSON.stringify(tenantUrl)}`],
         ['from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`],
         ['from "@/lib/supabase/admin"', `from ${JSON.stringify(ADMIN_STUB)}`],
         ['from "@/lib/uuid"', `from ${JSON.stringify(uuidUrl)}`],
@@ -99,10 +102,16 @@ function loadModules() {
 function makeFakeDb(name) {
   const state = { name, fixtures: {}, inserts: [], updates: [], insertHandler: null };
 
+  // Stage 6: resolve dotted columns (e.g. "professor.school_id") against the
+  // embedded row so the tenant !inner filters really filter the fixtures.
+  function readColumn(row, col) {
+    return col.split(".").reduce((value, key) => (value == null ? value : value[key]), row);
+  }
+
   function applyFilters(rows, filters) {
     return rows.filter((row) =>
       filters.every((f) =>
-        f.op === "eq" ? row[f.col] === f.val : f.val.includes(row[f.col]),
+        f.op === "eq" ? readColumn(row, f.col) === f.val : f.val.includes(readColumn(row, f.col)),
       ),
     );
   }
@@ -163,7 +172,9 @@ function makeFakeDb(name) {
 }
 
 const STUDENT = { id: "student-1", identifier: "student1@pacemate.edu", name: "김학생", role: "student", school_id: "s1", department_id: null };
-const PROFESSOR = { id: "prof-1", name: "김교수", office: "A-101", email: "prof1@pacemate.edu" };
+// school_id matches STUDENT.school_id so the tenant-scoped availability read
+// (professor.school_id = tenant) keeps this professor's window in the fixture.
+const PROFESSOR = { id: "prof-1", name: "김교수", office: "A-101", email: "prof1@pacemate.edu", school_id: "s1" };
 
 // One recurring Monday 10:00-11:00 window (30-min grid) always yields 4 slots
 // inside the +1..+14-day horizon regardless of the real clock.
@@ -211,7 +222,9 @@ function teardownWorld() {
 }
 
 async function firstLiveSlot(service, domain) {
-  const slots = await service.getAvailableCounselingSlots();
+  // Stage 6: the slot feed is tenant-scoped; the fixtures live in the student's
+  // tenant ("s1").
+  const slots = await service.getAvailableCounselingSlots(STUDENT.school_id);
   assert.ok(slots.length > 0, "fixtures must yield at least one bookable slot");
   return { slot: slots[0], slotId: domain.getCounselingSlotId(slots[0]) };
 }
@@ -305,11 +318,11 @@ test("M3: the page's displayed slot list excludes slots consumed by other studen
   const { service } = await loadModules();
   const { admin } = setupWorld();
   try {
-    const before = await service.getAvailableCounselingSlots();
+    const before = await service.getAvailableCounselingSlots(STUDENT.school_id);
     assert.ok(before.length > 0);
     admin.state.fixtures.counseling_requests.push(busyRowFor(before[0], "student-2"));
 
-    const after = await service.getAvailableCounselingSlots();
+    const after = await service.getAvailableCounselingSlots(STUDENT.school_id);
     assert.equal(
       after.length,
       before.length - 1,

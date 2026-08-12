@@ -24,12 +24,11 @@ type RoadmapCoursePageProps = {
   }>;
 };
 
-export function generateStaticParams() {
-  return roadmapCourses.map((course) => ({
-    courseId: course.id,
-  }));
-}
-
+// Stage 6: no generateStaticParams here. This route renders per-student
+// personalized content (getPersonalActionItems keyed on the onboarding
+// profile), so it must never prerender a shared per-courseId shell (AUDIT
+// X15). force-dynamic already wins today; removing the pairing closes the
+// latent footgun.
 export const dynamic = "force-dynamic";
 
 function includesAny(source: string, values: string[]) {

@@ -22,6 +22,14 @@ export async function sendAdminBroadcastNotification(
     return { ok: false, message: "관리자만 알림을 발송할 수 있습니다." };
   }
 
+  // Stage 6: an admin broadcasts only within their own tenant. Without this
+  // the recipient query fans out to every student/professor at every
+  // university (AUDIT X5).
+  const tenantId = profile.school_id;
+  if (!tenantId) {
+    return { ok: false, message: "소속 대학을 확인할 수 없어 알림을 발송할 수 없습니다." };
+  }
+
   const targetGroup = asTargetGroup(formData.get("targetGroup"));
   const titleValue = formData.get("title");
   const contentValue = formData.get("content");
@@ -41,6 +49,7 @@ export async function sendAdminBroadcastNotification(
   let recipients = admin
     .from("profiles")
     .select("id, role")
+    .eq("school_id", tenantId)
     .in("role", ["student", "professor"])
     .not("auth_user_id", "is", null);
   if (targetGroup === "STUDENT") recipients = recipients.eq("role", "student");
@@ -84,6 +93,7 @@ export async function sendAdminBroadcastNotification(
     recipientsToInsert.map((recipient) => ({
       recipient_id: recipient.id,
       recipient_role: recipient.role,
+      school_id: tenantId,
       target_group: targetGroup,
       category: "system",
       title,

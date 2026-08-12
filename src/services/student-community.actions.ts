@@ -558,12 +558,15 @@ export async function removeCourseFromSchedule(formData: FormData) {
 }
 
 export async function createCommunityPost(formData: FormData) {
-  const profileId = await getProfileId();
+  // Stage 6: the post's tenant comes from the server-verified session, never
+  // the client form field (which the composer used to populate from
+  // courses[0].school_id — AUDIT X9). The submitted schoolId is ignored.
+  const profile = await getDemoProfile();
+  const profileId = profile?.role === "student" ? profile.id : null;
   const title = requiredText(formData.get("title"));
   const content = requiredText(formData.get("content"));
   const category = requiredText(formData.get("category"), "question");
   const courseId = requiredText(formData.get("courseId"));
-  const schoolId = requiredText(formData.get("schoolId"));
   const displayMode = requiredText(formData.get("displayMode"), "anonymous");
 
   if (!profileId) {
@@ -580,7 +583,7 @@ export async function createCommunityPost(formData: FormData) {
     .insert({
       author_id: profileId,
       community_type: "student",
-      school_id: schoolId || null,
+      school_id: profile?.school_id ?? null,
       course_id: courseId || null,
       category,
       board_key: category,
