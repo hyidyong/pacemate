@@ -79,6 +79,11 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
     return null;
   }
 
+  // Same sanitizer as notification-list/menu — this was the one click path
+  // that pushed the raw href (Stage 4, audit A-29).
+  const safeNotificationTargetHref = (value: string) =>
+    value.startsWith("/") && !value.startsWith("//") ? value : "/notifications";
+
   const handleNotificationClick = async (notification: UserNotification) => {
     if (!notification.is_read) {
       setNotifications(previous => previous.map(item =>
@@ -90,7 +95,7 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
     if (notification.category === "counseling") {
       setSelectedNotification(notification);
     } else {
-      router.push(notification.target_href);
+      router.push(safeNotificationTargetHref(notification.target_href));
     }
   };
 
@@ -98,11 +103,22 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
     if (selectedNotification) {
       // The old handler pushed a hardcoded slot into a store no view reads.
       // The confirmed schedule lives on /counseling, so go there instead.
-      const target = selectedNotification.target_href || "/counseling";
+      const target = safeNotificationTargetHref(selectedNotification.target_href || "/counseling");
       setSelectedNotification(null);
       router.push(target);
     }
   };
+
+  // Modal dialog mechanics: Escape closes (audit D-5).
+  useEffect(() => {
+    if (!selectedNotification) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedNotification(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [selectedNotification]);
 
   const showScrollControls = visibleNotifications.length > 1;
 
@@ -180,15 +196,18 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
           <>
             <div
               onClick={() => setSelectedNotification(null)}
-              className="fixed inset-0 bg-black z-[110]"
+              className="fixed inset-0 bg-black/50 z-[110]"
             />
             <div
+              aria-label="알림 상세"
+              aria-modal="true"
+              role="dialog"
               className="fixed left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-[400px] bottom-10 md:bottom-auto md:top-1/2 md:-translate-y-1/2 bg-white rounded-3xl p-6 z-[120] shadow-2xl"
             >
               <div className="flex justify-between items-start mb-4">
                 <h3 className="text-lg font-bold text-gray-800">알림 상세</h3>
-                <button type="button" onClick={() => setSelectedNotification(null)} className="text-gray-400 hover:text-gray-600">
-                  <X size={20} />
+                <button type="button" aria-label="닫기" onClick={() => setSelectedNotification(null)} className="-m-2 rounded-full p-2 text-gray-400 hover:text-gray-600">
+                  <X size={20} aria-hidden="true" />
                 </button>
               </div>
 
@@ -203,7 +222,7 @@ export function NotificationStrip({ notifications: initialNotifications, showSum
               {selectedNotification.category === "counseling" && (
                 <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl text-xs mb-6">
                   <strong className="block mb-1">안내사항</strong>
-                  상담 일정을 시간표에 추가합니다. 정해진 시간에 맞춰 참석해 주세요.
+                  확인을 누르면 상담 페이지에서 일정을 확인할 수 있어요. 정해진 시간에 맞춰 참석해 주세요.
                 </div>
               )}
 

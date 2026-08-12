@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Check } from "lucide-react";
@@ -77,6 +77,7 @@ export function NotificationMenu({
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(() => dedupeMenuNotifications(notifications));
   const [toast, setToast] = useState<UserNotification | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [, startTransition] = useTransition();
   const unread = items.filter((item) => !item.is_read).length;
 
@@ -105,6 +106,25 @@ export function NotificationMenu({
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  // The dropdown could only be dismissed by clicking the bell again —
+  // Escape and outside clicks now close it (Stage 4, audit D-20).
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+    };
+  }, [open]);
+
   function openNotification(item: UserNotification) {
     setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, is_read: true } : entry));
     setOpen(false);
@@ -113,19 +133,18 @@ export function NotificationMenu({
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={menuRef}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         className="header-action-link header-icon-link notification-menu-link"
         aria-expanded={open}
-        aria-label={`알림 ${unread ? `읽지 않음 ${unread}개` : ""}`}
+        aria-label={unread ? `알림, 읽지 않음 ${unread}개` : "알림"}
       >
         <span className="notification-menu-icon">
           <Bell aria-hidden="true" />
           {unread ? <strong className="h-2.5 w-2.5 rounded-full bg-rose-400 text-transparent">새 알림</strong> : null}
         </span>
-        <span className="sr-only">알림</span>
       </button>
       {open ? (
         <div className="absolute right-0 top-full z-[200] mt-3 w-[min(20rem,calc(100vw-2rem))] rounded-3xl bg-white p-3 shadow-lg ring-1 ring-slate-100">
@@ -143,7 +162,12 @@ export function NotificationMenu({
                 className="flex w-full items-start gap-3 rounded-2xl bg-slate-50 px-3 py-3 text-left transition hover:bg-rose-50"
                 type="button"
               >
-                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-rose-400" aria-hidden="true" />
+                {/* The unread dot rendered unconditionally — every item
+                    looked unread (Stage 4, audit A-30). */}
+                <span
+                  className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.is_read ? "bg-slate-200" : "bg-rose-400"}`}
+                  aria-hidden="true"
+                />
                 <span className="min-w-0 flex-1">
                   <strong className="block truncate text-sm text-slate-800">{item.title}</strong>
                   <span className="mt-1 block line-clamp-2 text-xs leading-5 text-slate-500">{item.body}</span>
@@ -156,7 +180,7 @@ export function NotificationMenu({
         </div>
       ) : null}
       {toast ? (
-        <div className="fixed left-1/2 top-5 z-[300] w-[min(92vw,420px)] -translate-x-1/2 rounded-3xl bg-white px-5 py-4 shadow-lg ring-1 ring-slate-100">
+        <div role="status" className="fixed left-1/2 top-5 z-[300] w-[min(92vw,420px)] -translate-x-1/2 rounded-3xl bg-white px-5 py-4 shadow-lg ring-1 ring-slate-100">
           <p className="text-xs font-bold text-rose-500">새로운 알림</p>
           <strong className="mt-1 block text-sm text-slate-900">{toast.title}</strong>
           <p className="mt-1 text-sm text-slate-500">{toast.body}</p>
