@@ -113,9 +113,22 @@ export function buildAvailableCounselingSlots({
     }
   }
 
+  // Display cap applies PER PROFESSOR: a global cap over the merged
+  // chronological list let one professor's dense early availability crowd a
+  // later professor's real slots out of the list entirely (Stage 4, A-2).
+  // Slot membership per professor is unchanged — only list length is bounded.
+  const perProfessorCount = new Map<string, number>();
+
   return Array.from(slots.values())
     .sort((a, b) => a.start.localeCompare(b.start) || a.professorId.localeCompare(b.professorId))
-    .slice(0, 48);
+    .filter((slot) => {
+      const count = perProfessorCount.get(slot.professorId) ?? 0;
+      if (count >= 48) {
+        return false;
+      }
+      perProfessorCount.set(slot.professorId, count + 1);
+      return true;
+    });
 }
 
 // The canonical per-date primitive: every consumer that claims a time is

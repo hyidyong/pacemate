@@ -133,6 +133,49 @@ test("selection ignores a valid slot id paired with a different date", () => {
   );
 });
 
+test("one professor's dense availability cannot hide another professor's slots (per-professor cap)", () => {
+  // Stage 4 audit A-2: the display cap used to be a global slice(0, 48) over
+  // the merged chronological list, so a professor whose availability starts
+  // later in the 14-day window rendered as "no slots" while genuinely
+  // bookable. The cap must apply per professor.
+  const professorB = {
+    professorId: "22222222-2222-2222-2222-222222222222",
+    professorName: "두번째 교수",
+    professorOffice: null,
+    professorEmail: null,
+  };
+  const input = baseInput();
+  // Professor A: every weekday 09:00-18:00 → 18 slots/day, exceeds 48 within
+  // the first three weekdays of the window.
+  input.availability = [1, 2, 3, 4, 5].map((dayOfWeek) => ({
+    ...professor,
+    dayOfWeek,
+    specificDate: null,
+    startTime: "09:00",
+    endTime: "18:00",
+    slotMinutes: 30,
+    isActive: true,
+  }));
+  // Professor B: a single declared window in the second week of the horizon.
+  input.availability.push({
+    ...professorB,
+    dayOfWeek: null,
+    specificDate: "2026-07-23",
+    startTime: "10:00",
+    endTime: "11:00",
+    slotMinutes: 30,
+    isActive: true,
+  });
+
+  const slots = buildAvailableCounselingSlots(input);
+  const bSlots = slots.filter((slot) => slot.professorId === professorB.professorId);
+  const aSlots = slots.filter((slot) => slot.professorId === professor.professorId);
+
+  assert.equal(bSlots.length, 2, "professor B's declared window must stay visible");
+  assert.ok(aSlots.length <= 48, "each professor's list stays capped");
+  assert.ok(aSlots.length > 0, "professor A keeps their earliest slots");
+});
+
 test("selection never falls back to the first slot when the selected id is empty or stale", () => {
   const slots = buildAvailableCounselingSlots(baseInput());
   const selectedDate = "2026-07-13";

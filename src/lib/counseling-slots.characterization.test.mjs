@@ -273,7 +273,11 @@ test("one professor's busy sources never remove another professor's slots", () =
   assert.equal(slots.every((slot) => slot.professorId === PROFESSOR_A), true);
 });
 
-test("results cap at 48 slots, sorted by start then professor id", () => {
+test("results cap at 48 slots PER PROFESSOR, sorted by start then professor id", () => {
+  // Stage 4 (audit A-2) deliberately moved the display cap from a global
+  // slice(0, 48) to 48-per-professor: the global cap let one professor's
+  // dense early availability render another professor's real availability
+  // as "no slots". Slot membership per professor is unchanged.
   const weekdays = [1, 2, 3, 4, 5];
   const slots = buildAvailableCounselingSlots(
     baseInput({
@@ -285,7 +289,9 @@ test("results cap at 48 slots, sorted by start then professor id", () => {
     }),
   );
 
-  assert.equal(slots.length, 48);
+  assert.equal(slots.length, 96);
+  assert.equal(slots.filter((slot) => slot.professorId === PROFESSOR_A).length, 48);
+  assert.equal(slots.filter((slot) => slot.professorId === PROFESSOR_B).length, 48);
   for (let i = 1; i < slots.length; i += 1) {
     const ordered =
       slots[i - 1].start < slots[i].start ||
@@ -293,12 +299,15 @@ test("results cap at 48 slots, sorted by start then professor id", () => {
         slots[i - 1].professorId <= slots[i].professorId);
     assert.equal(ordered, true, `slots[${i - 1}] and slots[${i}] out of order`);
   }
-  // 18 chunks/professor on Mon 7/13 (36 total), then the earliest 6 chunks × 2 on Tue 7/14.
+  // Each professor keeps their EARLIEST 48 chunks: 18/day on Mon 7/13 and
+  // Tue 7/14, then the earliest 12 chunks on Wed 7/15 (ending 15:00 KST).
   const monday = slots.filter((slot) => slot.start.startsWith("2026-07-13"));
   const tuesday = slots.filter((slot) => slot.start.startsWith("2026-07-14"));
+  const wednesday = slots.filter((slot) => slot.start.startsWith("2026-07-15"));
   assert.equal(monday.length, 36);
-  assert.equal(tuesday.length, 12);
-  assert.equal(tuesday[tuesday.length - 1].start, kst("2026-07-14", "11:30"));
+  assert.equal(tuesday.length, 36);
+  assert.equal(wednesday.length, 24);
+  assert.equal(wednesday[wednesday.length - 1].start, kst("2026-07-15", "14:30"));
 });
 
 test("slot_minutes drives chunk size and drops a trailing partial chunk", () => {
