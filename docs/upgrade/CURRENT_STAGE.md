@@ -4,9 +4,13 @@
 
 Stage 7 / 10
 University SSO Readiness
-Status: IN PROGRESS on branch `upgrade/stage-7` (started 2026-08-12)
-Base: `main` @ 19a1124 (Stage 6 PR #40 merged 2026-08-12; `upgrade/stage-7`
-fast-forwarded onto merged `main`, clean, no rebase needed).
+Status: COMPLETE on branch `upgrade/stage-7` (2026-08-13) — awaiting PR
+review/merge. Base: `main` @ 19a1124 (Stage 6 PR #40 merged 2026-08-12).
+See docs/upgrade/stage-07/HANDOFF.md. Real university integration is
+BLOCKED — requires institution IdP configuration / credentials.
+
+Next stage: Stage 8 — NOT started. Stage 8 begins only after the Stage 7 PR
+merges, from the HANDOFF "Stage 8 inputs" section.
 
 ## Primary Objective
 
