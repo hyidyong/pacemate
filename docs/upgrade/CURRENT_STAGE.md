@@ -4,39 +4,48 @@
 
 Stage 5 / 10
 Reservation Transaction Reliability
-Status: IN PROGRESS on branch `upgrade/stage-5` (started 2026-08-12).
-Base: `main` @ 279f715 (Stage 4 merge, PR #38).
+Status: COMPLETE on branch `upgrade/stage-5` (2026-08-12) — awaiting PR
+review/merge.
+Base: `main` @ 279f715 (Stage 4 merge, PR #38). See
+docs/upgrade/stage-05/HANDOFF.md.
 
-## Primary Objective
+Next stage: Stage 6 (multi-tenancy) — NOT started. Stage 6 must begin from
+the Stage 5 HANDOFF's "Stage 6 inputs" section after the PR merges.
 
-Make reservation creation and cancellation transactionally reliable under real
-concurrent usage: concurrent bookings, duplicated/retried requests, stale
-client slot state, overlapping booking+cancellation, and late responses must
-never overbook a slot that is no longer legally bookable. UI availability is
-never authoritative booking proof; the authoritative layer must enforce the
-Stage 2 canonical semantics (D-004/D-005/D-006) atomically.
+## Primary Objective (achieved)
 
-## Working documents
+Reservation creation and cancellation are transactionally reliable under
+concurrency: the busy feed reads with service-role authority so displayed
+availability and server revalidation see every student's active bookings
+(D-011); constraint conflicts (23P01/23505) surface as controlled
+slot-conflict vocabulary with same-round-trip list healing; duplicates of the
+caller's own committed booking are acknowledged idempotently (D-013); status
+transitions are compare-and-set against a legal matrix — terminal rows stay
+terminal, competing transitions have exactly one winner, cancel notifications
+tell the truth (D-012); students can cancel their own active requests
+(D-014, KI-017). The live-verified GiST exclusion constraint remains the sole
+overbooking enforcer. No schema change, no migration, no new dependency.
 
-- docs/upgrade/stage-05/DESIGN.md
-- docs/upgrade/stage-05/IMPLEMENTATION_PLAN.md
-- docs/upgrade/stage-05/CONCURRENCY_TEST_MATRIX.md
-- docs/upgrade/stage-05/HANDOFF.md
+Verification: full suite 222/219 (same KI-002 trio), Stage 2 invariant suites
+green, typecheck/lint at baseline, build + bundle budgets met (shared 102 kB
+unchanged), rendered QA on the production build with a LIVE staged
+cross-student race + student cancel loop + service-role cleanup, zero console
+errors.
 
 ## Non-goals
 
 Do not begin:
 
-- Stage 6 multi-tenancy (tenants, tenant tables, school routing, SSO)
-- Stage 7 SSO · Stage 8 reliability/scale
-- Stage 9 security architecture (KI-011/KI-014 remain open)
+- Stage 6 multi-tenancy · Stage 7 SSO · Stage 8 reliability/scale (KI-018
+  outbox/bounds live there)
+- Stage 9 security architecture (KI-011/KI-014 ownership + RLS overhaul,
+  incl. the student self-cancel policy)
 - Stage 10 CI/CD
 
-Stage 5 must preserve Stage 2 canonical availability semantics, Stage 3
-performance budgets, and Stage 4 role/mobile/desktop UX. Minimal UI changes
-only where needed to communicate transaction conflicts honestly.
+Deferred Stage 5 findings live in KI-018.
 
 ## Completion rule
 
-Stage 5 completes on the branch only; merging requires external review and
-human approval. Never merge automatically. Never start Stage 6 automatically.
+Stage 5 work is complete on the branch only; merging requires external review
+and human approval (see HANDOFF "Exact next action"). Never merge
+automatically. Never start Stage 6 automatically.

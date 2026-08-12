@@ -1,8 +1,9 @@
 # Stage 5 Implementation Plan
 
-Status: ACTIVE (2026-08-12). Small, independently testable tasks; every
-correctness change is Red → Green. Matrix rows (M1–M10) and design sections
-(§) referenced throughout. One concern per commit, as in Stage 4.
+Status: COMPLETE (2026-08-12). All tasks executed in order; T1 probe PASSED
+(23P01 live), T2–T7 shipped Red → Green (commits 9aacb0d, 45d251c, d485ac5,
+34befa0), T8/T9 evidence recorded in HANDOFF.md. Matrix rows (M1–M10) and
+design sections (§) referenced throughout. One concern per commit.
 
 ## T1 — Verify the live GiST constraint (evidence gate)
 
