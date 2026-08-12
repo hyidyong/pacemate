@@ -20,15 +20,10 @@
 
 import { writeFileSync } from "node:fs";
 import { loadEnvLocal, requireEnv } from "../loadtest/lib/env.mjs";
-import { createRestClient } from "../loadtest/lib/supabase-rest.mjs";
 import { assertSafeToProbe } from "./lib/probe-guard.mjs";
-import {
-  PROBE_MARKER,
-  provisionProbeTenants,
-  signIn,
-  teardownProbeTenants,
-  verifyTornDown,
-} from "./lib/probe-fixtures.mjs";
+import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./lib/probe-rest.mjs";
+import { ProbeLedger, sweepOrphans, verifyNoResidue } from "./lib/probe-ledger.mjs";
+import { PROBE_MARKER, PROBE_PASSWORD, provisionProbeTenants } from "./lib/probe-fixtures.mjs";
 
 // Every table the app can reach. `expectAnonRead` records the DESIGN intent, so
 // the probe reports "anon can read a table it should not" rather than merely
@@ -104,20 +99,46 @@ async function main() {
 
   assertSafeToProbe({ ...env, ...process.env }, url);
 
-  const rest = createRestClient({ url, serviceRoleKey: serviceKey });
+  // Bounded timeouts everywhere: a hung request during CLEANUP is the one hang
+  // that must never be indefinite, because it leaves fixtures alive.
+  const rest = createProbeRest({ url, serviceRoleKey: serviceKey });
+  const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey });
+  const signIn = signInFactory({ url, anonKey });
+
+  // Operator-run recovery for the case `finally` cannot cover (SIGKILL, crash).
+  if (process.argv.includes("--sweep")) {
+    const { removed, failures } = await sweepOrphans({ rest, auth });
+    console.log(removed.length ? `Swept: ${removed.join(", ")}` : "Nothing to sweep.");
+    const residue = await verifyNoResidue({ rest, auth });
+    if (failures.length || !residue.clean) {
+      console.error(`Sweep incomplete. failures=${JSON.stringify(failures)} residue=${JSON.stringify(residue)}`);
+      process.exit(1);
+    }
+    console.log("Sweep verified clean.");
+    process.exit(0);
+  }
+
   const { check, results } = makeReporter();
 
   const anonHeaders = { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" };
   const asAnon = (path, init) => rawFetch(url, path, anonHeaders, init);
 
-  console.log(`Provisioning two disposable probe tenants (marker "${PROBE_MARKER}")…`);
-  const fixtures = await provisionProbeTenants({ rest, url, serviceRoleKey: serviceKey });
-  const A = fixtures.tenants.A;
-  const B = fixtures.tenants.B;
+  // Codex finding 1: the ledger belongs to the CALLER and provisioning happens
+  // INSIDE the try, so a partial provision — or a provisioner that never
+  // returns — is still fully cleaned up by the finally below.
+  const ledger = new ProbeLedger({ rest, auth });
+  let provisionOrProbeError = null;
+  let cleanupFailures = [];
+  let residue = { residue: [], unverifiable: ["cleanup did not run"], clean: false };
 
   try {
-    const tokenA = await signIn({ url, anonKey, email: A.email });
-    const tokenB = await signIn({ url, anonKey, email: B.email });
+    console.log(`Provisioning two disposable probe tenants (marker "${PROBE_MARKER}")…`);
+    const fixtures = await provisionProbeTenants(ledger);
+    const A = fixtures.tenants.A;
+    const B = fixtures.tenants.B;
+
+    const tokenA = await signIn(A.email, PROBE_PASSWORD);
+    const tokenB = await signIn(B.email, PROBE_PASSWORD);
     const headersFor = (token) => ({
       apikey: anonKey,
       Authorization: `Bearer ${token}`,
@@ -507,14 +528,13 @@ async function main() {
         `PATCH ${res.status}; is_read is now ${after?.is_read}`,
       );
     }
+  } catch (error) {
+    // Recorded rather than rethrown, so cleanup below always runs and its
+    // outcome is reported alongside the failure that caused it.
+    provisionOrProbeError = error;
   } finally {
-    await teardownProbeTenants({ rest, fixtures });
-    const leftovers = await verifyTornDown({ rest });
-    console.log(
-      leftovers.length
-        ? `\n!! TEARDOWN LEFTOVERS: ${leftovers.join(", ")}`
-        : "\nTeardown verified: 0 probe rows remain.",
-    );
+    cleanupFailures = await ledger.cleanup();
+    residue = await verifyNoResidue({ rest, auth });
   }
 
   console.log("\n=== Stage 9 direct Data API probe ===\n");
@@ -525,12 +545,45 @@ async function main() {
   }
   console.log(`\n${results.length} checks, ${failed} FAILED (each failure is a security finding).`);
 
-  const jsonFlag = process.argv.indexOf("--json");
-  if (jsonFlag !== -1 && process.argv[jsonFlag + 1]) {
-    writeFileSync(process.argv[jsonFlag + 1], JSON.stringify({ results }, null, 2));
+  console.log("\n=== Fixture cleanup ===");
+  if (cleanupFailures.length) {
+    for (const failure of cleanupFailures) {
+      console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id} (${failure.label}): ${failure.message}`);
+    }
+  } else {
+    console.log("All ledgered resources removed.");
+  }
+  if (residue.residue.length) {
+    for (const entry of residue.residue) console.error(`[RESIDUE] ${entry}`);
+  }
+  if (residue.unverifiable.length) {
+    for (const entry of residue.unverifiable) console.error(`[UNVERIFIABLE] ${entry}`);
+  }
+  if (residue.clean && !cleanupFailures.length) {
+    console.log("Residue verification: clean.");
+  } else {
+    console.error(
+      "\nRun `node scripts/security/rls-probe.mjs --sweep` to remove marked residue, then re-verify.",
+    );
   }
 
-  process.exit(failed === 0 ? 0 : 1);
+  const jsonFlag = process.argv.indexOf("--json");
+  if (jsonFlag !== -1 && process.argv[jsonFlag + 1]) {
+    writeFileSync(
+      process.argv[jsonFlag + 1],
+      JSON.stringify({ results, cleanupFailures, residue }, null, 2),
+    );
+  }
+
+  if (provisionOrProbeError) {
+    console.error(`\nProbe aborted: ${provisionOrProbeError.message}`);
+  }
+
+  // A run that cannot PROVE it cleaned up is not a passing run, whatever the
+  // security checks said.
+  const ok =
+    failed === 0 && cleanupFailures.length === 0 && residue.clean && !provisionOrProbeError;
+  process.exit(ok ? 0 : 1);
 }
 
 main().catch((error) => {
