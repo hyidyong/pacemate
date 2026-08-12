@@ -75,24 +75,45 @@ export function evaluateTargetGuard(env, baseUrl) {
 }
 
 /**
+ * Projects known to be PRODUCTION. Compiled into the repository on purpose:
+ * a denylist that lives in an environment variable is just another thing the
+ * operator can assert away, and the whole point of this list is that it cannot
+ * be overridden by the environment being checked.
+ *
+ * Add a ref here whenever a new production project appears.
+ */
+export const KNOWN_PRODUCTION_PROJECT_REFS = new Set(["szztsqdnvenfbgxtylkl"]);
+
+/**
+ * A tenant may only be treated as isolated when the DATABASE says so. The
+ * marker lives in `schools.slug`, is read back server-side, and cannot be
+ * conjured by passing a UUID on the command line.
+ */
+export const TEST_TENANT_SLUG_PREFIX = "pacemate-loadtest-";
+
+/**
  * Finding 4 — the database the harness will MUTATE.
  *
- * Three independent confirmations are required, and all of them must be
- * explicit. Cleanup is not one of them.
+ * Round 2 of this guard was still bypassable, and both bypasses were
+ * reproduced before this change:
  *
- *  1. `PACEMATE_LOADTEST_ALLOW_MUTATIONS=1` — a deliberate destructive opt-in.
- *  2. `PACEMATE_LOADTEST_EXPECTED_PROJECT_REF` equal to the ref actually derived
- *     from the configured Supabase URL — proves the operator knows WHICH
- *     project is about to be written to, so a stale .env.local cannot silently
- *     redirect the run at production.
- *  3. Either the target is declared non-production
- *     (`PACEMATE_LOADTEST_TARGET_KIND=non-production`) or an explicitly
- *     isolated tenant is named (`PACEMATE_LOADTEST_SCHOOL_ID`), so a shared
- *     project can still be used without touching real tenants' data.
+ *   A. `PACEMATE_LOADTEST_TARGET_KIND=non-production` on the production
+ *      project — the operator simply asserts safety and is believed.
+ *   B. `PACEMATE_LOADTEST_SCHOOL_ID=<the real tenant's uuid>` — an arbitrary
+ *      UUID was accepted as proof of isolation.
+ *
+ * Self-assertion is therefore no longer evidence. On a project in
+ * KNOWN_PRODUCTION_PROJECT_REFS, `TARGET_KIND` is IGNORED entirely, and the
+ * only remaining path is a tenant whose test marker is verified against the
+ * database by verifyIsolatedTenant() before anything is written.
+ *
+ * This function stays pure and synchronous (env in, verdict out); the
+ * server-side confirmation it demands is performed by assertSafeToMutate().
  */
 export function evaluateMutationGuard(env, supabaseUrl) {
   const problems = [];
   const actualRef = projectRefFromSupabaseUrl(supabaseUrl);
+  const isKnownProduction = actualRef ? KNOWN_PRODUCTION_PROJECT_REFS.has(actualRef) : false;
 
   if (env.PACEMATE_LOADTEST_ALLOW_MUTATIONS !== "1") {
     problems.push(
@@ -113,11 +134,24 @@ export function evaluateMutationGuard(env, supabaseUrl) {
     );
   }
 
-  const targetKind = env.PACEMATE_LOADTEST_TARGET_KIND;
   const isolatedSchoolId = env.PACEMATE_LOADTEST_SCHOOL_ID;
-  if (targetKind !== "non-production" && !isolatedSchoolId) {
+  const declaredNonProduction = env.PACEMATE_LOADTEST_TARGET_KIND === "non-production";
+
+  if (isKnownProduction) {
+    // Nothing the environment can say makes this project non-production.
+    if (declaredNonProduction && !isolatedSchoolId) {
+      problems.push(
+        `project "${actualRef}" is a KNOWN PRODUCTION project; PACEMATE_LOADTEST_TARGET_KIND=non-production is self-asserted and is ignored here`,
+      );
+    }
+    if (!isolatedSchoolId) {
+      problems.push(
+        `project "${actualRef}" is a KNOWN PRODUCTION project; the only permitted path is a dedicated test tenant whose slug starts with "${TEST_TENANT_SLUG_PREFIX}", named via PACEMATE_LOADTEST_SCHOOL_ID`,
+      );
+    }
+  } else if (!declaredNonProduction && !isolatedSchoolId) {
     problems.push(
-      'target is not declared non-production; set PACEMATE_LOADTEST_TARGET_KIND=non-production, or name an isolated tenant with PACEMATE_LOADTEST_SCHOOL_ID',
+      'target is not declared non-production; set PACEMATE_LOADTEST_TARGET_KIND=non-production, or name a marked test tenant with PACEMATE_LOADTEST_SCHOOL_ID',
     );
   }
 
@@ -125,15 +159,53 @@ export function evaluateMutationGuard(env, supabaseUrl) {
     allowed: problems.length === 0,
     problems,
     projectRef: actualRef,
+    isKnownProduction,
     isolatedSchoolId: isolatedSchoolId ?? null,
-    declaredNonProduction: targetKind === "non-production",
+    declaredNonProduction,
+    // A claimed tenant is never trusted on its own; the caller must confirm it.
+    requiresTenantVerification: Boolean(isolatedSchoolId),
   };
 }
 
-export function assertSafeToMutate(env, { supabaseUrl, baseUrl }) {
+/**
+ * Server-side confirmation that a claimed tenant really is a disposable test
+ * tenant. Reads the row back and checks the marker the database holds — a UUID
+ * on the command line proves nothing.
+ */
+export async function verifyIsolatedTenant(rest, schoolId) {
+  const rows = await rest.select("schools", `select=id,name,slug&id=eq.${schoolId}`);
+  const school = rows[0];
+
+  if (!school) {
+    return { verified: false, reason: `no schools row with id ${schoolId}` };
+  }
+  if (typeof school.slug !== "string" || !school.slug.startsWith(TEST_TENANT_SLUG_PREFIX)) {
+    return {
+      verified: false,
+      reason: `tenant "${school.name}" (slug ${school.slug ?? "null"}) does not carry the test marker "${TEST_TENANT_SLUG_PREFIX}" — naming a real tenant's UUID does not make it isolated`,
+    };
+  }
+  return { verified: true, school };
+}
+
+export async function assertSafeToMutate(env, { supabaseUrl, baseUrl, rest }) {
   const target = evaluateTargetGuard(env, baseUrl);
   const mutation = evaluateMutationGuard(env, supabaseUrl);
   const problems = [...target.problems, ...mutation.problems];
+
+  // Confirm the claimed tenant against the database before anything is written.
+  // Only attempted when the synchronous checks already passed, so a refusal is
+  // never masked by a lookup error.
+  if (!problems.length && mutation.requiresTenantVerification) {
+    if (!rest) {
+      problems.push("cannot verify the claimed test tenant: no database client was provided");
+    } else {
+      const verification = await verifyIsolatedTenant(rest, mutation.isolatedSchoolId);
+      if (!verification.verified) {
+        problems.push(verification.reason);
+      }
+    }
+  }
 
   if (problems.length) {
     throw new Error(

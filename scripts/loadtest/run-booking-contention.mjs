@@ -27,8 +27,11 @@
 // Required before any mutation:
 //   PACEMATE_LOADTEST_ALLOW_MUTATIONS=1          deliberate destructive opt-in
 //   PACEMATE_LOADTEST_EXPECTED_PROJECT_REF=<ref> must equal the configured project
-//   and either PACEMATE_LOADTEST_TARGET_KIND=non-production
-//          or PACEMATE_LOADTEST_SCHOOL_ID=<uuid> an explicitly isolated tenant
+//   and either PACEMATE_LOADTEST_TARGET_KIND=non-production  (ignored on a
+//                                                 KNOWN PRODUCTION project)
+//          or PACEMATE_LOADTEST_SCHOOL_ID=<uuid> a tenant whose slug carries the
+//                                                 test marker, VERIFIED against
+//                                                 the database before any write
 //
 // Usage:
 //   node scripts/loadtest/run-booking-contention.mjs --students=12
@@ -62,7 +65,7 @@ async function main() {
   // Cleanup in the finally block is not protection — it does nothing if the
   // process is killed, if cleanup errors, or if the operator aimed this at the
   // wrong project.
-  const guard = assertSafeToMutate(process.env, { supabaseUrl, baseUrl: BASE_URL });
+  const guard = await assertSafeToMutate(process.env, { supabaseUrl, baseUrl: BASE_URL, rest });
 
   console.log(`Booking contention run ${runId} — ${STUDENT_COUNT} concurrent students`);
   console.log(

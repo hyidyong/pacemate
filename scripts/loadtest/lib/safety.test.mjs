@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  KNOWN_PRODUCTION_PROJECT_REFS,
+  TEST_TENANT_SLUG_PREFIX,
   assertSafeToMutate,
   evaluateMutationGuard,
   evaluateTargetGuard,
   isLoopbackUrl,
   projectRefFromSupabaseUrl,
+  verifyIsolatedTenant,
 } from "./safety.mjs";
 
 // Stage 8 review findings 4 and 5. The booking harness provisions auth users
@@ -55,28 +58,6 @@ test("a correctly declared non-production project is allowed", () => {
   assert.equal(result.declaredNonProduction, true);
 });
 
-test("a shared project is allowed only with an explicitly isolated tenant", () => {
-  const withoutTenant = evaluateMutationGuard(
-    {
-      PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
-      PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: "szztsqdnvenfbgxtylkl",
-    },
-    PROD_URL,
-  );
-  assert.equal(withoutTenant.allowed, false, "no isolation declared — must refuse");
-
-  const withTenant = evaluateMutationGuard(
-    {
-      PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
-      PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: "szztsqdnvenfbgxtylkl",
-      PACEMATE_LOADTEST_SCHOOL_ID: "99999999-0000-4000-8000-000000000099",
-    },
-    PROD_URL,
-  );
-  assert.equal(withTenant.allowed, true, withTenant.problems.join("; "));
-  assert.equal(withTenant.isolatedSchoolId, "99999999-0000-4000-8000-000000000099");
-});
-
 test("loopback application targets need no opt-in", () => {
   for (const url of ["http://127.0.0.1:3000", "http://localhost:3000"]) {
     const result = evaluateTargetGuard({}, url);
@@ -105,10 +86,11 @@ test("a remote application target requires opt-in, https, and an expected host",
   assert.equal(ok.allowed, true, ok.problems.join("; "));
 });
 
-test("assertSafeToMutate throws with an actionable message and does not claim cleanup protects anything", () => {
+test("assertSafeToMutate rejects with an actionable message and does not claim cleanup protects anything", async () => {
   let message = "";
   try {
-    assertSafeToMutate({}, { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000" });
+    // Async since round 2: a claimed tenant is confirmed against the database.
+    await assertSafeToMutate({}, { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000" });
     assert.fail("expected a refusal");
   } catch (error) {
     message = error.message;
@@ -122,4 +104,117 @@ test("url helpers behave", () => {
   assert.equal(projectRefFromSupabaseUrl("not a url"), null);
   assert.equal(isLoopbackUrl("http://127.0.0.1:3000"), true);
   assert.equal(isLoopbackUrl("https://example.com"), false);
+});
+
+// --- Review finding 4 (round 2): self-assertion is not evidence -------------
+//
+// Both bypasses below were reproduced against the previous guard before this
+// change: it allowed destructive runs against the PRODUCTION project either by
+// declaring it non-production, or by naming an arbitrary school UUID (including
+// the real tenant's) as "isolated".
+
+const PROD_REF = "szztsqdnvenfbgxtylkl";
+const REAL_TENANT_UUID = "862b661c-810a-4440-ba76-722b2fcf8d6a";
+
+test("BYPASS A: declaring the production project non-production is refused", () => {
+  const result = evaluateMutationGuard(
+    {
+      PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
+      PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: PROD_REF,
+      PACEMATE_LOADTEST_TARGET_KIND: "non-production",
+    },
+    PROD_URL,
+  );
+
+  assert.equal(result.allowed, false, "a self-asserted label must not make production safe");
+  assert.ok(
+    result.problems.some((p) => p.includes("self-asserted") || p.includes("KNOWN PRODUCTION")),
+    `refusal must name the reason, got: ${result.problems.join("; ")}`,
+  );
+});
+
+test("BYPASS B: an arbitrary school UUID on production is not proof of isolation", async () => {
+  const sync = evaluateMutationGuard(
+    {
+      PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
+      PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: PROD_REF,
+      PACEMATE_LOADTEST_SCHOOL_ID: REAL_TENANT_UUID,
+    },
+    PROD_URL,
+  );
+  // The synchronous stage cannot know the tenant is real, so it must demand
+  // server-side verification rather than allowing the run outright.
+  assert.equal(sync.requiresTenantVerification, true, "a claimed tenant must always be verified");
+
+  // The database says this tenant carries no test marker.
+  const rest = {
+    select: async () => [{ id: REAL_TENANT_UUID, name: "계명대학교", slug: "kmu" }],
+  };
+  const verification = await verifyIsolatedTenant(rest, REAL_TENANT_UUID);
+  assert.equal(verification.verified, false, "a real tenant must not verify as isolated");
+  assert.match(verification.reason, /does not carry the test marker/);
+
+  await assert.rejects(
+    () =>
+      assertSafeToMutate(
+        {
+          PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
+          PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: PROD_REF,
+          PACEMATE_LOADTEST_SCHOOL_ID: REAL_TENANT_UUID,
+        },
+        { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000", rest },
+      ),
+    /does not carry the test marker/,
+    "naming a real tenant's UUID must not authorize destructive work on production",
+  );
+});
+
+test("a genuinely marked test tenant on a shared project is allowed", async () => {
+  const markedId = "77777777-0000-4000-8000-000000000077";
+  const rest = {
+    select: async () => [
+      { id: markedId, name: "load test university", slug: `${TEST_TENANT_SLUG_PREFIX}alpha` },
+    ],
+  };
+
+  const guard = await assertSafeToMutate(
+    {
+      PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
+      PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: PROD_REF,
+      PACEMATE_LOADTEST_SCHOOL_ID: markedId,
+    },
+    { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000", rest },
+  );
+
+  assert.equal(guard.isolatedSchoolId, markedId);
+  assert.equal(guard.isKnownProduction, true, "the project is still production; only the tenant is isolated");
+});
+
+test("a claimed tenant that does not exist is refused", async () => {
+  const rest = { select: async () => [] };
+  const verification = await verifyIsolatedTenant(rest, "12345678-0000-4000-8000-000000000000");
+  assert.equal(verification.verified, false);
+  assert.match(verification.reason, /no schools row/);
+});
+
+test("verification cannot be skipped by omitting the database client", async () => {
+  await assert.rejects(
+    () =>
+      assertSafeToMutate(
+        {
+          PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
+          PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: PROD_REF,
+          PACEMATE_LOADTEST_SCHOOL_ID: REAL_TENANT_UUID,
+        },
+        { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000" },
+      ),
+    /cannot verify the claimed test tenant/,
+  );
+});
+
+test("the production denylist is compiled in, not environment-supplied", () => {
+  assert.ok(
+    KNOWN_PRODUCTION_PROJECT_REFS.has(PROD_REF),
+    "the live project must be listed as production in the repository itself",
+  );
 });
