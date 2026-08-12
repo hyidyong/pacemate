@@ -25,8 +25,12 @@ function toDataUrl(code) {
 // test after the first write into the first test's recorder — and a real
 // vulnerability would look like a pass. (The production module is likewise a
 // lazy Proxy, so this matches its shape.)
-const ANON_STUB = toDataUrl(
-  "export const supabase = { from: (...args) => globalThis.__stage8AiClient.from(...args) };",
+// Stage 9: the module reads and writes through the caller's own session client
+// now that the `demo anon ...` policies are gone, so the stub stands in for
+// createSupabaseServerClient instead of the module-level anon client. The lazy
+// indirection is unchanged and still matters — see the comment above.
+const SESSION_CLIENT_STUB = toDataUrl(
+  "export const createSupabaseServerClient = async () => ({ from: (...args) => globalThis.__stage8AiClient.from(...args) });",
 );
 const SESSION_SERVICE_STUB = toDataUrl(
   "export const getDemoProfile = async () => globalThis.__stage8AiProfile;",
@@ -38,7 +42,7 @@ function loadActions() {
     let source = await readFile(new URL("./ai-tutor.actions.ts", import.meta.url), "utf8");
     for (const [from, to] of [
       ['"use server";', ""],
-      ['from "@/lib/supabase/client"', `from ${JSON.stringify(ANON_STUB)}`],
+      ['from "@/lib/supabase/server"', `from ${JSON.stringify(SESSION_CLIENT_STUB)}`],
       ['from "@/services/session.service"', `from ${JSON.stringify(SESSION_SERVICE_STUB)}`],
     ]) {
       source = source.split(from).join(to);

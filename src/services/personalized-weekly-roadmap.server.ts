@@ -326,6 +326,10 @@ async function generateWithOpenAi(context: unknown): Promise<AiWeeklyRoadmap[] |
           { role: "user", content: JSON.stringify(context) },
         ],
       }),
+      // Stage 8 bounded three of the four OpenAI calls and missed this one, so a
+      // slow upstream pinned the serverless invocation until the platform killed
+      // it. Same budget as the other generation calls.
+      signal: AbortSignal.timeout(20_000),
     });
     if (!response.ok) return null;
     const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
