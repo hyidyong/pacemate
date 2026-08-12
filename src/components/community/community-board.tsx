@@ -519,6 +519,7 @@ export function CommunityBoard({
                     <p className="text-sm text-gray-400">아직 댓글이 없습니다. 첫 댓글을 남겨보세요.</p>
                   )}
                   <textarea
+                    aria-label="댓글 입력"
                     onChange={(event) => setCommentDraft(event.target.value)}
                     placeholder="댓글을 입력해 주세요"
                     rows={3}

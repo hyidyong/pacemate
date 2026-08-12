@@ -96,6 +96,7 @@ export function RegisterCourseDialog({
                   className="grid gap-2 sm:grid-cols-[0.8fr_1fr_1fr_1.2fr_auto] sm:items-center"
                 >
                   <select
+                    aria-label={`${index + 1}번째 시간 요일`}
                     value={slot.day}
                     onChange={(event) => updateSlot(index, { day: event.target.value })}
                     className="rounded-md border px-2 py-1.5 text-sm"
@@ -107,18 +108,21 @@ export function RegisterCourseDialog({
                     ))}
                   </select>
                   <input
+                    aria-label={`${index + 1}번째 시간 시작`}
                     type="time"
                     value={slot.startTime}
                     onChange={(event) => updateSlot(index, { startTime: event.target.value })}
                     className="rounded-md border px-2 py-1.5 text-sm"
                   />
                   <input
+                    aria-label={`${index + 1}번째 시간 종료`}
                     type="time"
                     value={slot.endTime}
                     onChange={(event) => updateSlot(index, { endTime: event.target.value })}
                     className="rounded-md border px-2 py-1.5 text-sm"
                   />
                   <input
+                    aria-label={`${index + 1}번째 시간 강의실`}
                     type="text"
                     placeholder="강의실"
                     value={slot.classroom}
@@ -130,7 +134,7 @@ export function RegisterCourseDialog({
                     onClick={() => removeSlot(index)}
                     disabled={slots.length === 1}
                     className="text-gray-400 hover:text-red-500 disabled:opacity-30"
-                    aria-label="시간 삭제"
+                    aria-label={`${index + 1}번째 시간 삭제`}
                   >
                     <Trash2 size={16} />
                   </button>

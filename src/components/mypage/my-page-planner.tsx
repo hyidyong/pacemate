@@ -756,6 +756,7 @@ export function MyPagePlanner({
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
+              aria-label="과목 검색"
               type="text"
               placeholder="과목명, 코드, 분류 검색"
               className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"

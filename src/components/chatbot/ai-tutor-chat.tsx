@@ -70,6 +70,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
   const [isEscalationAnonymous, setIsEscalationAnonymous] = useState(false);
   const [isEscalationSubmitting, setIsEscalationSubmitting] = useState(false);
   const [submittedEscalationIds, setSubmittedEscalationIds] = useState<Set<string>>(new Set());
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const escalationSubmissionKeys = useRef(new Map<string, string>());
@@ -253,8 +254,8 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
             >
               <div className="flex items-center justify-between border-b border-gray-200 bg-white p-4">
                 <span className="font-semibold text-gray-800">채팅 기록</span>
-                <Button variant="ghost" size="icon" onClick={() => setIsChatSidebarOpen(false)} className="md:hidden">
-                  <ArrowLeft size={18} />
+                <Button variant="ghost" size="icon" aria-label="채팅 기록 닫기" onClick={() => setIsChatSidebarOpen(false)} className="md:hidden">
+                  <ArrowLeft size={18} aria-hidden="true" />
                 </Button>
               </div>
               <div className="p-3">
@@ -269,35 +270,60 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
               </div>
               <div className="flex-1 space-y-2 overflow-y-auto px-3 pb-4">
                 {cachedSessions.map((session) => (
-                  <button
+                  <div
                     key={session.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveChatSessionId(session.id);
-                      setIsChatSidebarOpen(false);
-                    }}
-                    className={`group flex w-full items-center justify-between rounded-lg border p-3 text-left transition-colors ${
+                    className={`group flex w-full items-center justify-between rounded-lg border transition-colors ${
                       activeChatSessionId === session.id
                         ? "border-emerald-200 bg-white"
                         : "border-transparent hover:border-gray-200 hover:bg-white"
                     }`}
                   >
-                    <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveChatSessionId(session.id);
+                        setIsChatSidebarOpen(false);
+                      }}
+                      className="min-w-0 flex-1 p-3 text-left"
+                    >
                       <div className="truncate text-sm font-medium text-gray-700">{session.title}</div>
                       {session.last_message ? (
                         <div className="mt-1 truncate text-xs text-gray-400">{session.last_message}</div>
                       ) : null}
-                    </div>
-                    <span
+                    </button>
+                    {/* A real sibling button (the old span-in-button was
+                        keyboard-dead and hover-invisible on touch), with a
+                        two-step confirm for the irreversible delete. */}
+                    <button
+                      type="button"
+                      aria-label={
+                        deletingSessionId === session.id
+                          ? `${session.title} 삭제 확인`
+                          : `${session.title} 대화 삭제`
+                      }
                       onClick={(event) => {
                         event.stopPropagation();
-                        void handleDeleteSession(session.id);
+                        if (deletingSessionId === session.id) {
+                          setDeletingSessionId(null);
+                          void handleDeleteSession(session.id);
+                        } else {
+                          setDeletingSessionId(session.id);
+                        }
                       }}
-                      className="ml-3 shrink-0 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500"
+                      onBlur={() => setDeletingSessionId((current) => (current === session.id ? null : current))}
+                      className={`mr-2 shrink-0 rounded-md p-2 transition-colors ${
+                        deletingSessionId === session.id
+                          ? "bg-red-50 text-red-600"
+                          : "text-gray-400 hover:text-red-500 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-visible:opacity-100"
+                      }`}
                     >
-                      <Trash2 size={14} />
-                    </span>
-                  </button>
+                      {deletingSessionId === session.id ? (
+                        <span className="text-[11px] font-bold">삭제 확인</span>
+                      ) : (
+                        <Trash2 size={14} aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
                 ))}
                 {!cachedSessions.length ? (
                   <div className="rounded-lg bg-white px-4 py-6 text-center text-sm text-gray-400">
@@ -315,17 +341,19 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
           <Button
             variant="ghost"
             size="icon"
+            aria-expanded={isChatSidebarOpen}
+            aria-label="채팅 기록 열기"
             onClick={() => setIsChatSidebarOpen(!isChatSidebarOpen)}
             className="-ml-2 text-gray-500"
           >
-            <Menu size={20} />
+            <Menu size={20} aria-hidden="true" />
           </Button>
           <div className="flex-1">
             <h2 className="text-sm font-bold leading-tight text-gray-800">AI 비서 터티</h2>
             <p className="text-[11px] text-gray-500">강의 자료 기반 학습 도우미</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-gray-500">
-            <ArrowLeft size={20} />
+          <Button variant="ghost" size="icon" aria-label="이전 페이지로 돌아가기" onClick={() => router.back()} className="text-gray-500">
+            <ArrowLeft size={20} aria-hidden="true" />
           </Button>
         </div>
 
@@ -381,7 +409,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
                               aria-label="질문을 전달할 과목"
                               value={selectedCourseId}
                               onChange={(event) => setSelectedCourseId(event.target.value)}
-                              className="rounded-xl bg-white px-3 py-2 text-xs text-slate-700 shadow-sm outline-none"
+                              className="rounded-xl bg-white px-3 py-2 text-xs text-slate-700 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                             >
                               {courses.map((course) => (
                                 <option key={course.id} value={course.id}>{course.name}</option>
@@ -391,7 +419,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
                               aria-label="교수님에게 전달할 질문"
                               value={escalationDraft}
                               onChange={(event) => setEscalationDraft(event.target.value)}
-                              className="min-h-24 resize-y rounded-xl bg-white px-3 py-2 text-sm leading-6 text-slate-800 shadow-sm outline-none"
+                              className="min-h-24 resize-y rounded-xl bg-white px-3 py-2 text-sm leading-6 text-slate-800 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                             />
                             <label className="flex items-center gap-2 text-xs text-slate-600">
                               <input
@@ -513,6 +541,7 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
             />
             <button
               type="submit"
+              aria-label="메시지 보내기"
               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-all ${
                 input.trim() && !isLoading
                   ? "bg-emerald-600 text-white shadow-md hover:scale-105 hover:bg-emerald-700 active:scale-95"

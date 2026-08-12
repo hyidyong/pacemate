@@ -140,7 +140,7 @@ export function ReviewsBoard({
 
       <section className="reviews-feed" aria-label="후기 목록">
         <div className="reviews-filter">
-          <select value={filterCourseId} onChange={(event) => setFilterCourseId(event.target.value)}>
+          <select aria-label="과목별 후기 필터" value={filterCourseId} onChange={(event) => setFilterCourseId(event.target.value)}>
             <option value="all">전체 과목</option>
             {courses.map((course) => (
               <option key={course.id} value={course.id}>

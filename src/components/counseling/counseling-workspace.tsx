@@ -335,6 +335,7 @@ export function CounselingWorkspace({
               <label className="community-search">
                 <Search size={17} aria-hidden="true" />
                 <input
+                  aria-label="교수 검색"
                   value={professorQuery}
                   onChange={(event) => setProfessorQuery(event.target.value)}
                   placeholder="교수 이름, 학부, 이메일 검색"

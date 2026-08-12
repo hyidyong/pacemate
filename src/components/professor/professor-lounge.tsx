@@ -55,24 +55,26 @@ export function ProfessorLounge({ posts }: { posts: ProfessorLoungePost[] }) {
           <span>교수 전용</span>
         </div>
         <div className="professor-lounge-options">
-          <select value={category} onChange={(event) => setCategory(event.target.value)}>
+          <select aria-label="게시글 분류" value={category} onChange={(event) => setCategory(event.target.value)}>
             {loungeCategories.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>
             ))}
           </select>
-          <select value={displayMode} onChange={(event) => setDisplayMode(event.target.value)}>
+          <select aria-label="표시 방식" value={displayMode} onChange={(event) => setDisplayMode(event.target.value)}>
             <option value="anonymous">익명</option>
             <option value="realname">실명</option>
           </select>
         </div>
         <input
+          aria-label="제목"
           onChange={(event) => setTitle(event.target.value)}
           placeholder="제목"
           value={title}
         />
         <textarea
+          aria-label="내용"
           onChange={(event) => setContent(event.target.value)}
           placeholder="교수님들끼리 공유할 수업 운영, 상담, 행정 팁을 남겨보세요."
           rows={7}
