@@ -677,9 +677,11 @@ export function MyPagePlanner({
           </div>
         ) : null}
         
-        <div className="w-full min-w-0 overflow-hidden p-2 sm:p-5">
+        {/* Below sm the 7-day grid scrolls horizontally instead of squeezing
+            each day column to ~39px (Stage 4, audit C-7). */}
+        <div className="w-full min-w-0 overflow-x-auto p-2 sm:p-5">
           <div
-            className="relative w-full min-w-0 overflow-hidden rounded-lg bg-gray-50/30 shadow-inner"
+            className="relative w-full min-w-[560px] overflow-hidden rounded-lg bg-gray-50/30 shadow-inner sm:min-w-0"
             style={{ contain: "layout paint" }}
           >
             {/* Header Row */}
