@@ -1,5 +1,48 @@
 # Architectural Decisions
 
+## D-009 — Counseling display cap is per professor
+
+Status: Accepted (Stage 4, 2026-08-12)
+
+Context: `buildAvailableCounselingSlots` applied `.slice(0, 48)` to the merged
+chronological multi-professor list; the workspace then filtered per professor.
+One professor's dense early availability could crowd another professor's real
+slots out entirely — the student saw "no slots" for genuinely bookable time
+(audit A-2, RED-tested).
+
+Decision: the cap bounds each professor's list at 48 (earliest first). The
+canonical per-date primitive `buildBookableSlotsForLocalDate` (D-004) is
+untouched; slot membership per professor is unchanged; only merged list
+length semantics changed. Characterization test updated deliberately
+(96 = 48×2 for two dense professors); cross-consumer identity test unchanged
+and green.
+
+Consequences: displayed availability now matches the canonical per-professor
+bookable set for every professor. Any future global bound must not reintroduce
+cross-professor starvation.
+
+## D-010 — No route-level Suspense seams (loading.tsx) on this app
+
+Status: Accepted (Stage 4, 2026-08-12)
+
+Context: Stage 4 added loading.tsx skeletons to 12 routes (KI-016 loading
+backlog). Rendered QA on the production build found direct GETs of those
+routes hydrate the route Suspense boundary into the skeleton fallback and
+NEVER resolve — orphaned SSR DOM plus a completely dead page (zero
+interactivity, zero console errors). This is byte-for-byte the KI-013
+pathology Stage 3 fixed by deleting a page-level `dynamic()` seam.
+
+Decision: reverted (commit 99bf213). The KI-013 lesson generalizes: on this
+app's force-dynamic pages under Next 15.5, NO route-level Suspense boundary
+of any kind — no loading.tsx, no page-level dynamic()/lazy. Client-side
+lazy INSIDE an already-hydrated client component (the recharts pattern,
+fca8ddc) remains safe.
+
+Consequences: perceived-loading work stays in KI-016 with this evidence.
+Candidate future mechanisms: a client navigation progress indicator (no
+Suspense), or a Next upgrade explicitly re-validated against the KI-013
+reproduction (8× direct-GET hydration check on /professor AND /counseling).
+
 ## D-001 — Repository as persistent project memory
 
 Status: Accepted

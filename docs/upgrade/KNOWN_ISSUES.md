@@ -3,9 +3,69 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-017 — Stage 4 audit findings deferred by design
+
+Status: OPEN (documented 2026-08-12; full evidence in docs/upgrade/stage-04/UX_AUDIT.md
+and the four audit agent registers referenced there). Deferred deliberately per
+stage-04/DESIGN.md "Changes explicitly NOT being made":
+- B-24 root cause: professor identity fallback (`getCurrentProfessor` falls back to
+  the first professors row; assistants always resolve their linked/first professor).
+  Stage 4 added an honest UI notice only. Real fix = identity linkage, Stage 6/9.
+  Note: the demo student's pending request (to 박성은) is reachable only via the
+  assistant login — no professor demo account maps to 박성은.
+- B-5: professor pending queue + log share one 12-row oldest-first window
+  (professor.service.ts getCounselingRequests limit(12) across all statuses); new
+  pending requests can be invisible; notification deep links can target absent rows.
+  Stage 5 (reservation flow redesign) / Stage 8.
+- B-6: professor home entry points driven by unread notification counts, not
+  outstanding work — they disappear on first visit while work remains.
+- B-10: no way to DECLARE availability from the calendar (only blackout); the
+  manual-schedule form has no date context and no row edit/delete (B-25/B-26).
+- B-20: professor desktop dropdown has 15 items resolving to 8 destinations, some
+  mislabeled (e.g. 과제 및 평가 → 담당 과목 삭제 요청 screen).
+- B-28: roadmap edit pre-fills placeholder prose that can be published verbatim;
+  two typed fields are never transmitted.
+- B-31: getRoadmapRequests unscoped (returns any professor's requests) — also a
+  privacy concern, Stage 6/9.
+- B-46: admin broadcast has no recipient preview/confirm; dedupe-block renders as
+  success; fields keep values after send.
+- A-12: /support auto-reply path (`/상담|예약|시간/`) returns ok:true, creates no
+  ticket, offers no escalation.
+- A-18: overdue todos silently vanish from the dashboard card (mypage disagrees).
+- A-22: 여러 수업 시간 입력 is a raw-JSON textarea; parse errors are silently
+  dropped (a proper row UI exists twice elsewhere).
+- A-25/A-26: community composer forces a 유사 글 review step even with no matches;
+  post detail lives in the third sidebar column below two recommendation rails.
+- Student reservation CANCEL action does not exist (pending requests for past
+  times linger as 승인 대기) — new API semantics, Stage 5 input.
+- Systemic (Stage 4 documented, not unified): Tailwind-vs-globals.css breakpoint
+  schism (640/768/1024 vs 620/700/900); 9+ date-format implementations (2 use
+  browser-local time); dead ui primitives (Badge/Select/Popover) vs 38 raw
+  selects and 5 badge implementations; 19 raw `"button button-*"` class strings;
+  counseling status vocabulary drift (거절/시간 조정/반려); C-31 mobile sticky
+  header doesn't span the viewport; C-34 site footer (약관/사업자 정보)
+  display:none on mobile with no alternative route; C-37 sub-16px inputs trigger
+  iOS focus zoom; D-7 zero aria-invalid/aria-describedby app-wide; D-17 no skip
+  link; D-18 heading-hierarchy gaps; C-35 undocumented z-index ladder (community
+  FAB z-55 paints above dialogs).
+- Rendered-QA observation (once, UNVERIFIED cause): immediately after a booking
+  submit, one navigation bounced to /dashboard (role-guard redirect class); not
+  reproducible on retry — the second full booking loop stayed in place.
+
 ## KI-016 — Stage 3 performance audit findings deferred by design (Stage 4/6/8/9 inputs)
 
-Status: OPEN (documented 2026-08-12; evidence in docs/upgrade/stage-03/PERFORMANCE_AUDIT.md).
+Status: OPEN, partially addressed in Stage 4 (2026-08-12):
+- Loading states: ATTEMPTED and REVERTED — route-level loading.tsx reproduces the
+  KI-013 stuck hydration fallback on this app (D-010, commit 99bf213). Still open,
+  needs a non-Suspense mechanism.
+- Nested <main> instances: FIXED (community/reviews/lounge/weekly-plan-preview +
+  guard test no-nested-main.test.mjs).
+- Rerender hotspots: hero carousel interval churn fixed (pause + 5s cadence);
+  hover-glow-card and ai-tutor-chat keystroke rerenders unchanged.
+- Report labeling fixed (course names); SCOPING still open (privacy, Stage 6/9).
+- Still open: supabase-js in shared shell, unbounded queries + index candidates,
+  dashboard student_courses 5× reads.
+Original text follows.
 - Professor report services read university-global data (ALL course_offerings +
   ALL student progress rows, unscoped to the signed-in professor) and serialize
   it into client props (professor-course-progress-report.server.ts:~195,
@@ -40,7 +100,10 @@ Status: OPEN (documented 2026-08-12; evidence in docs/upgrade/stage-03/PERFORMAN
 
 ## KI-013 — Professor workspace intermittently never leaves its lazy-load fallback
 
-Status: RESOLVED in Stage 3 (2026-08-12, commit b4bfe9f). Root cause: the
+Status: RESOLVED in Stage 3 (2026-08-12, commit b4bfe9f). Stage 4 addendum: the
+pathology GENERALIZES — route-level loading.tsx reproduced the identical stuck
+fallback (orphaned SSR DOM, dead page, no console errors) on every route it was
+added to; reverted and codified as D-010 (no route-level Suspense seams). Root cause: the
 "[Opt 4]" `next/dynamic()` wrapper in the Server Component page created a
 Suspense/lazy hydration seam while deferring nothing — the workspace chunk was
 eagerly preloaded for /professor in app-build-manifest.json, and direct GET
@@ -82,17 +145,18 @@ Stage 9). Evidence from the Stage 2 discovery sweep (2026-08-12):
 
 ## KI-015 — Assorted counseling-domain paper cuts (documented during Stage 2, out of scope)
 
-Status: OPEN.
-- Cancel notification text bug: professor cancel sends title "상담 시간이 조정
-  필요합니다" with an empty-note body implying a suggested time exists
-  (professor.actions.ts:238-247); approve/cancel also null out professor_note and
-  suggested_* unconditionally (:224-229).
-- `suggested_start/end` are advisory only (not constrained, not busy) yet the reject
-  flow hard-codes end = start + 30 min (professor-workspace.tsx:1468-1470) regardless
-  of the professor's slot_minutes.
-- Dead component `professor-admin-summary.tsx` (exported, imported nowhere).
-- Professor stat tile "상담 슬롯" counts availability ROWS including inactive blackout
-  rows (professor-workspace.tsx adminStats) — inflated number (Stage 4 label/logic).
+Status: PARTIALLY RESOLVED in Stage 4 (2026-08-12):
+- FIXED: reject flow's hard-coded 30-min suggested window — now spans the
+  originally requested duration (commit 6b87ea2); the "(선택)" label lie and the
+  silently-dropped unparseable time are also gone (datetime-local + required).
+- FIXED: dead component professor-admin-summary.tsx deleted (commit cb88917).
+- RECLASSIFIED: the "상담 슬롯 counts inactive rows" stat tile is currently DEAD
+  COMPUTATION — adminStats is computed and passed but never rendered (Stage 4
+  audit B-27); either render it with the corrected filter or delete it.
+- STILL OPEN: cancel notification text bug: professor cancel sends title "상담
+  시간이 조정 필요합니다" with an empty-note body implying a suggested time exists
+  (professor.actions.ts); approve/cancel also null out professor_note and
+  suggested_* unconditionally (see also KI-017 B-7).
 - Schema drift: `suggested_start`/`suggested_end`/`location` exist only in schema.sql
   (no migration adds them); `offering_id` exists only in migration 20260712000000 (not
   in schema.sql's table body). Reconcile with the migration-history cleanup (KI-006
@@ -208,14 +272,16 @@ executed (professor session querying student tables). Stage 2/9 candidate.
 
 ## KI-004 — Counseling UX correctness edges (documented baseline, Stage 2/4 candidates)
 
-Status: OPEN.
-- Counseling workspace month calendar derives its month from the first slot and cannot page
-  months; slots in the following month invisible (counseling-workspace.tsx:88-119).
-- After booking, the client does not refresh (`router.refresh()` absent) — slot list/requests
-  panel stale until navigation (counseling-workspace.tsx:173-179).
-- 과목별 예약 mode auto-selects `course.professors[0]`; no picker for a course's other
-  professors (counseling-workspace.tsx:190) — second professor reachable only via 교수별 검색.
-- Demo student login lands on /onboarding although onboarding data exists (cause UNVERIFIED).
+Status: MOSTLY RESOLVED in Stage 4 (2026-08-12, commits 4431bcc + b46fd34):
+- Month paging: FIXED — months derive from the slot range with labeled prev/next
+  controls; rendered-verified with a booking loop.
+- Post-booking staleness: FIXED — router.refresh() on success, message beside the
+  action, selection cleared; rendered-verified (2건 badge + slot count updated in
+  place).
+- Second-professor picker: FIXED — courses with >1 professor render selection
+  chips in step 2 (rendered-verified on 담보물권법).
+- STILL OPEN: demo student login lands on /onboarding although onboarding data
+  exists (cause UNVERIFIED).
 
 ## KI-006 — RLS policy recursion (42P17) on course_offerings
 
@@ -265,11 +331,15 @@ guards against the external host returning (doesNotMatch i.ibb.co).
 
 ## KI-009 — Mobile touch-target sizes below guideline
 
-Status: OPEN (Stage 4 candidate; no functional blocker found).
-375px audit on 2026-08-12: carousel dots 10×10 px, 공지 닫기 24×24 px, "마이페이지에서 관리"
-links ~17–20 px tall (guideline ≈44 px). elementFromPoint interception audit at scroll-top
-found zero blocked targets on dashboard/mypage; the only interceptions occur when content
-scrolls under the sticky header (normal behavior).
+Status: RESOLVED in Stage 4 (2026-08-12, commit 0e5c5f6 + aa4f4a3). Carousel dots
+now sit in 32px hit areas (prev/next 40–44px, plus a pause control); 공지 닫기
+24→36px (both banner and feed); both 마이페이지에서 관리 links get 44px-tall hit
+areas; every Radix dialog close X gets p-2 padding (16→32px). Residual sub-44px
+targets inventoried in the Stage 4 audit (C-22/C-23: 40px section tabs, .button-sm
+34px, h-9 inputs) are recorded, not blocking. Historical text below.
+Previously: 375px audit on 2026-08-12: carousel dots 10×10 px, 공지 닫기 24×24 px,
+"마이페이지에서 관리" links ~17–20 px tall (guideline ≈44 px). elementFromPoint
+interception audit at scroll-top found zero blocked targets on dashboard/mypage.
 
 ## KI-005 — supabase/schema.sql snapshot has a duplicate column line
 
