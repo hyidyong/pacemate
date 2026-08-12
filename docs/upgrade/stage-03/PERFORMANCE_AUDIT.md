@@ -345,3 +345,44 @@ Report-only (wall-clock, live-DB variance — never CI-asserted):
 - R3: client-nav RSC round trip mypage↔counseling from 479–852 ms → target ≤ 500 ms
   worst-case sample.
 - R4: /professor warm prod TTFB from ~460–600 ms → no regression while fixing KI-013.
+
+## 11. Before / after (measured 2026-08-12, end of Stage 3 implementation)
+
+Same environment/method as §1–2. Live-Supabase variance was high during the
+"after" session (isolated spikes of 1165/1841 ms observed and re-sampled);
+wall-clock rows are ranges, deterministic rows are exact.
+
+| Metric | Baseline (§2) | After Stage 3 | Change | Evidence |
+|---|---|---|---|---|
+| /professor usable on direct GET (prod) | 0/4 attempts (stuck ≥29 s) | 8/8 attempts (incl. mobile + ?tab=report) | KI-013 FIXED | §2.4; runtime QA both builds |
+| /professor First Load JS | 339 kB gz (137 kB route) | 225 kB gz (22.4 kB route) | −33% | next build tables |
+| Shared First Load JS | 102 kB | 102 kB | unchanged | next build tables |
+| getMyPageData posts-feed fetches | 4× (12 queries) | 1× (3 queries) | −9 queries | student-community.query-count.test.mjs (RED got 4 → GREEN) |
+| getCounselingPageData await stages | 3 (5 queries blocked on nothing) | 2 (7 issued in one batch) | −1 WAN stage | counseling.query-count.test.mjs (RED got 5 → GREEN 7) |
+| auth.getUser round trips per /dashboard | 3 | 1 (request-scoped resolver) | −2 | request-identity.test.mjs; source |
+| auth.getUser round trips per /professor | 3 | 1 | −2 | request-identity.test.mjs; source |
+| profiles reads per prop-less route (page+AppShell) | 2 | 1 (React.cache) | −1/route ×~20 routes | request-memoization.test.mjs |
+| Client-nav mypage→counseling RSC | 852 ms | 268 ms | −69% (1 sample each) | resource timing |
+| Client-nav counseling→mypage RSC | 479 ms | 609 ms (1841 spike discarded) | within variance | resource timing |
+| Warm prod TTFB /mypage | 412–528 ms | 315 ms | improved | Performance API |
+| Warm prod TTFB /courses | 284 ms | 228 ms | improved | Performance API |
+| Warm prod TTFB /counseling | 285–328 ms | 292–304 ms | unchanged | Performance API |
+| Warm prod TTFB /dashboard | 497–563 ms | 339–795 ms (median ~610) | within variance — UNVERIFIED as improvement | Performance API |
+| Warm prod TTFB /professor | 458–597 ms | 425–679 ms | within variance | Performance API |
+| Mobile 375px /counseling TTFB | 456 ms | 292 ms | improved | Performance API |
+| Mobile 375px /dashboard TTFB | 496 ms | 457 ms (1165 spike discarded) | within variance | Performance API |
+
+Wall-clock honesty note: at this WAN latency and demo data volume, the
+dashboard's dominant cost is its remaining true dependency chain (offering →
+eligibility/recommendations); removing 2 auth hops + the notifications stage is
+real (deterministic evidence above) but sits inside the noise band of single
+localhost samples. The deterministic budgets B1–B7 are the enforceable record.
+
+Booking/cancellation correctness loop (production build, live DB, 2026-08-12):
+booked 박성은 8/17 09:30 as student1 → "상담 신청을 보냈습니다. (74f5b283)";
+reload: 8/17 2개→1개, 09:30 gone from slot list, request panel shows 8/17
+09:30 KST pending; deleted via service role (204); reload: 8/17 back to 2개,
+09:30 visible, request count restored. Same counts desktop and mobile.
+Stage 2 suites: availability-consistency 3/3, counseling-slots + adapter +
+security 36/36 in the invariant set; full suite 192/189/3 (same KI-002 trio:
+admin-notifications ×2, question-notice-workflow ×1).
