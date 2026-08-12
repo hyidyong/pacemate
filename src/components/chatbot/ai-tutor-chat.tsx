@@ -462,18 +462,26 @@ export function AiTutorChat({ courses }: { courses: ProfessorQuestionCourseOptio
           <div ref={chatEndRef} />
         </div>
 
-        <div className="shrink-0 border-t border-gray-100 bg-white p-3 pb-safe">
+        <div className="shrink-0 border-t border-gray-100 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {!courses.length ? (
             <p className="mx-auto mb-2 max-w-3xl rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700 shadow-sm">
               시간표에 등록된 과목이 없어 질문할 과목을 선택할 수 없습니다. 먼저 시간표에 과목을 추가해 주세요.
             </p>
           ) : null}
-          <form onSubmit={handleSubmit} className="relative mx-auto flex max-w-3xl items-end gap-2">
+          {courses.length && !selectedCourseId ? (
+            <p className="mx-auto mb-2 max-w-3xl rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700 shadow-sm">
+              질문할 과목을 먼저 선택해 주세요. 과목을 선택해야 전송할 수 있습니다.
+            </p>
+          ) : null}
+          {/* The course selector was display:none below md while the send
+              button REQUIRED a selection — mobile students were locked to
+              the auto-selected first course (audit A-10/C-39). */}
+          <form onSubmit={handleSubmit} className="relative mx-auto flex max-w-3xl flex-wrap items-end gap-2">
             <select
               aria-label="AI 비서 터티 참고 과목"
               value={selectedCourseId}
               onChange={(event) => setSelectedCourseId(event.target.value)}
-              className="hidden max-w-36 rounded-xl bg-slate-100 px-2 py-3 text-xs text-slate-600 shadow-sm outline-none md:block"
+              className="w-full rounded-xl bg-slate-100 px-2 py-2.5 text-xs text-slate-600 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 md:w-auto md:max-w-36 md:py-3"
             >
               <option value="">과목 선택</option>
               {courses.map((course) => (
