@@ -364,6 +364,25 @@ export function CounselingWorkspace({
               <span>2단계</span>
               <strong>상담 대상 확인</strong>
             </div>
+            {mode === "course" && courseProfessors.length > 1 ? (
+              <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="담당 교수 선택">
+                {courseProfessors.map((professor) => (
+                  <button
+                    aria-pressed={selectedProfessor?.id === professor.id}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                      selectedProfessor?.id === professor.id
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                    key={professor.id}
+                    onClick={() => chooseProfessor(professor.id)}
+                    type="button"
+                  >
+                    {professor.name} 교수
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {selectedProfessor ? (
               <article>
                 <span className="icon-box">
