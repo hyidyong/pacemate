@@ -116,10 +116,16 @@ export default async function DashboardPage() {
 
   const copy = roleCopy[profile.role];
   const shouldShowPrimaryAction = profile.role !== "student";
-  const [notifications, unreadCount] = await Promise.all([
+  // Kick the notification pair off now and await it after the student data
+  // block — it depends only on the profile, so serializing it ahead of the
+  // heavy student batch just added a WAN stage to every dashboard render.
+  const notificationsPromise = Promise.all([
     getNotificationsForProfile(profile, 5),
     getUnreadNotificationCount(profile),
   ]);
+  // The real await below still surfaces failures; this only silences the
+  // transient unhandled-rejection window while the student batch is in flight.
+  notificationsPromise.catch(() => {});
 
   // Fetch student courses if student
   let coursesData: any[] = [];
@@ -239,6 +245,8 @@ export default async function DashboardPage() {
       recommendationResult = { ok: false, code: "read_failed" };
     }
   }
+
+  const [notifications, unreadCount] = await notificationsPromise;
 
   return (
     <AppShell

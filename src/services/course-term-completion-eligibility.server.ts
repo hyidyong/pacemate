@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { PostgrestError } from "@supabase/supabase-js";
 import { assessCourseTermCompletionEligibility } from "@/services/course-term-completion-eligibility";
 import {
   ELIGIBILITY_SELECT,
@@ -12,6 +11,7 @@ import type { CourseTermCompletionEligibilityResult } from "@/types/course-term-
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
+import { resolveAuthenticatedProfile } from "@/services/request-identity.server";
 
 export type CourseTermCompletionEligibilityReadErrorCode =
   | "invalid_offering_id"
@@ -80,9 +80,10 @@ function failure(
   };
 }
 
-function classifyReadError(error: PostgrestError): CourseTermCompletionEligibilityReadErrorCode {
-  const status = (error as PostgrestError & { status?: number }).status;
-  return error.code === "42501" || status === 401 || status === 403
+function classifyReadError(
+  error: { code?: string; status?: number },
+): CourseTermCompletionEligibilityReadErrorCode {
+  return error.code === "42501" || error.status === 401 || error.status === 403
     ? "permission_denied"
     : "database_read_failed";
 }
@@ -102,29 +103,21 @@ export async function getCourseTermCompletionEligibility(
     return failure("database_read_failed");
   }
 
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) {
+  const identity = await resolveAuthenticatedProfile();
+  if (identity.status === "client_error") {
+    return failure("database_read_failed");
+  }
+  if (identity.status === "unauthenticated") {
     return failure("unauthenticated");
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("id, auth_user_id, role")
-    .eq("auth_user_id", authData.user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    return failure(classifyReadError(profileError));
+  if (identity.status === "profile_error") {
+    return failure(classifyReadError(identity.error));
   }
-
-  if (!profile) {
+  if (identity.status === "profile_missing" || identity.status === "profile_mismatch") {
     return failure("profile_not_found");
   }
 
-  const profileRow = profile as EligibilityProfileRow;
-  if (profileRow.auth_user_id !== authData.user.id) {
-    return failure("profile_not_found");
-  }
+  const profileRow = identity.profile as EligibilityProfileRow;
 
   if (profileRow.role !== "student") {
     return failure("forbidden");

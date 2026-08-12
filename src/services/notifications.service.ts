@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
 import {
@@ -43,11 +44,13 @@ function applyNotificationOwnership<T>(query: T, profile: DemoProfile) {
   );
 }
 
-export async function getNotificationsForProfile(
+// Request-scoped memo (cache keys non-primitive args by reference — callers must
+// pass the profile object from the memoized getDemoProfile for hits to land).
+export const getNotificationsForProfile = cache(async (
   profile: DemoProfile | null,
   limit = 5,
   category: NotificationCategoryFilter = "all",
-): Promise<UserNotification[]> {
+): Promise<UserNotification[]> => {
   if (!profile) {
     return [];
   }
@@ -76,9 +79,9 @@ export async function getNotificationsForProfile(
   }
 
   return (data ?? []) as UserNotification[];
-}
+});
 
-export async function getUnreadNotificationCount(profile: DemoProfile | null) {
+export const getUnreadNotificationCount = cache(async (profile: DemoProfile | null) => {
   if (!profile) {
     return 0;
   }
@@ -98,7 +101,7 @@ export async function getUnreadNotificationCount(profile: DemoProfile | null) {
   }
 
   return count ?? 0;
-}
+});
 
 export async function getUnreadNotificationCountByCategory(
   profile: DemoProfile | null,

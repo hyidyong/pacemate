@@ -1,4 +1,3 @@
-import dynamicImport from "next/dynamic";
 import { AppShell } from "@/components/layout/app-shell";
 import { getAcademicEvents } from "@/services/academic-calendar.service";
 import { getUnreadNotificationCountByCategory } from "@/services/notifications.service";
@@ -12,20 +11,10 @@ import { getProfessorAnonymousWeeklyAggregate } from "@/services/professor-anony
 import type { ProfessorAnonymousWeeklyAggregateReport } from "@/types/professor-anonymous-weekly-aggregate";
 import { getProfessorQuestionInbox } from "@/services/professor-questions.server";
 import { ProfessorProfileSummary } from "@/components/professor/professor-profile-summary";
-
-// ✅ [Opt 4] ProfessorWorkspace(50KB)를 Lazy Load — 교수 페이지 초기 JS 대폭 감소
-const ProfessorWorkspace = dynamicImport(
-  () => import("@/components/professor/professor-workspace").then((m) => ({ default: m.ProfessorWorkspace })),
-  {
-    loading: () => (
-      <section className="section">
-        <div className="community-empty">
-          <p>워크스페이스 불러오는 중...</p>
-        </div>
-      </section>
-    ),
-  }
-);
+// KI-013: static import — the dynamic() wrapper deferred nothing (the chunk is
+// preloaded with the page) and its Suspense seam left direct GETs stuck on the
+// loading fallback. Heavy report internals lazy-load inside the workspace instead.
+import { ProfessorWorkspace } from "@/components/professor/professor-workspace";
 
 export const dynamic = "force-dynamic";
 

@@ -3,6 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
+import { resolveAuthenticatedProfile } from "@/services/request-identity.server";
 import { buildStudentLearningRecommendations, type StudentLearningRecommendation } from "@/services/student-learning-recommendations";
 
 export type StudentLearningRecommendationResult =
@@ -13,11 +14,14 @@ export async function getStudentLearningRecommendations(offeringIdValue: string)
   const offeringId = normalizeUuid(offeringIdValue);
   if (!offeringId) return { ok: false, code: "invalid_request" };
   const supabase = await createSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) return { ok: false, code: "unauthenticated" };
-  const { data: profile, error: profileError } = await supabase.from("profiles").select("id, auth_user_id, role").eq("auth_user_id", authData.user.id).maybeSingle();
-  if (profileError || !profile) return { ok: false, code: "read_failed" };
-  if (profile.auth_user_id !== authData.user.id || profile.role !== "student") return { ok: false, code: "forbidden" };
+  const identity = await resolveAuthenticatedProfile();
+  if (identity.status === "unauthenticated") return { ok: false, code: "unauthenticated" };
+  if (identity.status === "client_error" || identity.status === "profile_error" || identity.status === "profile_missing") {
+    return { ok: false, code: "read_failed" };
+  }
+  if (identity.status === "profile_mismatch") return { ok: false, code: "forbidden" };
+  const profile = identity.profile;
+  if (profile.role !== "student") return { ok: false, code: "forbidden" };
   // Ownership gate + admin reads: the student RLS policy on course_offerings
   // recurses (42P17) against the professor policy on student_weekly_progress,
   // so verify ownership via the student's own student_courses rows and read

@@ -24,7 +24,6 @@ export default async function MyPage() {
       scrapedPosts: [],
       commentedPosts: [],
       likedPosts: [],
-      savedProfile: null,
     };
   });
 

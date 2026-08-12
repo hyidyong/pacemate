@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { readDemoSession } from "@/lib/auth/demo-session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -37,7 +38,9 @@ function toDemoProfile(profile: AuthMappedProfile): DemoProfile {
   };
 }
 
-export async function getDemoProfile(): Promise<DemoProfile | null> {
+// Request-scoped memo: the page and AppShell both resolve the profile during one
+// render; cache() collapses them into a single profiles query per request.
+export const getDemoProfile = cache(async (): Promise<DemoProfile | null> => {
   try {
     const session = await readDemoSession();
     const supabase = await createSupabaseServerClient();
@@ -69,7 +72,7 @@ export async function getDemoProfile(): Promise<DemoProfile | null> {
     console.error("Failed to resolve the current session profile", error);
     return null;
   }
-}
+});
 
 export async function getSignedDemoProfile(): Promise<DemoProfile | null> {
   try {

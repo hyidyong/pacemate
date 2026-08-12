@@ -93,7 +93,6 @@ export type MyPageData = {
   scrapedPosts: CommunityPostRecord[];
   commentedPosts: CommunityPostRecord[];
   likedPosts: CommunityPostRecord[];
-  savedProfile?: any;
 };
 
 const defaultSchoolName = "계명대학교";
@@ -132,31 +131,26 @@ export async function ensureProfileSchool(profile: DemoProfile | null) {
 export async function getMyPageData(
   profile: DemoProfile | null,
 ): Promise<MyPageData> {
-  const supabase = await createSupabaseServerClient();
   await ensureProfileSchool(profile);
-  const [schoolName, courses, myCourses] = await Promise.all([
-    getSchoolName(profile),
-    getCourses(),
-    getMyCourses(profile),
-  ]);
-  const [myPosts, scrapedPosts, commentedPosts, likedPosts] = await Promise.all([
-    getMyPosts(profile?.id),
-    getScrapedPosts(profile?.id),
-    getCommentedPosts(profile?.id),
-    getLikedPosts(profile?.id),
-  ]);
+  // The two former batches were independent; the posts feed is fetched once and
+  // the four views derive from it (it used to run once per view — 4x).
+  const [schoolName, courses, myCourses, posts, scrapedIds, likedIds, commentedIds] =
+    await Promise.all([
+      getSchoolName(profile),
+      getCourses(),
+      getMyCourses(profile),
+      getPosts(profile?.id),
+      getReactedPostIds(profile?.id, "scrap"),
+      getReactedPostIds(profile?.id, "like"),
+      getCommentedPostIds(profile?.id),
+    ]);
 
-  let savedProfile = null;
-  if (profile?.id && profile.role === "student") {
-    const { data } = await supabase
-      .from("student_profiles")
-      .select("*")
-      .eq("profile_id", profile.id)
-      .maybeSingle();
-    savedProfile = data;
-  }
+  const myPosts = profile?.id ? posts.filter((post) => post.author_id === profile.id) : [];
+  const scrapedPosts = posts.filter((post) => scrapedIds.has(post.id));
+  const likedPosts = posts.filter((post) => likedIds.has(post.id));
+  const commentedPosts = posts.filter((post) => commentedIds.has(post.id));
 
-  return { schoolName, profile, courses, myCourses, myPosts, scrapedPosts, commentedPosts, likedPosts, savedProfile };
+  return { schoolName, profile, courses, myCourses, myPosts, scrapedPosts, commentedPosts, likedPosts };
 }
 
 export async function getCommunityData(
@@ -437,48 +431,31 @@ export async function getPostComments(postIds: string[]): Promise<Record<string,
   return grouped;
 }
 
-async function getScrapedPosts(profileId?: string): Promise<CommunityPostRecord[]> {
+async function getReactedPostIds(
+  profileId: string | undefined,
+  type: "scrap" | "like",
+): Promise<Set<string>> {
   if (!profileId) {
-    return [];
+    return new Set();
   }
   const supabase = await createSupabaseServerClient();
-
   const { data } = await supabase
     .from("post_reactions")
     .select("post_id")
     .eq("user_id", profileId)
-    .eq("type", "scrap");
+    .eq("type", type);
+  return new Set((data ?? []).map((item) => item.post_id as string).filter(Boolean));
+}
 
-  const postIds = (data ?? []).map((item) => item.post_id).filter(Boolean);
-  if (!postIds.length) {
-    return [];
+async function getCommentedPostIds(profileId?: string): Promise<Set<string>> {
+  if (!profileId) {
+    return new Set();
   }
-
-  const posts = await getPosts(profileId);
-  const scrapedIds = new Set(postIds);
-  return posts.filter((post) => scrapedIds.has(post.id));
-}
-
-async function getMyPosts(profileId?: string): Promise<CommunityPostRecord[]> {
-  if (!profileId) return [];
-  const posts = await getPosts(profileId);
-  return posts.filter((post) => post.author_id === profileId);
-}
-
-async function getLikedPosts(profileId?: string): Promise<CommunityPostRecord[]> {
-  if (!profileId) return [];
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.from("post_reactions").select("post_id").eq("user_id", profileId).eq("type", "like");
-  const postIds = new Set((data ?? []).map(item => item.post_id));
-  const posts = await getPosts(profileId);
-  return posts.filter((post) => postIds.has(post.id));
-}
-
-async function getCommentedPosts(profileId?: string): Promise<CommunityPostRecord[]> {
-  if (!profileId) return [];
-  const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.from("comments").select("post_id").eq("author_id", profileId).eq("status", "active");
-  const postIds = new Set((data ?? []).map(item => item.post_id));
-  const posts = await getPosts(profileId);
-  return posts.filter((post) => postIds.has(post.id));
+  const { data } = await supabase
+    .from("comments")
+    .select("post_id")
+    .eq("author_id", profileId)
+    .eq("status", "active");
+  return new Set((data ?? []).map((item) => item.post_id as string).filter(Boolean));
 }

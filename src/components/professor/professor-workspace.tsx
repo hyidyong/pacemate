@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import nextDynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -50,7 +51,6 @@ import type {
   ProfessorAnonymousWeeklyAggregateResult,
 } from "@/types/professor-anonymous-weekly-aggregate";
 import { ProfessorCalendar } from "./professor-calendar";
-import { ProfessorCourseProgressReportView } from "./professor-course-progress-report";
 import { ProfessorQuestionInboxView } from "./professor-question-inbox";
 import type { ProfessorQuestionInbox } from "@/types/professor-questions";
 import {
@@ -66,6 +66,27 @@ import {
 import { parsePacemateWallClock } from "@/lib/counseling-slots";
 import { markNotificationsReadByCategory } from "@/services/notifications.actions";
 import { saveProfessorRoadmapPersonalization } from "@/services/personalized-weekly-roadmap.actions";
+
+// The report view is the only recharts consumer (~114 kB gz) and lives behind
+// a non-default tab. Lazy-loading it HERE — inside an already-hydrated client
+// component, with ssr:false — is safe (no RSC hydration seam, unlike the
+// KI-013 page-level wrapper) and keeps recharts out of /professor's first load.
+const ProfessorCourseProgressReportView = nextDynamic(
+  () =>
+    import("./professor-course-progress-report").then((m) => ({
+      default: m.ProfessorCourseProgressReportView,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <section className="section">
+        <div className="community-empty">
+          <p>리포트 불러오는 중...</p>
+        </div>
+      </section>
+    ),
+  },
+);
 
 // ============== TYPES ==============
 type ProfessorWorkspaceProps = {
@@ -347,7 +368,7 @@ export function ProfessorWorkspace({
     const formData = new FormData();
     formData.set("requestId", requestId);
     formData.set("status", "cancelled");
-    runAction((fd) => import("@/services/professor.actions").then(m => m.updateCounselingStatus(fd)), formData);
+    runAction(updateCounselingStatus, formData);
   }
 
   // Dashboard stats
@@ -604,8 +625,8 @@ export function ProfessorWorkspace({
         </nav>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="min-w-0 flex-1 w-full p-4 lg:p-6 xl:p-8">
+      {/* Main Content Area — div: AppShell already renders the page's single main landmark */}
+      <div className="min-w-0 flex-1 w-full p-4 lg:p-6 xl:p-8">
         {/* Content Header */}
         <header className="mb-5 lg:mb-8">
           <div>
@@ -681,7 +702,7 @@ export function ProfessorWorkspace({
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-4 lg:p-6 min-h-[600px]">
           {renderSubContent()}
         </div>
-      </main>
+      </div>
 
       {/* Toast */}
       {toast ? (

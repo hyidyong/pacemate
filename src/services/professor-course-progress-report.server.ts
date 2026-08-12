@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
+import { resolveAuthenticatedProfile } from "@/services/request-identity.server";
 import type {
   ProfessorCourseProgressOfferingReport,
   ProfessorCourseProgressReportErrorCode,
@@ -32,11 +33,6 @@ const SAFE_MESSAGES: Record<ProfessorCourseProgressReportErrorCode, string> = {
 };
 
 type UnknownRecord = Record<string, unknown>;
-
-type ProfileRow = {
-  auth_user_id: string | null;
-  role: string;
-};
 
 type ParsedProgressRow = {
   row: ProfessorCourseProgressRow;
@@ -86,16 +82,6 @@ function classifyReadError(error: unknown): "permission_denied" | "database_read
   return code === "42501" || status === 401 || status === 403
     ? "permission_denied"
     : "database_read_failed";
-}
-
-function parseProfile(value: unknown): ProfileRow | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  return typeof value.auth_user_id === "string" && typeof value.role === "string"
-    ? { auth_user_id: value.auth_user_id, role: value.role }
-    : null;
 }
 
 function parseOfferingId(value: unknown): string | null {
@@ -175,27 +161,21 @@ export async function getProfessorCourseProgressReport(): Promise<ProfessorCours
     return failure("database_read_failed");
   }
 
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) {
+  const identity = await resolveAuthenticatedProfile();
+  if (identity.status === "client_error") {
+    return failure("database_read_failed");
+  }
+  if (identity.status === "unauthenticated") {
     return failure("unauthenticated");
   }
-
-  const { data: profileData, error: profileError } = await supabase
-    .from("profiles")
-    .select("auth_user_id, role")
-    .eq("auth_user_id", authData.user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    return failure(classifyReadError(profileError));
+  if (identity.status === "profile_error") {
+    return failure(classifyReadError(identity.error));
   }
-
-  const profile = parseProfile(profileData);
-  if (!profile || profile.auth_user_id !== authData.user.id) {
+  if (identity.status === "profile_missing" || identity.status === "profile_mismatch") {
     return failure("profile_not_found");
   }
 
-  if (profile.role !== "professor") {
+  if (identity.profile.role !== "professor") {
     return failure("forbidden");
   }
 

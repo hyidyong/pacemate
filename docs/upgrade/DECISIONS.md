@@ -76,3 +76,55 @@ were removed from scheduling paths (professor calendar, suggested-time input,
 today-timetable widget, availability-write validation). `scheduling-policy.ts` was
 deleted (4 of 7 exports dead; survivors moved into the domain). Intervals are half-open
 `[start, end)` at every layer, matching the DB `tstzrange(...,'[)')` constraint.
+
+## D-007 — Request-scoped memoization only; no cross-request caching of scheduling data
+
+Status: Accepted (Stage 3, 2026-08-12)
+
+Context: every page paid duplicate identity/notification queries (AppShell
+refetch on ~20 routes; 3× auth.getUser identity chains on /dashboard and
+/professor), but availability data is correctness-critical and must never be
+stale (Stage 2 invariants).
+
+Decision: React `cache()` request-scoped memoization is the ONLY caching layer
+introduced: `getDemoProfile`, `getNotificationsForProfile`,
+`getUnreadNotificationCount`, and `resolveAuthenticatedProfile`
+(src/services/request-identity.server.ts) — six services consume the shared
+identity resolver, each keeping its own frozen error vocabulary. No
+`unstable_cache`, no ISR/revalidate windows, no client query cache, and no
+caching of any availability/booking read was added. The coarse
+`revalidatePath` vocabulary is unchanged (harmless while nothing outlives a
+request).
+
+Reason: the memo dies with the response, so booking/cancellation freshness is
+byte-identical to before; within one request it yields a single consistent
+identity snapshot. Fixes the duplicate-fetch root cause instead of masking it.
+
+Consequences: source-level guards (request-memoization.test.mjs,
+request-identity.test.mjs) freeze the wiring; any future cross-request cache
+must answer the stage-03 DESIGN.md §5.1 safety questionnaire and use precise
+invalidation (tags), not path shotguns.
+
+## D-008 — Stage 3 performance budgets and deterministic guards
+
+Status: Accepted (Stage 3, 2026-08-12)
+
+Context: wall-clock timings against live Supabase are too noisy to assert in
+tests (spikes of 2–4× observed within one measurement session).
+
+Decision: performance regressions are guarded deterministically — query-count
+and batching tests via the repo's transpile-loader + counting fake client
+(student-community.query-count.test.mjs, counseling.query-count.test.mjs), a
+hydration-seam source guard (professor-page-hydration.test.mjs), and a
+bundle-size script (scripts/check-bundle-budgets.mjs: shared ≤550 kB raw,
+/professor ≤900 kB raw, any route ≤850 kB raw; run after a fresh build, not in
+the src test glob). Wall-clock numbers are report-only in
+stage-03/PERFORMANCE_AUDIT.md.
+
+Reason: deterministic proxies catch the mechanisms that caused the measured
+slowness (extra round trips, false await stages, eager heavy chunks) without
+flaky CI.
+
+Consequences: `npm run build && node scripts/check-bundle-budgets.mjs` is the
+bundle gate; budgets must be revised deliberately in the same commit as an
+intentional size change.

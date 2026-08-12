@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
+import { resolveAuthenticatedProfile } from "@/services/request-identity.server";
 import {
   MINIMUM_ANONYMOUS_GROUP_SIZE,
   type ProfessorAnonymousWeeklyAggregate,
@@ -36,11 +37,6 @@ const SAFE_MESSAGES: Record<ProfessorAnonymousWeeklyAggregateErrorCode, string> 
 };
 
 type UnknownRecord = Record<string, unknown>;
-
-type ProfileRow = {
-  auth_user_id: string | null;
-  role: string;
-};
 
 type ParsedProgressRow = {
   studentId: string;
@@ -119,16 +115,6 @@ function classifyReadError(error: unknown): "permission_denied" | "database_read
   return code === "42501" || status === 401 || status === 403
     ? "permission_denied"
     : "database_read_failed";
-}
-
-function parseProfile(value: unknown): ProfileRow | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  return typeof value.auth_user_id === "string" && typeof value.role === "string"
-    ? { auth_user_id: value.auth_user_id, role: value.role }
-    : null;
 }
 
 function parseOffering(value: unknown): { id: string; courseName: string } | null {
@@ -258,27 +244,21 @@ export async function getProfessorAnonymousWeeklyAggregate(): Promise<ProfessorA
     return failure("database_read_failed");
   }
 
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) {
+  const identity = await resolveAuthenticatedProfile();
+  if (identity.status === "client_error") {
+    return failure("database_read_failed");
+  }
+  if (identity.status === "unauthenticated") {
     return failure("unauthenticated");
   }
-
-  const { data: profileData, error: profileError } = await supabase
-    .from("profiles")
-    .select("auth_user_id, role")
-    .eq("auth_user_id", authData.user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    return failure(classifyReadError(profileError));
+  if (identity.status === "profile_error") {
+    return failure(classifyReadError(identity.error));
   }
-
-  const profile = parseProfile(profileData);
-  if (!profile || profile.auth_user_id !== authData.user.id) {
+  if (identity.status === "profile_missing" || identity.status === "profile_mismatch") {
     return failure("profile_not_found");
   }
 
-  if (profile.role !== "professor") {
+  if (identity.profile.role !== "professor") {
     return failure("forbidden");
   }
 
@@ -310,10 +290,20 @@ export async function getProfessorAnonymousWeeklyAggregate(): Promise<ProfessorA
     return { ok: true, report: { aggregates: [] } };
   }
 
-  const { data: planData, error: planError } = await supabase
-    .from("course_weekly_plans")
-    .select("offering_id, week_number, title, topic")
-    .in("offering_id", offeringIds);
+  // Plans and progress both depend only on offeringIds — one round trip, not two.
+  const [
+    { data: planData, error: planError },
+    { data: progressData, error: progressError },
+  ] = await Promise.all([
+    supabase
+      .from("course_weekly_plans")
+      .select("offering_id, week_number, title, topic")
+      .in("offering_id", offeringIds),
+    supabase
+      .from("student_weekly_progress")
+      .select(STUDENT_WEEKLY_PROGRESS_SELECT)
+      .in("offering_id", offeringIds),
+  ]);
   if (planError) {
     return failure(classifyReadError(planError));
   }
@@ -330,11 +320,6 @@ export async function getProfessorAnonymousWeeklyAggregate(): Promise<ProfessorA
         : `${planWeekNumber}주차`;
     weeklyTitles.set(`${planOfferingId}\u0000${planWeekNumber}`, title);
   }
-
-  const { data: progressData, error: progressError } = await supabase
-    .from("student_weekly_progress")
-    .select(STUDENT_WEEKLY_PROGRESS_SELECT)
-    .in("offering_id", offeringIds);
 
   if (progressError) {
     return failure(classifyReadError(progressError));

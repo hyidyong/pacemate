@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { resolveAuthenticatedProfile } from "@/services/request-identity.server";
 import {
   selectCompanyLawOffering,
   type CompanyLawOfferingRow,
@@ -56,21 +57,14 @@ export async function resolveCompanyLaw2026OfferingForSession(): Promise<Company
     return failure("database_read_failed");
   }
 
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) {
-    return failure("unauthenticated");
-  }
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("id, auth_user_id, role")
-    .eq("auth_user_id", authData.user.id)
-    .maybeSingle();
-
-  if (profileError) return failure(classifyError(profileError));
-  if (!profile || profile.auth_user_id !== authData.user.id) {
+  const identity = await resolveAuthenticatedProfile();
+  if (identity.status === "client_error") return failure("database_read_failed");
+  if (identity.status === "unauthenticated") return failure("unauthenticated");
+  if (identity.status === "profile_error") return failure(classifyError(identity.error));
+  if (identity.status === "profile_missing" || identity.status === "profile_mismatch") {
     return failure("profile_not_found");
   }
+  const profile = identity.profile;
   if (profile.role !== "student") return failure("forbidden");
 
   const { data: studentCourses, error: studentCoursesError } = await supabase

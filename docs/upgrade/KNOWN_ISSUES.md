@@ -3,20 +3,66 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-016 — Stage 3 performance audit findings deferred by design (Stage 4/6/8/9 inputs)
+
+Status: OPEN (documented 2026-08-12; evidence in docs/upgrade/stage-03/PERFORMANCE_AUDIT.md).
+- Professor report services read university-global data (ALL course_offerings +
+  ALL student progress rows, unscoped to the signed-in professor) and serialize
+  it into client props (professor-course-progress-report.server.ts:~195,
+  professor-anonymous-weekly-aggregate.server.ts:~280). Also a privacy concern —
+  any professor sees every student's progress. Scoping changes displayed
+  content, so it was out of Stage 3's behavior-preservation charter.
+  Recommended: Stage 6 (tenancy) / Stage 9 (authz), severity Medium.
+- Unbounded result sets fine at demo scale: courses full table (course.service.ts,
+  student-community.service.ts getCourses), course_professors fallback
+  (counseling.service.ts:128-130), escalations inbox + student /ask full-table
+  read (professor-questions.server.ts), getCalendarRequests, course notices
+  (course-notices.server.ts:36-43), posts' reactions/comments for 80 posts.
+  Recommended: Stage 8, severity Low today / Medium at scale.
+- Justified-by-pattern index candidates, negligible at 126-row scale:
+  user_notifications partial unread indexes; student_weekly_progress
+  (offering_id, week_number) once professor scoping lands; counseling_requests
+  (student_id, created_at desc). Recommended: Stage 8.
+- No loading.tsx/streaming anywhere: every navigation blocks on full SSR with a
+  frozen previous page (client-nav RSC 268–852 ms measured). Loading-state
+  design belongs to Stage 4 (§23); revisit with post-Stage-3 numbers.
+- supabase-js rides in the shared shell (~72 kB gz on every route) via
+  NotificationMenu for a realtime channel that is off by default
+  (notification-menu.tsx:73). Extraction candidate, Stage 4/8.
+- Rerender hotspots (no measured journey impact yet): hover-glow-card mousemove
+  setState (dashboard), ai-tutor-chat per-keystroke full re-render, hero
+  carousel interval churn; nested <main> also in community-board.tsx:399,
+  reviews-board.tsx:136, professor-lounge.tsx:93. Stage 4.
+- /dashboard still reads student_courses 5× per render with different
+  selects/filters (getMyCourses, course notices, page inline, offering
+  resolution, ownership gates) — a true consolidation needs a shared
+  student-courses snapshot type, deferred. Stage 4/8, severity Low.
+
 ## KI-013 — Professor workspace intermittently never leaves its lazy-load fallback
 
-Status: OPEN (pre-existing; reproduced on `main` production build 2026-08-12 — NOT a
-Stage 2 regression; Stage 3 candidate, it stems from the "[Opt 4]" lazy-load of
-ProfessorWorkspace in src/app/professor/page.tsx:17-28).
-Symptom: /professor renders the SSR'd workspace, then hydration replaces it with the
-"워크스페이스 불러오는 중..." fallback which never resolves; the SSR'd workspace HTML
-remains orphaned in the DOM (nested `<main>`, width 0). All JS chunks return 200; no
+Status: RESOLVED in Stage 3 (2026-08-12, commit b4bfe9f). Root cause: the
+"[Opt 4]" `next/dynamic()` wrapper in the Server Component page created a
+Suspense/lazy hydration seam while deferring nothing — the workspace chunk was
+eagerly preloaded for /professor in app-build-manifest.json, and direct GET
+loads reproduced the stuck fallback 4/4 (≥29 s, orphaned SSR DOM, 2 nested
+<main>, all chunks 200, no console errors) on the production build. Fix:
+static import (seam deleted), workspace's nested <main> → div, redundant
+inline dynamic import of professor.actions removed. After: 8/8 direct GETs
+render the workspace (desktop + mobile + ?tab=report deep link) across two
+production builds; /professor First Load JS unchanged then reduced 339→225 kB
+by re-introducing lazy loading at the correct boundary (recharts report view
+inside the client workspace, ssr:false — no RSC hydration seam). Guarded by
+src/app/professor/professor-page-hydration.test.mjs. Historical text below
+kept for context.
+
+Previously: /professor rendered the SSR'd workspace, then hydration replaced it with the
+"워크스페이스 불러오는 중..." fallback which never resolved; the SSR'd workspace HTML
+remained orphaned in the DOM (nested `<main>`, width 0). All JS chunks returned 200; no
 console/server errors. Flaky: loads arriving via the login POST redirect reliably
 hydrated during QA; direct GET navigations frequently stuck. Reproduced identically on
 `main` (d922b34) and `upgrade/stage-2` production builds, same machine/browser.
-Impact: professor calendar/workspace unusable on affected loads until a lucky reload.
 Note: Stage 2 QA also hit a SEPARATE, Stage-2-caused variant (relative .ts-extension
-import broke webpack dev's client graph) — that one was fixed on the branch
+import broke webpack dev's client graph) — that one was fixed on the stage-2 branch
 (calendar-utils imports via the @/ alias again; tests use a transpile loader).
 
 ## KI-014 — Availability writes lack ownership/role guards; counseling status updates lack ownership checks

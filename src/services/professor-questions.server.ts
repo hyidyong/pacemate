@@ -3,6 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
+import { resolveAuthenticatedProfile } from "@/services/request-identity.server";
 import {
   createUserNotifications,
   createUserNotificationsWithClient,
@@ -364,29 +365,25 @@ export async function getAuthenticatedQuestionStaffIdentity(): Promise<{
 }
 
 async function getAuthProfile(
-  supabase: ServerClient,
+  _supabase: ServerClient,
   expectedRole: AuthProfile["role"] | readonly AuthProfile["role"][],
 ): Promise<AuthProfile | null> {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) {
+  // Identity comes from the request-scoped resolver (one auth round trip +
+  // profiles read per render, shared with the report services). Every failure
+  // state collapses to null, exactly like the inline chain it replaces.
+  const identity = await resolveAuthenticatedProfile();
+  if (identity.status !== "ok") {
     return null;
   }
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, auth_user_id, role")
-    .eq("auth_user_id", authData.user.id)
-    .maybeSingle();
-  const id = data ? normalizeUuid(data.id) : null;
+  const id = normalizeUuid(identity.profile.id);
+  const role = identity.profile.role;
   if (
-    error ||
-    !data ||
     !id ||
-    data.auth_user_id !== authData.user.id ||
-    !(Array.isArray(expectedRole) ? expectedRole.includes(data.role) : data.role === expectedRole)
+    !(Array.isArray(expectedRole) ? expectedRole.includes(role) : role === expectedRole)
   ) {
     return null;
   }
-  return { id, role: data.role as AuthProfile["role"] };
+  return { id, role: role as AuthProfile["role"] };
 }
 
 export async function getStudentAiTutorCourses(): Promise<ProfessorQuestionCourseOption[]> {
