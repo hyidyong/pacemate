@@ -30,6 +30,25 @@ function notificationOwnershipFilter(profile: NonNullable<Awaited<ReturnType<typ
   return `recipient_id.eq.${profile.id},recipient_role.eq.${profile.role}`;
 }
 
+// Bulk "mark read" statements carry no id, so the ownership filter is their
+// only bound — and role-addressed rows have recipient_id IS NULL, so the
+// recipient_role arm matches those rows in EVERY tenant. One student's click
+// would mark other universities' notifications read (Stage 8 P0-1).
+//
+// The role arm is therefore tenant-scoped; the recipient_id arm is left alone
+// because a row addressed to this profile id is this user's by construction and
+// cannot name anyone else. Tenant comes from the server-resolved profile, never
+// from request input (Stage 6 D-015/D-016).
+function bulkNotificationOwnershipFilter(
+  profile: NonNullable<Awaited<ReturnType<typeof getDemoProfile>>>,
+) {
+  if (!profile.school_id) {
+    return `recipient_id.eq.${profile.id}`;
+  }
+
+  return `recipient_id.eq.${profile.id},and(recipient_role.eq.${profile.role},school_id.eq.${profile.school_id})`;
+}
+
 export async function markNotificationReadAndGo(formData: FormData) {
   const profile = await getDemoProfile();
   const notificationId = normalizeUuid(text(formData.get("notificationId")));
@@ -97,7 +116,7 @@ export async function markAllNotificationsRead() {
     .from("user_notifications")
     .update({ is_read: true })
     .eq("is_read", false)
-    .or(notificationOwnershipFilter(profile));
+    .or(bulkNotificationOwnershipFilter(profile));
 
   if (error) {
     return;
@@ -120,7 +139,7 @@ export async function markNotificationsReadByCategory(category: "question" | "co
     .update({ is_read: true })
     .eq("is_read", false)
     .eq("category", category)
-    .or(notificationOwnershipFilter(profile));
+    .or(bulkNotificationOwnershipFilter(profile));
 
   if (error) {
     return;
