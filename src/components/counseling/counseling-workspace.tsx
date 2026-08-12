@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen, CalendarCheck, ChevronLeft, ChevronRight, Search, Send, UserRound } from "lucide-react";
 import {
+  cancelMyCounselingRequest,
   createCounselingRequest,
   reserveSuggestedCounseling,
 } from "@/services/counseling.actions";
@@ -277,6 +278,16 @@ export function CounselingWorkspace({
     const formData = new FormData();
     formData.set("requestId", request.id);
     runAction(reserveSuggestedCounseling, formData, "requests");
+  }
+
+  function cancelRequest(request: StudentCounselingRequest) {
+    if (!window.confirm(`${formatDateTime(request.requested_start)} 상담 신청을 취소할까요?`)) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("requestId", request.id);
+    runAction(cancelMyCounselingRequest, formData, "requests");
   }
 
   return (
@@ -554,6 +565,16 @@ export function CounselingWorkspace({
                 </div>
                 <span>{statusLabels[request.status]}</span>
                 {request.professor_note ? <p>{request.professor_note}</p> : null}
+                {request.status === "pending" || request.status === "approved" ? (
+                  <button
+                    className="button button-outline button-sm"
+                    disabled={isPending}
+                    onClick={() => cancelRequest(request)}
+                    type="button"
+                  >
+                    상담 신청 취소
+                  </button>
+                ) : null}
                 {request.status === "rejected" && request.suggested_start ? (
                   <div className="counseling-suggestion">
                     <p>추천 시간: {formatDateTime(request.suggested_start)}</p>

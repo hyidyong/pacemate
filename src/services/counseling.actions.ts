@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCounselingSlotId } from "@/lib/counseling-slots";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeUuid } from "@/lib/uuid";
 import { getAvailableCounselingSlots } from "@/services/counseling.service";
@@ -173,4 +174,57 @@ export async function reserveSuggestedCounseling(formData: FormData) {
   );
   request.set("topic", `${data.topic} (추천 시간 재신청)`);
   return createCounselingRequest(request);
+}
+
+const CANCEL_CONFLICT_MESSAGE = "취소할 수 없는 상담 신청입니다. 최신 상태를 확인해 주세요.";
+
+export async function cancelMyCounselingRequest(formData: FormData) {
+  const profile = await getDemoProfile();
+  const requestId = normalizeUuid(text(formData.get("requestId")));
+
+  if (!profile || profile.role !== "student" || !requestId) {
+    return { ok: false, message: CANCEL_CONFLICT_MESSAGE };
+  }
+
+  // Admin client + app-level ownership predicate: students have no UPDATE
+  // policy on counseling_requests (the whole authenticated policy family is
+  // Stage 9's charter), so this mirrors the professor transition path. The
+  // single conditional UPDATE is a compare-and-set: only the caller's own
+  // still-active (pending/approved) request can move to cancelled, and a
+  // competing transition makes this a zero-row conflict instead of a blind
+  // overwrite.
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("counseling_requests")
+    .update({ status: "cancelled" })
+    .eq("id", requestId)
+    .eq("student_id", profile.id)
+    .in("status", ["pending", "approved"])
+    .select("id, topic")
+    .single();
+
+  if (error || !data) {
+    if (!error || error.code === "PGRST116") {
+      return { ok: false, message: CANCEL_CONFLICT_MESSAGE };
+    }
+    return { ok: false, message: "상담 신청을 취소하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+
+  const notificationResult = await createUserNotification({
+    recipientRole: "professor",
+    recipientId: null,
+    category: "counseling",
+    title: "상담 신청이 취소됐습니다",
+    body: `${profile.name} 학생이 ${data.topic} 상담 신청을 취소했습니다.`,
+    targetHref: "/professor?tab=counseling",
+  });
+
+  revalidatePath("/counseling");
+  revalidatePath("/professor");
+
+  if (!notificationResult.ok) {
+    return { ok: true, message: "상담 신청은 취소됐지만 알림 전송에 실패했습니다." };
+  }
+
+  return { ok: true, message: "상담 신청을 취소했습니다." };
 }

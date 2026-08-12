@@ -428,6 +428,114 @@ test("M2 interleaving: two concurrent submissions of one intent — exactly one 
   }
 });
 
+function cancelForm(requestId) {
+  const form = new FormData();
+  form.set("requestId", requestId);
+  return form;
+}
+
+const OWN_REQUEST_ID = "11111111-1111-4111-8111-111111111111";
+
+function ownRequestRow(status = "pending", overrides = {}) {
+  return {
+    id: OWN_REQUEST_ID,
+    student_id: STUDENT.id,
+    professor_id: PROFESSOR.id,
+    topic: "학업 상담",
+    requested_start: "2026-09-07T01:00:00.000Z",
+    requested_end: "2026-09-07T01:30:00.000Z",
+    status,
+    ...overrides,
+  };
+}
+
+test("M9: a student cancels their own pending request (CAS to cancelled + professor notified)", async () => {
+  const { actions } = await loadModules();
+  const { admin } = setupWorld();
+  try {
+    admin.state.fixtures.counseling_requests.push(ownRequestRow("pending"));
+
+    const result = await actions.cancelMyCounselingRequest(cancelForm(OWN_REQUEST_ID));
+
+    assert.equal(result.ok, true, result.message);
+    assert.match(result.message, /상담 신청을 취소했습니다/);
+    assert.equal(admin.state.fixtures.counseling_requests[0].status, "cancelled");
+    assert.equal(globalThis.__stage5Notifications.length, 1);
+    assert.equal(globalThis.__stage5Notifications[0].recipientRole, "professor");
+    assert.match(globalThis.__stage5Notifications[0].title, /취소/);
+    assert.deepEqual(globalThis.__stage5Revalidated, ["/counseling", "/professor"]);
+  } finally {
+    teardownWorld();
+  }
+});
+
+test("M9: an approved request can also be cancelled by its student", async () => {
+  const { actions } = await loadModules();
+  const { admin } = setupWorld();
+  try {
+    admin.state.fixtures.counseling_requests.push(ownRequestRow("approved"));
+
+    const result = await actions.cancelMyCounselingRequest(cancelForm(OWN_REQUEST_ID));
+
+    assert.equal(result.ok, true, result.message);
+    assert.equal(admin.state.fixtures.counseling_requests[0].status, "cancelled");
+  } finally {
+    teardownWorld();
+  }
+});
+
+test("M9: cancelling another student's request is refused and touches nothing", async () => {
+  const { actions } = await loadModules();
+  const { admin } = setupWorld();
+  try {
+    admin.state.fixtures.counseling_requests.push(
+      ownRequestRow("pending", { student_id: "student-2" }),
+    );
+
+    const result = await actions.cancelMyCounselingRequest(cancelForm(OWN_REQUEST_ID));
+
+    assert.equal(result.ok, false, "foreign requests must not be cancellable");
+    assert.match(result.message, /취소할 수 없는 상담 신청/);
+    assert.equal(admin.state.fixtures.counseling_requests[0].status, "pending");
+    assert.equal(globalThis.__stage5Notifications.length, 0);
+  } finally {
+    teardownWorld();
+  }
+});
+
+test("M9: cancel loses a competing terminal transition — controlled conflict, no notification", async () => {
+  const { actions } = await loadModules();
+  const { admin } = setupWorld();
+  try {
+    admin.state.fixtures.counseling_requests.push(ownRequestRow("rejected"));
+
+    const result = await actions.cancelMyCounselingRequest(cancelForm(OWN_REQUEST_ID));
+
+    assert.equal(result.ok, false);
+    assert.match(result.message, /취소할 수 없는 상담 신청/);
+    assert.equal(admin.state.fixtures.counseling_requests[0].status, "rejected");
+    assert.equal(globalThis.__stage5Notifications.length, 0);
+  } finally {
+    teardownWorld();
+  }
+});
+
+test("M9: only students can use the cancel action", async () => {
+  const { actions } = await loadModules();
+  const { admin } = setupWorld();
+  try {
+    admin.state.fixtures.counseling_requests.push(ownRequestRow("pending"));
+    globalThis.__stage5Profile = { ...STUDENT, role: "professor" };
+
+    const result = await actions.cancelMyCounselingRequest(cancelForm(OWN_REQUEST_ID));
+
+    assert.equal(result.ok, false);
+    assert.equal(admin.state.fixtures.counseling_requests[0].status, "pending");
+  } finally {
+    teardownWorld();
+  }
+});
+
 test("unknown insert failures keep the generic retryable message and structured log", async () => {
   const { actions, service, domain } = await loadModules();
   const { session } = setupWorld();
