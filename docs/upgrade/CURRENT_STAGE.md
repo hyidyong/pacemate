@@ -4,10 +4,13 @@
 
 Stage 6 / 10
 University Multi-Tenancy
-Status: IN PROGRESS on branch `upgrade/stage-6` (started 2026-08-12).
+Status: COMPLETE on branch `upgrade/stage-6` (2026-08-12) — awaiting PR
+review/merge.
 Base: `main` @ 0b3b88e (Stage 5 merge, PR #39). See
-docs/upgrade/stage-06/ for the tenant data audit, design, migration plan,
-and isolation test matrix as they land.
+docs/upgrade/stage-06/HANDOFF.md.
+
+Next stage: Stage 7 (SSO) — NOT started. Stage 7 begins only after the Stage 6
+PR merges, from the HANDOFF "Stage 7 SSO integration points" section.
 
 ## Primary Objective
 

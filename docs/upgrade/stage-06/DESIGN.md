@@ -149,7 +149,10 @@ where the chain is broken. Concretely:
   relying on the join (Agent C's landmine). Backfilled from the department
   join (all 3 live professors resolve cleanly), then NOT NULL.
 - `user_notifications.school_id uuid REFERENCES schools(id)` — broadcast rows
-  (recipient_id NULL) have no derivable parent. Backfilled (§8), then NOT NULL.
+  (recipient_id NULL) have no derivable parent. Backfilled (§8). IMPLEMENTATION
+  NOTE: kept NULLABLE, not NOT NULL — see D-018 (ungated writers can run with a
+  null acting profile; NOT NULL would break their degraded notifications).
+  The service stamps it best-effort.
 
 ### 6.2 Columns tightened (already fully populated live)
 

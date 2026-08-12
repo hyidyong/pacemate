@@ -163,6 +163,29 @@ M1 → M4 (courses, no dependency) → M2 (professors) → M5 (profiles backfill
 → M3 (notifications, after M5) → M6 (RLS/RPC, after M2+M5). Each pushed and
 validated independently. `db push --dry-run` before every real push.
 
+## As-applied (2026-08-12, live pacemate DB)
+
+The plan above was executed as eight timestamped migrations, all pushed via
+`npx supabase db push --linked` after a clean `--dry-run`:
+
+- 20260812010000 schools status/slug (M1)
+- 20260812020000 professors.school_id backfill + NOT NULL (M2)
+- 20260812030000 profiles + courses backfill/NOT NULL (M5+M4)
+- 20260812040000 user_notifications.school_id backfill + NOT NULL (M3)
+- 20260812050000 counseling INSERT tenant WITH CHECK, drop dead anon policy,
+  RPC assistant tenant scope (M6)
+- 20260812060000 user_notifications.school_id → NULLABLE (M7 — see D-018;
+  NOT NULL from M3 reverted because ungated writers can pass a null profile)
+- 20260812070000 posts.school_id backfill (M8 — enables the tenant-scoped
+  community board without hiding legacy posts)
+
+Post-migration validation (live): professors/profiles/courses/notifications
+tenant columns all 0 NULL; professors/courses/profiles school_id NOT NULL;
+GiST `counseling_requests_no_active_overlap` byte-identical; counseling INSERT
+policy carries the tenant clause; dead email-gated anon policy gone; RPC
+tenant-scoped. Authenticated cross-tenant booking probe REJECTED, same-tenant
+INSERTED (probe rows cleaned up, schools back to 1).
+
 ## Global validation after all migrations
 
 - `select table_name, count(*) filter (where school_id is null) as nulls
