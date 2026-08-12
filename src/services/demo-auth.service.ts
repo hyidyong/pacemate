@@ -7,6 +7,7 @@ import {
   destroyDemoSession,
 } from "@/lib/auth/demo-session";
 import { logEvent } from "@/lib/observability/log";
+import { getRequestId } from "@/lib/observability/request-context";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getRoleHomePath, type DemoProfile } from "@/services/session.service";
@@ -36,6 +37,7 @@ async function rejectLogin(
   logEvent({
     event: "auth.login_denied",
     outcome: "denied",
+    requestId: await getRequestId(),
     route: "/login",
     detail: errorCode,
   });

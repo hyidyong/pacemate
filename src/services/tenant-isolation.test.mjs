@@ -21,6 +21,9 @@ function toDataUrl(code) {
 const OBSERVABILITY_LOG_STUB = toDataUrl(
   "export const logEvent = () => {}; export const buildLogRecord = () => ({}); export const classifyPostgresError = () => 'fault';",
 );
+const REQUEST_CONTEXT_STUB = toDataUrl(
+  "export const getRequestId = async () => undefined;",
+);
 
 const SERVER_STUB = toDataUrl(
   "export const createSupabaseServerClient = async () => globalThis.__tenantSessionClient;",
@@ -64,6 +67,7 @@ function loadModules() {
       ['from "@/lib/supabase/server"', `from ${JSON.stringify(SERVER_STUB)}`],
       ['from "@/lib/supabase/admin"', `from ${JSON.stringify(ADMIN_STUB)}`],
       ['from "@/lib/observability/log"', `from ${JSON.stringify(OBSERVABILITY_LOG_STUB)}`],
+      ['from "@/lib/observability/request-context"', `from ${JSON.stringify(REQUEST_CONTEXT_STUB)}`],
     ]);
     const actionsUrl = await compile(new URL("./counseling.actions.ts", import.meta.url), [
       ['"use server";', ""],
@@ -77,6 +81,7 @@ function loadModules() {
       ['from "@/services/notifications.create.service"', `from ${JSON.stringify(NOTIFY_STUB)}`],
       ['from "@/services/session.service"', `from ${JSON.stringify(SESSION_STUB)}`],
       ['from "@/lib/observability/log"', `from ${JSON.stringify(OBSERVABILITY_LOG_STUB)}`],
+      ['from "@/lib/observability/request-context"', `from ${JSON.stringify(REQUEST_CONTEXT_STUB)}`],
     ]);
     const professorUrl = await compile(new URL("./professor.actions.ts", import.meta.url), [
       ['"use server";', ""],
@@ -89,6 +94,7 @@ function loadModules() {
       ['from "@/services/roadmap-revisions.service"', `from ${JSON.stringify(ROADMAP_STUB)}`],
       ['from "@/services/session.service"', `from ${JSON.stringify(SESSION_STUB)}`],
       ['from "@/lib/observability/log"', `from ${JSON.stringify(OBSERVABILITY_LOG_STUB)}`],
+      ['from "@/lib/observability/request-context"', `from ${JSON.stringify(REQUEST_CONTEXT_STUB)}`],
     ]);
     const [service, actions, professor, domain] = await Promise.all([
       import(serviceUrl), import(actionsUrl), import(professorUrl), import(domainUrl),

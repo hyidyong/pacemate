@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getCounselingSlotId } from "@/lib/counseling-slots";
 import { logEvent } from "@/lib/observability/log";
+import { getRequestId } from "@/lib/observability/request-context";
 import { tryResolveTenantContext } from "@/lib/tenant";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -89,6 +90,7 @@ export async function createCounselingRequest(formData: FormData) {
     logEvent({
       event: "booking.availability_unavailable",
       outcome: "fault",
+      requestId: await getRequestId(),
       route: "/counseling",
       tenantId: tenant.tenantId,
       profileId: profile.id,
@@ -135,6 +137,7 @@ export async function createCounselingRequest(formData: FormData) {
     logEvent({
       event: "booking.slot_conflict",
       outcome: "conflict",
+      requestId: await getRequestId(),
       route: "/counseling",
       tenantId: tenant.tenantId,
       profileId: profile.id,
@@ -158,6 +161,7 @@ export async function createCounselingRequest(formData: FormData) {
     logEvent({
       event: "booking.storage_failure",
       outcome: "fault",
+      requestId: await getRequestId(),
       route: "/counseling",
       tenantId: tenant.tenantId,
       profileId: profile.id,
