@@ -18,7 +18,21 @@
 import { loadEnvLocal, requireEnv } from "./loadtest/lib/env.mjs";
 import { createRestClient } from "./loadtest/lib/supabase-rest.mjs";
 
-const DEMO_STUDENT = { identifier: "student1@pacemate.edu", password: "1234" };
+// Codex F5: the demo password is no longer stored in the repository. It is
+// read from PACEMATE_DEMO_PASSWORDS, which is never committed.
+const DEMO_STUDENT_IDENTIFIER = "student1@pacemate.edu";
+
+function demoPasswordFor(identifier) {
+  const raw = process.env.PACEMATE_DEMO_PASSWORDS;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const password = parsed?.[identifier];
+    return typeof password === "string" && password ? password : null;
+  } catch {
+    return null;
+  }
+}
 const PROBE_MARKER = "rls-probe";
 
 async function main() {
@@ -27,6 +41,14 @@ async function main() {
   const anonKey = requireEnv(env, "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   const serviceKey = requireEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
   const rest = createRestClient({ url, serviceRoleKey: serviceKey });
+
+  const demoPassword = demoPasswordFor(DEMO_STUDENT_IDENTIFIER);
+  if (!demoPassword) {
+    throw new Error(
+      "PACEMATE_DEMO_PASSWORDS must supply a credential for " +
+        `${DEMO_STUDENT_IDENTIFIER} — demo passwords are no longer stored in the repository.`,
+    );
+  }
 
   const results = [];
   const check = (id, pass, detail) => results.push({ id, pass, detail });
@@ -46,7 +68,7 @@ async function main() {
   const tokenRes = await fetch(`${url}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: { apikey: anonKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ email: DEMO_STUDENT.identifier, password: DEMO_STUDENT.password }),
+    body: JSON.stringify({ email: DEMO_STUDENT_IDENTIFIER, password: demoPassword }),
   });
   const token = (await tokenRes.json()).access_token;
   if (!token) throw new Error("could not sign in the demo student; cannot verify authenticated policy");
@@ -59,7 +81,7 @@ async function main() {
 
   const [profile] = await rest.select(
     "profiles",
-    `select=id,school_id,role&identifier=eq.${encodeURIComponent(DEMO_STUDENT.identifier)}`,
+    `select=id,school_id,role&identifier=eq.${encodeURIComponent(DEMO_STUDENT_IDENTIFIER)}`,
   );
   if (!profile) throw new Error("demo student profile not found");
 
