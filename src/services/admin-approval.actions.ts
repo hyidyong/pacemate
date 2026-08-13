@@ -15,6 +15,28 @@ function text(value: FormDataEntryValue | null, fallback = "") {
   return current || fallback;
 }
 
+/**
+ * Codex round 3, F5 — legal transitions for a roadmap revision.
+ *
+ * The update was previously `.eq("id").eq("school_id")` with no expected prior
+ * state, so `approved` could be walked back to `assistant_reviewed`, a rejected
+ * request could be revived, and two admins deciding at once BOTH succeeded —
+ * last write wins, and both fanned out a student-facing notification.
+ *
+ * Derived from the workflow the board actually drives: an assistant reviews a
+ * pending request; an admin decides on something pending or already reviewed;
+ * approved and rejected are terminal.
+ */
+const LEGAL_TRANSITION_SOURCES: Record<string, readonly string[]> = {
+  assistant_reviewed: ["pending"],
+  approved: ["pending", "assistant_reviewed"],
+  rejected: ["pending", "assistant_reviewed"],
+};
+
+export function legalSourcesFor(status: string): readonly string[] | null {
+  return LEGAL_TRANSITION_SOURCES[status] ?? null;
+}
+
 export async function updateRoadmapRevisionStatus(formData: FormData) {
   const profile = await getDemoProfile();
   const requestId = text(formData.get("requestId"));
@@ -82,17 +104,32 @@ export async function updateRoadmapRevisionStatus(formData: FormData) {
   // tenant A request's UUID could publish into A. The predicate is constrained
   // by school_id as well as id, so the service-role update cannot reach outside
   // the caller's own university even if the id is guessed or leaked.
-  const { data, error } = await createSupabaseAdminClient()
+  // Codex round 3, F5: a compare-and-set on the expected prior state, so a
+  // terminal decision cannot be walked back and two concurrent deciders resolve
+  // to exactly one winner. Zero matched rows is STALE, not success.
+  const legalSources = legalSourcesFor(status);
+  if (!legalSources) {
+    redirect("/admin?result=invalid");
+  }
+
+  const { data: updated, error } = await createSupabaseAdminClient()
     .from("roadmap_revision_requests")
     .update(patch)
     .eq("id", requestId)
     .eq("school_id", profile.school_id)
-    .select("id, title, course_id, course_code")
-    .single();
+    .in("status", legalSources as string[])
+    .select("id, title, course_id, course_code");
 
   if (error) {
     redirect("/admin?result=error");
   }
+
+  // Exactly one row, or somebody else decided first / the request is already
+  // terminal. The notification below must fire only for the actual winner.
+  if (!updated || updated.length !== 1) {
+    redirect(`/admin?result=stale&request=${requestId}`);
+  }
+  const data = updated[0];
 
   const notification: UserNotificationCreateInput =
     status === "assistant_reviewed"

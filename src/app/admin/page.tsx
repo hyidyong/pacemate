@@ -22,6 +22,11 @@ const resultMessages: Record<string, { text: string; ok: boolean }> = {
   approved: { text: "최종 승인했습니다. 학생 로드맵에 반영됩니다.", ok: true },
   rejected: { text: "요청을 반려하고 요청자에게 알림을 보냈습니다.", ok: true },
   note_required: { text: "반려하려면 검토 메모에 반려 사유를 입력해 주세요.", ok: false },
+  // Codex R3 F5: the decision lost a compare-and-set — the request had already
+  // moved on (another admin decided, or it is already final). The board below
+  // shows its current state, so the operator sees what actually happened rather
+  // than a silent no-op that looks like success.
+  stale: { text: "이미 처리된 요청입니다. 아래에서 현재 상태를 확인해 주세요.", ok: false },
   invalid: { text: "요청을 처리할 수 없습니다. 다시 시도해 주세요.", ok: false },
   error: { text: "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", ok: false },
 };
