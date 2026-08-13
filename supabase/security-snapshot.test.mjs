@@ -154,3 +154,83 @@ test("no client role can INSERT notifications", () => {
     assert.doesNotMatch(row.privileges, /INSERT/, `${row.grantee} can create notifications`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Codex round 3, F12 — the snapshot must capture what actually changes security
+// semantics, not just names.
+// ---------------------------------------------------------------------------
+
+test("the snapshot captures effective privileges, not only explicit grants", () => {
+  assert.ok(Array.isArray(snapshot.effective_privileges), "effective privileges are missing");
+  assert.ok(snapshot.effective_privileges.length > 0);
+  assert.ok(Array.isArray(snapshot.public_privileges), "PUBLIC privileges are missing");
+  assert.ok(Array.isArray(snapshot.column_privileges), "column privileges are missing");
+});
+
+test("nothing is granted to PUBLIC, which every role inherits", () => {
+  assert.deepEqual(
+    snapshot.public_privileges,
+    [],
+    `PUBLIC holds privileges every role inherits: ${JSON.stringify(snapshot.public_privileges)}`,
+  );
+});
+
+test("anon's EFFECTIVE reach is one table, read-only", () => {
+  // Explicit grants alone could miss a privilege arriving via PUBLIC or role
+  // inheritance; this is computed with has_table_privilege.
+  const anon = snapshot.effective_privileges.filter((row) => row.role === "anon");
+  assert.deepEqual(
+    anon.map((row) => `${row.table}:${row.privileges}`),
+    ["schools:SELECT"],
+    `anon can effectively reach more than schools: ${JSON.stringify(anon)}`,
+  );
+});
+
+test("the audit trail is effectively append-only for every client-reachable role", () => {
+  for (const row of snapshot.effective_privileges.filter((r) => r.table === "security_events")) {
+    assert.doesNotMatch(
+      row.privileges,
+      /UPDATE|DELETE|TRUNCATE/,
+      `${row.role} can effectively mutate the audit trail: ${row.privileges}`,
+    );
+  }
+});
+
+test("provenance columns are not UPDATE-grantable to client roles", () => {
+  const forbidden = {
+    posts: ["author_id", "school_id", "community_type", "board_key", "course_id"],
+    course_reviews: ["author_id", "course_id"],
+  };
+  for (const [table, columns] of Object.entries(forbidden)) {
+    for (const row of snapshot.column_privileges.filter((r) => r.table === table)) {
+      const granted = row.columns.split(",");
+      for (const column of columns) {
+        assert.ok(
+          !granted.includes(column),
+          `${row.grantee} can UPDATE ${table}.${column} — provenance must be immutable`,
+        );
+      }
+    }
+  }
+});
+
+test("every function carries a definition hash, so a rewritten body is drift", () => {
+  for (const fn of snapshot.functions) {
+    assert.match(
+      fn.definition_md5 ?? "",
+      /^[0-9a-f]{32}$/,
+      `${fn.schema}.${fn.name} has no definition hash`,
+    );
+  }
+});
+
+test("the append-only triggers are present, enabled, and hashed", () => {
+  const triggers = snapshot.triggers.filter((row) => row.table === "security_events");
+  const names = triggers.map((row) => row.trigger);
+  assert.ok(names.includes("security_events_no_update_trg"), "the append-only trigger is missing");
+  assert.ok(names.includes("security_events_snapshot_trg"), "the attribution trigger is missing");
+  for (const trigger of triggers) {
+    assert.equal(trigger.enabled, "O", `${trigger.trigger} is not enabled (tgenabled=${trigger.enabled})`);
+    assert.match(trigger.definition_md5 ?? "", /^[0-9a-f]{32}$/, `${trigger.trigger} has no hash`);
+  }
+});

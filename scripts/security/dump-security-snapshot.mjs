@@ -53,12 +53,17 @@ select json_build_object(
       group by table_name, grantee
     ) g
   ),
+  -- Codex round 3, F12: the previous snapshot recorded a function's NAME and
+  -- flags but not its BODY, and a trigger's name but not what it does. A
+  -- rewritten SECURITY DEFINER body or a gutted trigger would have passed
+  -- --check unchanged. Both now carry a definition hash.
   'functions', (
     select coalesce(json_agg(json_build_object(
       'schema', n.nspname, 'name', p.proname, 'args', pg_get_function_identity_arguments(p.oid),
       'security_definer', p.prosecdef,
       'config', coalesce(array_to_string(p.proconfig, ','), ''),
-      'acl', coalesce(p.proacl::text, 'DEFAULT')
+      'acl', coalesce(p.proacl::text, 'DEFAULT'),
+      'definition_md5', md5(pg_get_functiondef(p.oid))
     ) order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)), '[]'::json)
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname in ('public', 'app_private')
@@ -66,10 +71,59 @@ select json_build_object(
   ),
   'triggers', (
     select coalesce(json_agg(json_build_object(
-      'table', c.relname, 'trigger', t.tgname
+      'table', c.relname, 'trigger', t.tgname,
+      'enabled', t.tgenabled,
+      'definition_md5', md5(pg_get_triggerdef(t.oid))
     ) order by c.relname, t.tgname), '[]'::json)
     from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and not t.tgisinternal
+  ),
+  -- Effective privileges, including anything reachable through PUBLIC or role
+  -- inheritance. Explicit grants alone missed a privilege granted to PUBLIC,
+  -- which every role holds.
+  'effective_privileges', (
+    select coalesce(json_agg(json_build_object(
+      'table', tbl, 'role', role_name, 'privileges', privs
+    ) order by tbl, role_name), '[]'::json)
+    from (
+      select c.relname as tbl, r.rolname as role_name,
+             string_agg(p.priv, ',' order by p.priv) as privs
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      cross join (values ('anon'), ('authenticated'), ('service_role')) as r(rolname)
+      cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) as p(priv)
+      where n.nspname = 'public' and c.relkind = 'r'
+        and has_table_privilege(r.rolname, c.oid, p.priv)
+      group by c.relname, r.rolname
+    ) e
+  ),
+  -- Privileges held by PUBLIC itself, which every role inherits.
+  'public_privileges', (
+    select coalesce(json_agg(json_build_object(
+      'table', table_name, 'privileges', privs
+    ) order by table_name), '[]'::json)
+    from (
+      select table_name, string_agg(privilege_type, ',' order by privilege_type) as privs
+      from information_schema.role_table_grants
+      where table_schema = 'public' and grantee = 'PUBLIC'
+      group by table_name
+    ) g
+  ),
+  -- Column-level privileges: Stage 9 uses these to make provenance immutable,
+  -- so a re-grant must show up as drift.
+  'column_privileges', (
+    select coalesce(json_agg(json_build_object(
+      'table', table_name, 'grantee', grantee, 'privilege', privilege_type, 'columns', cols
+    ) order by table_name, grantee, privilege_type), '[]'::json)
+    from (
+      select table_name, grantee, privilege_type,
+             string_agg(column_name, ',' order by column_name) as cols
+      from information_schema.column_privileges
+      where table_schema = 'public'
+        and grantee in ('anon', 'authenticated')
+        and privilege_type = 'UPDATE'
+      group by table_name, grantee, privilege_type
+    ) cp
   )
 ) as snapshot
 `;
@@ -124,5 +178,7 @@ if (process.argv.includes("--check")) {
 writeFileSync(SNAPSHOT_PATH, serialised);
 console.log(
   `Wrote supabase/security-snapshot.json — ${live.tables.length} tables, ${live.policies.length} policies, ` +
-    `${live.grants.length} grant rows, ${live.functions.length} functions, ${live.triggers.length} triggers.`,
+    `${live.grants.length} grant rows, ${live.effective_privileges.length} effective-privilege rows, ` +
+    `${live.public_privileges.length} PUBLIC rows, ${live.column_privileges.length} column-privilege rows, ` +
+    `${live.functions.length} functions (hashed), ${live.triggers.length} triggers (hashed).`,
 );
