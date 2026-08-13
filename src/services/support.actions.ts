@@ -25,29 +25,36 @@ function getAutoReply(message: string) {
 }
 
 /**
- * Stage 9 — the anonymous support boundary.
+ * Stage 9 — the support boundary. SUPPORT REQUIRES A SESSION.
  *
- * /support is deliberately reachable without a session, and that is preserved.
- * What is NOT preserved is the shape of the old boundary:
+ * Codex round 3, F8: the previous shape was internally contradictory. The page
+ * already gated itself — `/support` calls requireRoles(profile, [student,
+ * professor, assistant, admin]), so an anonymous visitor is redirected to login
+ * and can never reach the form — while this action still accepted anonymous
+ * submissions and created a notification with a NULL tenant and no recipient.
+ * A role broadcast with a NULL school_id matches NO reader under the
+ * notification policy, so those submissions were written to a place no
+ * administrator could ever read them. Both halves were wrong in opposite
+ * directions.
  *
- *   before:  anonymous browser -> INSERT into user_notifications with a
- *            caller-chosen recipient_id, recipient_role, school_id,
- *            target_href, category, title and body
- *   after:   anonymous browser -> this validated server action -> a
- *            notification whose every routing field is a constant chosen here
+ * Option A of the two the review offered is chosen, because it is the one the
+ * repository already implements and documents: the page requires a session, and
+ * KI-021 records the sessionless path as a DEFECT ("/support additionally
+ * requires NO session at all — fix the authorization before adding a limiter"),
+ * not as a product requirement. Nothing in the product asks for public support.
  *
- * The anon INSERT policy the old shape depended on is gone (20260814010000),
- * and no client role holds INSERT on `user_notifications` at all, so the only
- * way to create one is through server code that has already decided what it is
- * creating. The caller controls exactly two things — a title and a body — and
- * both are length-bounded before they are stored.
+ * So: the action requires an authenticated profile with a tenant, derives the
+ * tenant server-side, and the resulting notification is readable by that
+ * tenant's administrators — which is the whole point of filing one.
  *
- * Anti-abuse is deliberately bounded to what can be enforced correctly here:
- * length caps and a fixed low-trust routing shape. Per-IP throttling is NOT
- * added — university traffic arrives through campus NAT, so an IP is not a
- * caller (the same reasoning as KI-021), and an in-memory limiter on serverless
- * is per-instance theatre. A volume control belongs with a shared store, which
- * this stage does not introduce.
+ * The caller still controls only a title, a body and an allowlisted category,
+ * all bounded before they are stored. Every routing field is a constant.
+ *
+ * Anti-abuse stays bounded to what can be enforced correctly here. Per-IP
+ * throttling is NOT added — university traffic arrives through campus NAT, so an
+ * IP is not a caller (the KI-021 reasoning), and an in-memory limiter on
+ * serverless is per-instance theatre. Requiring a session is itself the largest
+ * abuse control this flow gained.
  */
 const SUPPORT_TITLE_MAX = 120;
 const SUPPORT_MESSAGE_MAX = 500;
@@ -70,6 +77,11 @@ function isSupportCategory(value: string): value is SupportCategory {
 
 export async function submitSupportInquiry(formData: FormData) {
   const profile = await getDemoProfile();
+  // A server action is reachable directly and does not inherit the page's
+  // guard, so the requirement is restated here rather than assumed.
+  if (!profile || !profile.school_id) {
+    return { ok: false, message: "문의를 접수하려면 로그인해 주세요." };
+  }
   const title = text(formData.get("title"));
   const message = text(formData.get("message"));
   const category = text(formData.get("category"), "system");
@@ -96,10 +108,10 @@ export async function submitSupportInquiry(formData: FormData) {
     return { ok: true, autoReplied: true, message: autoReply };
   }
 
-  // Every routing field below is a constant. An anonymous submission is
-  // labelled as such rather than borrowing a name it cannot prove, and it is
-  // addressed to the admin role — never to a recipient the caller names.
-  const submitter = profile?.name ?? "비로그인 사용자";
+  // Every routing field below is a constant, and the tenant comes from the
+  // session — never from the form. The submission is addressed to the admin
+  // ROLE, never to a recipient the caller names.
+  const submitter = profile.name;
   const notificationResult = await createUserNotification({
     recipientRole: "admin",
     recipientId: null,
@@ -107,11 +119,9 @@ export async function submitSupportInquiry(formData: FormData) {
     title: `운영 문의: ${title}`,
     body: `[${category}] ${submitter}: ${message.slice(0, SUPPORT_MESSAGE_MAX)}`,
     targetHref: "/admin",
-    // A signed-in submitter's inquiry reaches their own university's admins; an
-    // anonymous one has no tenant to claim and stays untenanted, which the
-    // Stage 8 read predicate already handles (NULL school_id matches nothing,
-    // so it is visible only through the server-side admin surface).
-    schoolId: profile?.school_id ?? null,
+    // Derived from the session. A role broadcast with a NULL tenant is readable
+    // by nobody, which is what made the old anonymous path write into a void.
+    schoolId: profile.school_id,
   });
 
   if (!notificationResult.ok) {

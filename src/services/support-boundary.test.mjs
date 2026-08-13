@@ -1,13 +1,14 @@
-// Codex F6 — the anonymous /support boundary.
+// Codex F6 + round 3 F8 — the /support boundary.
 //
-// /support is reachable with no session by design. That makes everything the
-// caller can influence an untrusted input that ends up in a PERSISTED,
-// admin-facing record. These tests pin two properties:
+// SUPPORT REQUIRES A SESSION (F8). The page already enforced that while the
+// action still accepted anonymous submissions and wrote a NULL-tenant
+// notification no administrator could read. These tests pin the coherent model:
 //
-//   1. the caller controls only a title and a body, both bounded, and an
-//      allowlisted category — never the recipient, role, tenant, notification
-//      type or target URL;
-//   2. the central creation chokepoint bounds what is stored, so a future
+//   1. an unauthenticated caller is refused and nothing is persisted;
+//   2. a signed-in caller controls only a title, a body and an allowlisted
+//      category - never the recipient, role, tenant, notification type or
+//      target URL, and the tenant comes from the session;
+//   3. the central creation chokepoint bounds what is stored, so a future
 //      caller cannot reopen the hole by forgetting to validate.
 
 import assert from "node:assert/strict";
@@ -65,10 +66,32 @@ function reset(profile = null) {
 }
 
 const BODY = "이 문의는 충분히 길게 작성된 정상적인 내용입니다.";
+const TENANT = "33333333-3333-4333-8333-333333333333";
+const SIGNED_IN = { id: "p1", name: "학생", school_id: TENANT };
 
-test("a normal anonymous submission is accepted and creates one notification", async () => {
+test("an UNAUTHENTICATED submission is refused and persists nothing (F8)", async () => {
   const { submitSupportInquiry } = await loadSupport();
   reset(null);
+
+  const result = await submitSupportInquiry(form({ title: "결제 문의", message: BODY, category: "account" }));
+
+  assert.equal(result.ok, false);
+  assert.equal(globalThis.__supportNotifications.length, 0, "nothing may be persisted without a session");
+});
+
+test("a caller with a session but no tenant is refused", async () => {
+  const { submitSupportInquiry } = await loadSupport();
+  reset({ id: "p1", name: "학생", school_id: null });
+
+  const result = await submitSupportInquiry(form({ title: "문의", message: BODY, category: "system" }));
+
+  assert.equal(result.ok, false);
+  assert.equal(globalThis.__supportNotifications.length, 0);
+});
+
+test("a normal signed-in submission is accepted and creates one notification", async () => {
+  const { submitSupportInquiry } = await loadSupport();
+  reset(SIGNED_IN);
 
   const result = await submitSupportInquiry(form({ title: "결제 문의", message: BODY, category: "account" }));
 
@@ -77,10 +100,24 @@ test("a normal anonymous submission is accepted and creates one notification", a
   assert.equal(globalThis.__supportNotifications.length, 1);
 });
 
+test("the submission is routed to the submitter own tenant, so admins can read it (F8)", async () => {
+  const { submitSupportInquiry } = await loadSupport();
+  reset(SIGNED_IN);
+
+  await submitSupportInquiry(form({ title: "문의", message: BODY, category: "system" }));
+
+  const [notification] = globalThis.__supportNotifications;
+  assert.equal(notification.recipientRole, "admin");
+  assert.equal(notification.recipientId, null);
+  // A role broadcast with a NULL tenant matches no reader under the
+  // notification policy - that was the F8 defect.
+  assert.equal(notification.schoolId, TENANT);
+});
+
 test("every valid category is accepted", async () => {
   const { submitSupportInquiry } = await loadSupport();
   for (const category of ["system", "account", "counseling", "roadmap", "course", "other"]) {
-    reset(null);
+    reset(SIGNED_IN);
     const result = await submitSupportInquiry(form({ title: "문의", message: BODY, category }));
     assert.equal(result.ok, true, `category ${category} should be accepted`);
   }
@@ -88,7 +125,7 @@ test("every valid category is accepted", async () => {
 
 test("an unknown category is REJECTED, not silently coerced to a default", async () => {
   const { submitSupportInquiry } = await loadSupport();
-  reset(null);
+  reset(SIGNED_IN);
 
   const result = await submitSupportInquiry(
     form({ title: "문의", message: BODY, category: "<script>alert(1)</script>" }),
@@ -100,7 +137,7 @@ test("an unknown category is REJECTED, not silently coerced to a default", async
 
 test("an oversized category is rejected", async () => {
   const { submitSupportInquiry } = await loadSupport();
-  reset(null);
+  reset(SIGNED_IN);
 
   const result = await submitSupportInquiry(
     form({ title: "문의", message: BODY, category: "a".repeat(5000) }),
@@ -112,7 +149,7 @@ test("an oversized category is rejected", async () => {
 
 test("an oversized body is rejected rather than truncated into the record", async () => {
   const { submitSupportInquiry } = await loadSupport();
-  reset(null);
+  reset(SIGNED_IN);
 
   const result = await submitSupportInquiry(
     form({ title: "문의", message: "가".repeat(4001), category: "system" }),
@@ -124,7 +161,7 @@ test("an oversized body is rejected rather than truncated into the record", asyn
 
 test("an oversized title is rejected rather than trimmed to fit", async () => {
   const { submitSupportInquiry } = await loadSupport();
-  reset(null);
+  reset(SIGNED_IN);
 
   const result = await submitSupportInquiry(
     form({ title: "가".repeat(121), message: BODY, category: "system" }),
@@ -134,9 +171,9 @@ test("an oversized title is rejected rather than trimmed to fit", async () => {
   assert.equal(globalThis.__supportNotifications.length, 0);
 });
 
-test("the anonymous caller controls no routing field", async () => {
+test("the caller controls no routing field", async () => {
   const { submitSupportInquiry } = await loadSupport();
-  reset(null);
+  reset(SIGNED_IN);
 
   // Everything an attacker would want to steer is submitted here and must be
   // ignored: recipient, role, tenant, notification type and target URL.
@@ -159,12 +196,13 @@ test("the anonymous caller controls no routing field", async () => {
   assert.equal(notification.recipientId, null);
   assert.equal(notification.category, "system");
   assert.equal(notification.targetHref, "/admin");
-  assert.equal(notification.schoolId, null, "an anonymous caller has no tenant to claim");
+  // The submitted schoolId is ignored; the session tenant is used.
+  assert.equal(notification.schoolId, TENANT);
 });
 
 test("a signed-in submission is tenant-stamped from the session, not the form", async () => {
   const { submitSupportInquiry } = await loadSupport();
-  reset({ id: "p1", name: "학생", school_id: "33333333-3333-4333-8333-333333333333" });
+  reset(SIGNED_IN);
 
   await submitSupportInquiry(
     form({
@@ -177,6 +215,20 @@ test("a signed-in submission is tenant-stamped from the session, not the form", 
 
   const [notification] = globalThis.__supportNotifications;
   assert.equal(notification.schoolId, "33333333-3333-4333-8333-333333333333");
+});
+
+test("the page and the action agree that support requires a session (F8)", () => {
+  // The contradiction Codex found was UI-vs-server. Both halves are asserted.
+  const page = readFileSync(
+    fileURLToPath(new URL("../app/support/page.tsx", import.meta.url)),
+    "utf8",
+  );
+  assert.match(page, /requireRoles\(/, "the page must gate itself");
+  const action = readFileSync(
+    fileURLToPath(new URL("./support.actions.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.match(action, /if \(!profile \|\| !profile\.school_id\)/, "the action must gate itself too");
 });
 
 test("the central chokepoint bounds what is persisted", () => {
