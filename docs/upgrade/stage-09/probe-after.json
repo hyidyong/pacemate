@@ -412,13 +412,13 @@
       "id": "counseling-direct:requested-start",
       "property": "a professor must not rewrite the requested start time directly",
       "pass": true,
-      "detail": "PATCH 403; requested_start is now \"2026-08-19T22:00:00+00:00\""
+      "detail": "PATCH 403; requested_start is now \"2026-08-20T08:00:00+00:00\""
     },
     {
       "id": "counseling-direct:student",
       "property": "a professor must not reassign a request to another student",
       "pass": true,
-      "detail": "PATCH 403; student_id is now \"664e986e-e3a4-4136-9db8-128dff4a962c\""
+      "detail": "PATCH 403; student_id is now \"b4565f9d-f51e-4409-b02d-697abe111eb0\""
     },
     {
       "id": "counseling-direct:suggested",
@@ -447,6 +447,72 @@
     {
       "id": "allow:staff-reads-own-tenant-revision",
       "property": "tenant A staff CAN read their own tenant's revision request",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "review:cross-tenant-move",
+      "property": "a review must not be moved to another tenant's course (F2)",
+      "pass": true,
+      "detail": "PATCH 403; course_id is now \"97483b50-0f9e-4a67-82b9-4acc61ef2091\""
+    },
+    {
+      "id": "review:same-tenant-move",
+      "property": "a review's course is immutable, even within the same tenant (F2)",
+      "pass": true,
+      "detail": "PATCH 403; course_id is now \"97483b50-0f9e-4a67-82b9-4acc61ef2091\""
+    },
+    {
+      "id": "review:author-reassign",
+      "property": "a review's author must not be reassigned",
+      "pass": true,
+      "detail": "PATCH 403; author_id is now \"b4565f9d-f51e-4409-b02d-697abe111eb0\""
+    },
+    {
+      "id": "post:promote-to-professor-community",
+      "property": "a student must not mutate their post into the professor community (F3)",
+      "pass": true,
+      "detail": "PATCH 403; community_type is now \"student\""
+    },
+    {
+      "id": "post:promote-to-course-notice",
+      "property": "a student must not mutate their post into a trusted course notice (F3)",
+      "pass": true,
+      "detail": "PATCH 403; board_key is now \"question\""
+    },
+    {
+      "id": "post:move-tenant",
+      "property": "a student must not move their post into another tenant",
+      "pass": true,
+      "detail": "PATCH 403; school_id is now \"66156047-a8a2-4366-9b54-7c267c2bebd1\""
+    },
+    {
+      "id": "post:create-course-notice",
+      "property": "a student must not create a trusted course notice (F3)",
+      "pass": true,
+      "detail": "POST 403; 0 row(s) in the database"
+    },
+    {
+      "id": "allow:author-edits-own-review",
+      "property": "an author CAN still edit their own review's content",
+      "pass": true,
+      "detail": "PATCH 204; content is updated"
+    },
+    {
+      "id": "allow:author-edits-own-post",
+      "property": "an author CAN still edit their own post's content",
+      "pass": true,
+      "detail": "PATCH 204; content is updated"
+    },
+    {
+      "id": "faq:cross-tenant-courseless",
+      "property": "an approved FAQ with no course must not leak to another tenant (F4)",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "allow:faq-own-tenant-courseless",
+      "property": "an approved course-less FAQ IS visible inside its own tenant",
       "pass": true,
       "detail": "status 200, 1 row(s)"
     },

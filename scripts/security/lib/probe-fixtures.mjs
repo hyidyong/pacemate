@@ -128,6 +128,23 @@ export async function provisionTenant(ledger, label, runId) {
     `course ${label}`,
   );
 
+  // A SECOND course in the SAME tenant. Without it, "the review could not be
+  // moved" is ambiguous: a cross-tenant move is also refused simply because the
+  // moved row stops satisfying the tenant-scoped SELECT policy. Moving within
+  // the tenant isolates whether course_id is genuinely constrained.
+  const courseAlt = await createRow(
+    ledger,
+    "courses",
+    {
+      school_id: school.id,
+      department_id: department.id,
+      code: `PBALT-${label}-${runId}`.slice(0, 20),
+      name: `${PROBE_MARKER} alt course ${label}`,
+      credit: 3,
+    },
+    `alt course ${label}`,
+  );
+
   const availability = await createRow(
     ledger,
     "professor_availability",
@@ -247,6 +264,55 @@ export async function provisionTenant(ledger, label, runId) {
     `roadmap revision ${label}`,
   );
 
+  // Provenance fixtures (Codex round 3, F2/F3/F4): a review the student owns, an
+  // ordinary student post they own, and an approved FAQ with NO course, so each
+  // mutation probe has a real row of its own to attack.
+  const review = await createRow(
+    ledger,
+    "course_reviews",
+    {
+      course_id: course.id,
+      author_id: profile.id,
+      difficulty: 3,
+      workload: 3,
+      grading_style: `${PROBE_MARKER} grading ${label}`,
+      team_project: false,
+      content: `${PROBE_MARKER} review ${label}`,
+    },
+    `review ${label}`,
+  );
+
+  const post = await createRow(
+    ledger,
+    "posts",
+    {
+      author_id: profile.id,
+      school_id: school.id,
+      course_id: course.id,
+      community_type: "student",
+      board_key: "question",
+      category: "free",
+      title: `${PROBE_MARKER} post ${label}`,
+      content: `${PROBE_MARKER} post body ${label}`,
+      status: "active",
+    },
+    `post ${label}`,
+  );
+
+  const courselessFaq = await createRow(
+    ledger,
+    "faqs",
+    {
+      question: `${PROBE_MARKER} courseless faq ${label}`,
+      answer: `${PROBE_MARKER} courseless answer ${label}`,
+      category: `${PROBE_MARKER}`,
+      course_id: null,
+      professor_id: professor.id,
+      approved_at: new Date().toISOString(),
+    },
+    `courseless faq ${label}`,
+  );
+
   const mission = await createRow(
     ledger,
     "student_mission_progress",
@@ -269,6 +335,7 @@ export async function provisionTenant(ledger, label, runId) {
     professorAuthUserId: professorAuthUser.id,
     professor,
     course,
+    courseAlt,
     availability,
     email,
     authUserId: authUser.id,
@@ -280,6 +347,9 @@ export async function provisionTenant(ledger, label, runId) {
     broadcast,
     mission,
     revision,
+    review,
+    post,
+    courselessFaq,
   };
 }
 

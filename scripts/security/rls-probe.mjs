@@ -785,6 +785,168 @@ async function main() {
       );
     }
 
+    // ---------------- provenance and tenant immutability (Codex round 3) -----
+    // Every outcome below is read back with the SERVICE ROLE. A PATCH that
+    // returns 200 with an empty representation, or is hidden by a SELECT policy,
+    // proves nothing about what is actually stored.
+    const mutationProbes = [
+      {
+        id: "review:cross-tenant-move",
+        property: "a review must not be moved to another tenant's course (F2)",
+        table: "course_reviews",
+        id_: A.review.id,
+        patch: { course_id: B.course.id },
+        column: "course_id",
+        mustRemain: A.course.id,
+      },
+      {
+        id: "review:same-tenant-move",
+        property: "a review's course is immutable, even within the same tenant (F2)",
+        table: "course_reviews",
+        id_: A.review.id,
+        patch: { course_id: A.courseAlt.id },
+        column: "course_id",
+        mustRemain: A.course.id,
+      },
+      {
+        id: "review:author-reassign",
+        property: "a review's author must not be reassigned",
+        table: "course_reviews",
+        id_: A.review.id,
+        patch: { author_id: B.profile.id },
+        column: "author_id",
+        mustRemain: A.profile.id,
+      },
+      {
+        id: "post:promote-to-professor-community",
+        property: "a student must not mutate their post into the professor community (F3)",
+        table: "posts",
+        id_: A.post.id,
+        patch: { community_type: "professor" },
+        column: "community_type",
+        mustRemain: "student",
+      },
+      {
+        id: "post:promote-to-course-notice",
+        property: "a student must not mutate their post into a trusted course notice (F3)",
+        table: "posts",
+        id_: A.post.id,
+        patch: { board_key: "course_notice" },
+        column: "board_key",
+        mustRemain: "question",
+      },
+      {
+        id: "post:move-tenant",
+        property: "a student must not move their post into another tenant",
+        table: "posts",
+        id_: A.post.id,
+        patch: { school_id: B.school.id },
+        column: "school_id",
+        mustRemain: A.school.id,
+      },
+    ];
+
+    for (const probe of mutationProbes) {
+      const { status } = await asA(`${probe.table}?id=eq.${probe.id_}`, {
+        method: "PATCH",
+        body: JSON.stringify(probe.patch),
+      });
+      const [after] = await rest.select(probe.table, `select=${probe.column}&id=eq.${probe.id_}`);
+      const unchanged = String(after?.[probe.column] ?? null) === String(probe.mustRemain);
+      if (!unchanged) {
+        await rest.update(probe.table, `id=eq.${probe.id_}`, { [probe.column]: probe.mustRemain });
+      }
+      check(
+        probe.id,
+        probe.property,
+        unchanged,
+        `PATCH ${status}; ${probe.column} is now ${JSON.stringify(after?.[probe.column] ?? null)}`,
+      );
+    }
+
+    // A student must not be able to CREATE a trusted notice either.
+    {
+      const tagged = tag("xt-notice");
+      const { status } = await asA("posts", {
+        method: "POST",
+        body: JSON.stringify({
+          author_id: A.profile.id,
+          school_id: A.school.id,
+          course_id: A.course.id,
+          community_type: "student",
+          board_key: "course_notice",
+          category: "notice",
+          title: tagged,
+          content: tagged,
+          status: "active",
+        }),
+      });
+      const rows = await rest
+        .select("posts", `select=id&title=eq.${encodeURIComponent(tagged)}`)
+        .catch(() => null);
+      if (rows === null) {
+        check("post:create-course-notice", "a student must not create a trusted course notice (F3)", false, "read-back FAILED");
+      } else {
+        for (const row of rows) ledger.recordRow("posts", row.id, "leaked course_notice");
+        check(
+          "post:create-course-notice",
+          "a student must not create a trusted course notice (F3)",
+          rows.length === 0,
+          `POST ${status}; ${rows.length} row(s) in the database`,
+        );
+      }
+    }
+
+    // The author must still be able to edit what a review/post IS.
+    {
+      const edited = tag("edited-review");
+      const { status } = await asA(`course_reviews?id=eq.${A.review.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content: edited }),
+      });
+      const [after] = await rest.select("course_reviews", `select=content&id=eq.${A.review.id}`);
+      check(
+        "allow:author-edits-own-review",
+        "an author CAN still edit their own review's content",
+        after?.content === edited,
+        `PATCH ${status}; content is ${after?.content === edited ? "updated" : "unchanged"}`,
+      );
+    }
+    {
+      const edited = tag("edited-post");
+      const { status } = await asA(`posts?id=eq.${A.post.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content: edited }),
+      });
+      const [after] = await rest.select("posts", `select=content&id=eq.${A.post.id}`);
+      check(
+        "allow:author-edits-own-post",
+        "an author CAN still edit their own post's content",
+        after?.content === edited,
+        `PATCH ${status}; content is ${after?.content === edited ? "updated" : "unchanged"}`,
+      );
+    }
+
+    // ---------------- FAQ tenant isolation (Codex round 3, F4) --------------
+    {
+      const { status, body } = await asB(`faqs?select=id&id=eq.${A.courselessFaq.id}`);
+      check(
+        "faq:cross-tenant-courseless",
+        "an approved FAQ with no course must not leak to another tenant (F4)",
+        status === 200 && rowCount(body) === 0,
+        `status ${status}, ${rowCount(body) ?? "?"} row(s)`,
+      );
+    }
+    {
+      const { status, body } = await asA(`faqs?select=id&id=eq.${A.courselessFaq.id}`);
+      check(
+        "allow:faq-own-tenant-courseless",
+        "an approved course-less FAQ IS visible inside its own tenant",
+        status === 200 && rowCount(body) === 1,
+        `status ${status}, ${rowCount(body) ?? "?"} row(s)`,
+      );
+    }
+
     // ------------------------------------------------- legitimate paths (allow)
     // A security fix that denies everyone is not a fix. These must stay GREEN.
     const allowChecks = [
