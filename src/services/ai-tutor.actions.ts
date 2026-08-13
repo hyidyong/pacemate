@@ -238,15 +238,30 @@ export async function submitProgressFeedback(
 
   // Compare-and-set on the week we authorized against, so two concurrent
   // submissions cannot advance the enrollment twice.
-  const { error: weekError } = await (await createSupabaseServerClient())
+  //
+  // Codex round 3, F6: this used to check only `weekError`. A CAS that matches
+  // ZERO rows is not an error — it is a LOSER, and the previous code treated it
+  // as success and carried on to generateWeeklyGuide(). Two concurrent
+  // submissions therefore both advanced past the guard and both spent an OpenAI
+  // call. `.select()` makes the matched row the evidence: exactly one caller may
+  // continue.
+  const { data: advanced, error: weekError } = await (await createSupabaseServerClient())
     .from("student_courses")
     .update({ current_week: nextWeek })
     .eq("student_id", studentId)
     .eq("course_id", courseId)
-    .eq("current_week", authorizedWeek);
+    .eq("current_week", authorizedWeek)
+    .select("id");
 
   if (weekError) {
     console.error("Failed to advance current week:", weekError);
+    return;
+  }
+
+  // Zero rows means somebody else advanced this enrollment first. That is a
+  // stale request, not a failure: return quietly and spend nothing.
+  if (!advanced || advanced.length !== 1) {
+    return;
   }
 
   await generateWeeklyGuide(courseId, _studentId, nextWeek, feedback);
