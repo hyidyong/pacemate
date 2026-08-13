@@ -87,37 +87,66 @@ export function NotificationMenu({
     // the desktop instance should subscribe and surface live toasts.
     if (!enableRealtime || !profileId) return;
 
-    // Realtime evaluates RLS as the role the SOCKET authenticates with, which
-    // is not automatically the role the HTTP client uses. Hand it the current
-    // access token before subscribing, and again whenever the session changes,
-    // so a refresh does not silently downgrade the channel to `anon`.
+    // Codex round 3, F11 — two defects in the previous wiring.
+    //
+    // 1. The auth handshake RACED the subscription. `void authorise()` was
+    //    fire-and-forget, so `.subscribe()` could open the socket before
+    //    setAuth() had run and the channel would evaluate RLS as `anon`.
+    //    Subscription now happens AFTER the token is installed.
+    // 2. The filter was `recipient_id=eq.<me>`, which structurally EXCLUDES
+    //    role broadcasts — those carry `recipient_id IS NULL`. Tenant-wide
+    //    announcements could never arrive. The filter is removed: Realtime
+    //    evaluates the SELECT policy per subscriber, so the socket receives
+    //    exactly the rows this user may read — their own notifications and
+    //    their own tenant's role broadcasts — and nothing else. RLS is the
+    //    boundary; it is not weakened here.
     let cancelled = false;
-    const authorise = async () => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const applyToken = (token: string | undefined) => {
       if (token) supabase.realtime.setAuth(token);
     };
-    void authorise();
+
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
-      if (session?.access_token) supabase.realtime.setAuth(session.access_token);
+      // A refresh must not silently downgrade the channel back to `anon`.
+      applyToken(session?.access_token);
     });
 
-    const channel = supabase
-      .channel(`in-app-notifications:${profileId}:${channelInstanceId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_notifications", filter: `recipient_id=eq.${profileId}` }, (payload) => {
-        const next = asNotification(payload.new as Record<string, unknown>);
-        if (!next) return;
-        setItems((current) =>
-          dedupeMenuNotifications([next, ...current.filter((item) => item.id !== next.id)]).slice(0, 20),
-        );
-        setToast(next);
-      })
-      .subscribe();
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      applyToken(data.session?.access_token);
+
+      channel = supabase
+        .channel(`in-app-notifications:${profileId}:${channelInstanceId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "user_notifications" },
+          (payload) => {
+            const row = payload.new as Record<string, unknown>;
+            const next = asNotification(row);
+            if (!next) return;
+            // Defence in depth, not the boundary: RLS already decided what this
+            // socket may see. This only keeps the menu showing things addressed
+            // to this user or to their role. `recipient_id` is read from the
+            // raw row because the shared UI type deliberately omits it.
+            const recipientId = typeof row.recipient_id === "string" ? row.recipient_id : null;
+            if (recipientId !== null && recipientId !== profileId) return;
+
+            setItems((current) =>
+              dedupeMenuNotifications([next, ...current.filter((item) => item.id !== next.id)]).slice(0, 20),
+            );
+            setToast(next);
+          },
+        )
+        .subscribe();
+    })();
+
     return () => {
       cancelled = true;
       authListener?.subscription?.unsubscribe();
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [channelInstanceId, enableRealtime, profileId]);
   useEffect(() => {
