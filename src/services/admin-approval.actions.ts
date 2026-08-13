@@ -8,33 +8,12 @@ import {
   type UserNotificationCreateInput,
 } from "@/services/notifications.create.service";
 import { recordSecurityEvent } from "@/lib/observability/security-audit";
+import { legalSourcesFor } from "@/services/roadmap-transitions";
 import { getDemoProfile } from "@/services/session.service";
 
 function text(value: FormDataEntryValue | null, fallback = "") {
   const current = typeof value === "string" ? value.trim() : "";
   return current || fallback;
-}
-
-/**
- * Codex round 3, F5 — legal transitions for a roadmap revision.
- *
- * The update was previously `.eq("id").eq("school_id")` with no expected prior
- * state, so `approved` could be walked back to `assistant_reviewed`, a rejected
- * request could be revived, and two admins deciding at once BOTH succeeded —
- * last write wins, and both fanned out a student-facing notification.
- *
- * Derived from the workflow the board actually drives: an assistant reviews a
- * pending request; an admin decides on something pending or already reviewed;
- * approved and rejected are terminal.
- */
-const LEGAL_TRANSITION_SOURCES: Record<string, readonly string[]> = {
-  assistant_reviewed: ["pending"],
-  approved: ["pending", "assistant_reviewed"],
-  rejected: ["pending", "assistant_reviewed"],
-};
-
-export function legalSourcesFor(status: string): readonly string[] | null {
-  return LEGAL_TRANSITION_SOURCES[status] ?? null;
 }
 
 export async function updateRoadmapRevisionStatus(formData: FormData) {

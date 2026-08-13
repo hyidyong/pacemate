@@ -32,6 +32,17 @@ const NAV_STUB = toDataUrl(`
   export const redirect = (to) => { const e = new Error("REDIRECT:" + to); e.__redirect = to; throw e; };
 `);
 
+const compile = (path) =>
+  transpileModule(readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8"), {
+    compilerOptions: { module: ModuleKind.ESNext, target: ScriptTarget.ES2022 },
+  }).outputText;
+
+// The transition matrix is NOT stubbed — the real table is compiled, and both
+// the action and the matrix test below run against it. It lives outside the
+// `"use server"` module because every export of one becomes a remotely
+// invocable endpoint and must be async; see server-action-contract.test.mjs.
+const TRANSITIONS_URL = toDataUrl(compile("./roadmap-transitions.ts"));
+
 let modulePromise;
 async function loadAction() {
   modulePromise ??= (async () => {
@@ -46,6 +57,7 @@ async function loadAction() {
       ['from "@/lib/supabase/admin"', `from ${JSON.stringify(ADMIN_STUB)}`],
       ['from "@/services/notifications.create.service"', `from ${JSON.stringify(NOTIFY_STUB)}`],
       ['from "@/lib/observability/security-audit"', `from ${JSON.stringify(AUDIT_STUB)}`],
+      ['from "@/services/roadmap-transitions"', `from ${JSON.stringify(TRANSITIONS_URL)}`],
       ['from "@/services/session.service"', `from ${JSON.stringify(SESSION_STUB)}`],
     ]) {
       source = source.split(from).join(to);
@@ -122,7 +134,7 @@ async function decide(status, { adminNote = "note" } = {}) {
 }
 
 test("the transition matrix names legal prior states, and terminal states have none", async () => {
-  const { legalSourcesFor } = await loadAction();
+  const { legalSourcesFor } = await import(TRANSITIONS_URL);
   assert.deepEqual(legalSourcesFor("assistant_reviewed"), ["pending"]);
   assert.deepEqual(legalSourcesFor("approved"), ["pending", "assistant_reviewed"]);
   assert.deepEqual(legalSourcesFor("rejected"), ["pending", "assistant_reviewed"]);
@@ -206,4 +218,9 @@ test("the action performs a real CAS, not an unconditional update", () => {
   assert.match(source, /result=stale/);
   // The tenant term from the previous round must survive.
   assert.match(source, /\.eq\("school_id", profile\.school_id\)/);
+  // The matrix must be imported, not defined here: a `"use server"` module
+  // publishes every export as an endpoint, so it must export only async
+  // functions. Defining it inline broke `next build`.
+  assert.match(source, /from "@\/services\/roadmap-transitions"/);
+  assert.doesNotMatch(source, /export function legalSourcesFor/);
 });
