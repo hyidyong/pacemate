@@ -140,13 +140,26 @@ function makeRecordingClient() {
           update: (payload) => {
             const record = { table, op: "update", payload, filters: {} };
             writes.push(record);
+            // Codex round 3, F6: the CAS returns the rows it MATCHED. The fake
+            // must model a zero-row miss, or a losing caller looks like a
+            // winner and the test proves nothing.
+            const casResult = () => {
+              const enrollment = ENROLLMENTS.find(
+                (e) => e.student_id === record.filters.student_id && e.course_id === record.filters.course_id,
+              );
+              const matched =
+                Boolean(enrollment) &&
+                (record.filters.current_week === undefined ||
+                  record.filters.current_week === enrollment.current_week);
+              return { data: matched ? [{ id: "enrolment" }] : [], error: null };
+            };
             const api = {
               eq: (column, value) => {
                 record.filters[column] = value;
                 return api;
               },
-              then: (resolve, reject) =>
-                Promise.resolve({ data: null, error: null }).then(resolve, reject),
+              select: () => Promise.resolve(casResult()),
+              then: (resolve, reject) => Promise.resolve(casResult()).then(resolve, reject),
             };
             return api;
           },
@@ -166,8 +179,9 @@ function makeRecordingClient() {
               record.filters[column] = value;
               return api;
             },
+            select: () => Promise.resolve({ data: [{ id: "row" }], error: null }),
             then: (resolve, reject) =>
-              Promise.resolve({ data: null, error: null }).then(resolve, reject),
+              Promise.resolve({ data: [{ id: "row" }], error: null }).then(resolve, reject),
           };
           return api;
         },

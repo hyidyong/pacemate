@@ -120,13 +120,21 @@ test("the client login component receives no credential", () => {
   assert.doesNotMatch(code, /demo-accounts\.server/);
 });
 
-test("operational scripts refuse to run rather than embedding a credential", () => {
-  for (const script of [
-    "scripts/ensure-demo-operator-auth.mjs",
-    "scripts/verify-notification-rls.mjs",
-  ]) {
-    const source = read(script);
-    assert.match(source, /PACEMATE_DEMO_PASSWORDS/, `${script} should read credentials from the environment`);
-    assert.doesNotMatch(source, /password:\s*["'][^"'$]{3,}["']/, `${script} still hardcodes a password`);
-  }
+test("operational scripts never embed a REUSABLE credential", () => {
+  // `ensure-demo-operator-auth.mjs` provisions the real demo accounts, so it
+  // must read their passwords from the environment and refuse without them.
+  const provisioner = read("scripts/ensure-demo-operator-auth.mjs");
+  assert.match(provisioner, /PACEMATE_DEMO_PASSWORDS/, "must read credentials from the environment");
+  assert.match(provisioner, /Refusing to run/, "must refuse rather than fall back");
+  assert.doesNotMatch(provisioner, /password:\s*["'][^"'$]{3,}["']/, "still hardcodes a password");
+
+  // Codex round 3, F1 changed `verify-notification-rls.mjs`: it no longer signs
+  // in as a real demo account at all. It PROVISIONS its own disposable user and
+  // removes it, so the only literal it holds is that throwaway user's password —
+  // which is not a reusable credential for any real account. What matters is
+  // that it does not reference a real demo identity.
+  const verifier = read("scripts/verify-notification-rls.mjs");
+  assert.doesNotMatch(verifier, /@pacemate\.edu/, "must not depend on a real demo account");
+  assert.match(verifier, /probe\.invalid/, "its user must be a disposable probe identity");
+  assert.match(verifier, /ProbeLedger/, "it must clean up through the ledger");
 });
