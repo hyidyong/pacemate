@@ -2,12 +2,137 @@
 
 ## Status
 
-COMPLETE on `upgrade/stage-9`, REVISED after an external Codex security review
-that returned **NOT SAFE TO MERGE**. Base `main` @ `fd44172` (Stage 8 PR #42
+On `upgrade/stage-9` after **three** external Codex security review rounds, each
+of which returned **NOT SAFE TO MERGE**. Base `main` @ `fd44172` (Stage 8 PR #42
 merged 2026-08-12, verified). Not merged — that is the human's call. Stage 10
-not started. The next step is another independent Codex review.
+not started. **The next action is another independent Codex security review.**
 
-## Codex review round (2026-08-14)
+Read the round-3 section first: it corrects claims made in the round-1 and
+round-2 sections below, which are kept as the historical record rather than
+edited into agreement.
+
+Status markers used in this document mean exactly one of:
+`PASS` (with evidence) · `UNVERIFIED — <exact missing evidence>` ·
+`BLOCKED — <exact external dependency>` · `DEFERRED — <exact stage/reason>`.
+
+---
+
+## Codex review round 3 (2026-08-14)
+
+Twelve findings (F1–F12). Every one was verified against the branch, the
+migrations, the installed dependencies and live metadata **before** any change.
+**All twelve were confirmed.** Two were materially different from the report and
+are recorded as such rather than accepted at face value. Verifying the fixes
+exposed one further defect that this round had introduced itself.
+
+| # | Finding | Verdict | Status |
+|---|---|---|---|
+| F1 | Security-probe results are not trustworthy | **CONFIRMED** — unbounded transport, no signal handling, Auth listing capped at one page, host guard defeatable | CLOSED |
+| F2 | `course_reviews` cross-tenant UPDATE | **CONFIRMED, DIFFERENT** — see below | CLOSED |
+| F3 | `posts` / `course_notice` provenance is mutable | **CONFIRMED** | CLOSED |
+| F4 | Course-less FAQ leaks across tenants | **CONFIRMED** | CLOSED |
+| F5 | Roadmap transition has no expected prior state | **CONFIRMED** | CLOSED |
+| F6 | AI progress CAS loser still pays for generation | **CONFIRMED** | CLOSED |
+| F7 | Audit append-only claim is not backed by an ACL | **CONFIRMED** | CLOSED |
+| F8 | `/support` page and action disagree about sessions | **CONFIRMED** | CLOSED |
+| F9 | Assistant professor workspace regressed | **CONFIRMED** | CLOSED |
+| F10 | Roadmap publication notification has no tenant | **CONFIRMED** | CLOSED |
+| F11 | Realtime role broadcasts structurally excluded | **CONFIRMED, WIDER** — the filter excluded them *and* the handshake raced | CLOSED (live delivery UNVERIFIED) |
+| F12 | Security snapshot records names, not semantics | **CONFIRMED** | CLOSED |
+
+### The two findings that were not what the report said
+
+**F2 — the reported exploit was blocked, but only incidentally.** The report's
+cross-tenant `course_id` move returned 403. That looked like a pass. It was not:
+PostgREST was rejecting the row because the *SELECT* policy could not see the
+post-update row, not because any rule constrained `course_id`. Adding a
+same-tenant `courseAlt` fixture as a discriminator proved it — the same-tenant
+move succeeded with 204, so `course_id` was **entirely unconstrained** and only
+the tenant coincidence of the reporter's fixture produced the 403. The real
+defect was wider than reported and is fixed by column-level UPDATE grants, which
+constrain the column itself rather than a visibility side effect.
+
+**F11 — the filter was one of two defects.** The reported `recipient_id` filter
+does structurally exclude every role broadcast (those carry a NULL recipient).
+But the auth handshake was also fire-and-forget, so the socket could open and
+evaluate RLS as `anon` before `setAuth()` ran. Fixing only the filter would have
+left a channel that authenticates by luck.
+
+### A defect this round introduced, found by the production build
+
+The F5 fix put the transition matrix and a synchronous `legalSourcesFor` helper
+inside `admin-approval.actions.ts`, which carries `"use server"`. Every export
+of such a module becomes a remotely invocable endpoint, so Next.js refuses to
+build one that exports a non-async function. **`next build` failed.** Neither
+`tsc --noEmit` nor `next lint` caught it.
+
+Fixed by moving the matrix to `src/services/roadmap-transitions.ts`, a plain
+module. A new guard — `src/services/server-action-contract.test.mjs` — scans
+every `"use server"` module in `src` and fails on any non-async export, so this
+class of defect now fails in the unit suite instead of at build time. It was
+written RED first and reproduced exactly the one offender the build named.
+
+### Round-3 changes
+
+| Area | Change |
+|---|---|
+| Probe transport | `scripts/security/lib/probe-http.mjs` — one bounded request path; the deadline covers the **body read**, not just headers, so a mid-body stall cannot hang a probe |
+| Probe lifecycle | `scripts/security/lib/probe-lifecycle.mjs` — SIGINT/SIGTERM run cleanup once (latched on a promise) and exit 130/143 |
+| Probe host guard | rejects embedded credentials, non-HTTPS, any explicit port, and any host that is not exactly `<ref>.supabase.co` / `.supabase.in` |
+| Probe pagination | `listUsersByEmailPrefix` pages to exhaustion and **throws** if it does not terminate, instead of silently reporting a clean first page |
+| F2 | `20260814110000` — `revoke update on course_reviews`, then column-level grants excluding `author_id`/`course_id` |
+| F3 | `20260814120000` — same shape for `posts`; INSERT policy additionally refuses a client-authored `course_notice` |
+| F4 | `20260814130000` — FAQ tenant resolves via course **or** `professors.school_id`; the `course_id IS NULL` short-circuit is gone |
+| F5 | `.in("status", legalSources)` CAS; zero matched rows redirects to `result=stale` and does **not** notify |
+| F6 | the weekly advance is a CAS on `current_week`; only the winner calls `generateWeeklyGuide` |
+| F7 | `20260814140000` — explicit `security_events` ACL; no client role holds more than SELECT |
+| F8 | `/support` requires a session; the notification is stamped with the session tenant so an admin can actually read it |
+| F9 | assistant workspace restored through **tenant scope**, not professor impersonation |
+| F10 | roadmap publication broadcast carries `school_id` |
+| F11 | `getSession()` → `setAuth()` → *then* subscribe; unfiltered INSERT subscription with RLS doing the filtering |
+| F12 | snapshot records `definition_md5`, `tgenabled`, effective privileges (`has_table_privilege`), PUBLIC privileges and column privileges |
+
+### Round-3 verification
+
+Every number below was produced by a fresh run in this session.
+
+| Check | Result |
+|---|---|
+| Live direct Data API probe (`rls-probe.mjs`) | **PASS — 96 checks, 0 failed**; ledger cleanup complete, residue verification clean |
+| Live durable audit probe (`audit-trail-probe.mjs`) | **PASS — 12 checks, 0 failed** |
+| Live notification RLS (`verify-notification-rls.mjs`) | **PASS — 6 checks, 0 failed**, own fixtures, cleanup verified clean |
+| Security snapshot vs live DB (`--check`) | **PASS — matches** |
+| `scripts/**` guard suites | **PASS — 55 tests, 52 pass, 0 fail, 3 skipped** (Windows cannot deliver POSIX signals to a child; covered platform-independently by `lib/probe-lifecycle.test.mjs`) |
+| `supabase/**` migration + snapshot guards | **PASS — 57 tests, 57 pass, 0 fail** |
+| Whole repository suite | **373 + 126 = 499 tests, 493 pass, 3 fail, 3 skipped** |
+| The 3 failures | **the KI-002 trio, confirmed pre-existing** — the same three names fail on `origin/main` in a clean worktree; both test files are untouched by this branch |
+| `tsc --noEmit` | **PASS — exit 0** |
+| `next lint` | **PASS — exit 0**, 1 pre-existing `no-img-element` warning (baseline) |
+| `next build` | **PASS — exit 0**, 26 routes, shared JS 102 kB (unchanged) |
+| Credential scan of shipped output | **PASS — 202 files across `.next/static` + `.next/server`, 0 hits.** The only `password123` match anywhere under `.next` is in `.next/cache/webpack/*.pack`, mtime 2026-08-11, i.e. **before** the 2026-08-13 rotation commit `6a3037e`; `.next/` is gitignored and the cache is never served |
+| `git diff --check` | **PASS — clean** |
+| Rendered browser QA | **UNVERIFIED — the browser preview tool was blocked by this session's permission classifier, so no page was rendered this round.** The F8/F5/F9/F11 UI paths were verified only by build, typecheck and unit guards |
+
+### Claims from earlier rounds that round 3 invalidated
+
+1. *"Anonymous support is preserved"* — **false as of F8.** `/support` now
+   requires a session. See the corrected section below.
+2. *"Realtime … Not working, and not fixed"* — **superseded.** The client-side
+   repair landed (F11). Live delivery is still UNVERIFIED.
+3. *"The four passwords still require rotation"* — **stale.** They were rotated
+   in round 2 (commit `6a3037e`); corrected below.
+4. *"Probe fixtures create/teardown deterministically — PASS, twice"* — round 2
+   already corrected this in AUDIT_RECOVERY_DESIGN §6, but the recovery table in
+   this document still carried the old claim. Corrected below.
+5. *"No client role can INSERT/UPDATE/DELETE [on `security_events`]"* — this was
+   true of the **policies** but was not backed by an **ACL** until F7. The claim
+   is now enforced by an explicit grant/revoke and asserted from the snapshot.
+6. The round-2 result table's counts (85 probe checks, 11 audit checks, 348
+   tests) are superseded by the round-3 table above.
+
+---
+
+## Codex review round 2 (2026-08-14)
 
 Nine findings. **All nine were verified against the branch before any change and
 all nine were confirmed** — none needed push-back. Four were materially worse
@@ -169,29 +294,48 @@ Four service-role sites that *substituted* for authorization were fixed
 (professor fallback, enrolment tenant gate, syllabus read, AI tutor tenant
 join). Five more with a single well-behaved caller are recorded in KI-022.
 
-## Support anonymous-boundary decision
+## Support boundary decision — CORRECTED IN ROUND 3
 
-Anonymous support is **preserved**; the boundary is replaced. Before: an anon
-INSERT into a general-purpose notification table with a caller-chosen recipient,
-role, tenant and `target_href`. After: a validated server action writing under
-the service role, where every routing field is a constant
-(`recipientRole: admin`, `recipientId: null`, `category: system`,
-`targetHref: /admin`) and the caller controls only a length-bounded title and
-body. No client role holds INSERT any more. Verified end-to-end in the browser;
-the stored row had exactly that shape.
+**Support requires a session (F8).** Round 1 preserved anonymous submission and
+replaced the boundary; round 3 found that the *page* already gated itself with
+`requireRoles` while the *action* still accepted sessionless submissions — and
+that those submissions wrote a role broadcast with a **NULL tenant**, which
+matches no reader under the notification policy. Every anonymous inquiry was
+being accepted and then silently discarded into a row no administrator could
+read. The page and the action disagreed, and the losing side was the user's.
+
+Option A (require login) was chosen from repository evidence rather than
+preference: the page already enforced it, and KI-021 records sessionless
+submission as a defect rather than a feature.
+
+The input boundary from round 1 is unchanged and still holds: the caller
+controls only a length-bounded title, a bounded body and an allowlisted
+category. Every routing field is a constant (`recipientRole: admin`,
+`recipientId: null`, `category: system`, `targetHref: /admin`), and the tenant
+now comes from the **session**, never the form. No client role holds INSERT.
 
 Per-IP throttling deliberately not added — campus NAT makes an IP a building,
 and an in-memory limiter on serverless is per-instance theatre (KI-021).
 
-## Realtime notification result
+## Realtime notification result — CORRECTED IN ROUND 3
 
-**Not working, and not fixed — stated rather than glossed.**
-`notification-menu.tsx` subscribes through a client that never reads the auth
-cookie, so the socket is `anon`, which has had no SELECT policy since Stage 8.
-Page loads and the bell are unaffected, so the failure is silent. Stage 9
-refused to weaken RLS for it. The repair is client-side (`createBrowserClient`
-+ `realtime.setAuth`), the channel is off by default, and it is recorded in
-KI-022. **UNVERIFIED in a browser.**
+Round 1 recorded this as "not working, and not fixed". Round 2 gave the socket
+the user JWT. Round 3 (F11) found **two** remaining defects and fixed both:
+
+1. the handshake was fire-and-forget, so the socket could open and evaluate RLS
+   as `anon` before `setAuth()` ran — it authenticated by luck;
+2. the subscription filtered on `recipient_id`, which can never match a role
+   broadcast, because those carry a NULL recipient. Tenant-wide announcements
+   could not arrive whatever RLS permitted.
+
+Now: `await getSession()` → `setAuth(token)` → *then* subscribe, with an
+unfiltered INSERT subscription and RLS doing the filtering. The client-side
+recipient check remains as defence in depth, not as the boundary. **RLS was not
+weakened** — asserted by `notification-realtime.test.mjs`.
+
+**Live delivery remains UNVERIFIED — it requires a real socket, a real INSERT
+and a rendered browser session; the channel is off by default and the browser
+preview was blocked this session.** DEFERRED — Stage 10.
 
 ## Demo credential decision
 
@@ -199,10 +343,15 @@ KI-022. **UNVERIFIED in a browser.**
 imported by a `"use client"` component and was **verifiably present in the built
 client bundle**. Now behind `import "server-only"` plus a
 `PACEMATE_ENABLE_DEMO_LOGIN` gate; the browser receives names/roles/identifiers
-only and a server action looks the password up. Verified: `grep` over
-`.next/static/**` finds nothing; the panel does not render without the flag.
-QA usability is preserved. **The four passwords still require rotation** —
-operator action, RECOVERY_RUNBOOK §3.4.
+only and a server action looks the password up. Verified: a scan over
+`.next/static/**` and `.next/server/**` finds nothing; the panel does not render
+without the flag. QA usability is preserved.
+
+**The four passwords WERE rotated** in round 2 (commit `6a3037e`) — this is not
+outstanding operator action. The earlier "still require rotation" wording is
+superseded. Round 2 also re-rotated all four a second time after I leaked the
+first set into a session transcript by reading `.env.local`; that incident and
+its lesson are recorded in RECOVERY_RUNBOOK §3.4.
 
 ## Privacy / PII summary
 
@@ -248,8 +397,25 @@ postcondition); reads are tenant-admin-scoped. **Not claimed tamper-proof** —
 no hash chain, no signature. Best-effort by design: a failed insert degrades to
 a log line rather than breaking the audited action.
 
-Live-verified 5/5: service role can append; anon cannot read, append, rewrite or
-delete.
+**Round 3, F7 — the append-only claim now has an ACL behind it.** Until
+`20260814140000`, "no client role can write the audit trail" rested on the
+absence of a policy while the underlying table privileges were whatever the
+platform defaults happened to be. A policy-only guarantee is not a guarantee.
+The migration revokes everything on `security_events` from `public`, `anon`,
+`authenticated` and `service_role`, then grants exactly `SELECT` to
+`authenticated` and `INSERT, SELECT` to `service_role`. The snapshot now records
+**effective** privileges via `has_table_privilege`, so a privilege arriving
+through PUBLIC or role inheritance is drift, not an invisible hole.
+
+Production append-only behaviour was **not weakened for testing convenience**.
+The probe cannot delete its own audit rows, so its test events remain in
+`security_events` permanently and the probe reports them rather than cleaning
+them up.
+
+Live-verified this round: **PASS — 12 checks, 0 failed.** Service role can
+append; the record cannot be UPDATEd or DELETEd even by the service role; anon
+cannot read, append, rewrite or delete; the attribution snapshot is written at
+event time and survives deletion of the actor's profile.
 
 ## Backup / recovery capability
 
@@ -274,8 +440,8 @@ lists plainly what is impossible today.
 | A postcondition genuinely fails closed | **PASS, demonstrated** — the first push aborted on my own over-strict assertion and applied nothing |
 | Drift repair idempotent against the populated DB | PASS |
 | Migration history reconciled | PASS 55/55 |
-| Probe fixtures create/teardown deterministically | PASS, twice, baseline restored exactly |
-| Audit trail resists client mutation | PASS 5/5 |
+| ~~Probe fixtures create/teardown deterministically~~ | **RETRACTED — this claim was false.** Round 2 proved 6 of 6 injected provisioning failures leaked, and that a live run had already left 4 posts and 2 `course_reviews` behind while reporting clean. Teardown is now ledger-driven with fatal residue verification; round 3 additionally made it survive SIGINT/SIGTERM and a mid-body transport stall. Current status: **PASS — 96/12/6 live checks this round, residue verified clean after each.** No crash-safety or SIGKILL claim is made |
+| Audit trail resists client mutation | **PASS — 12/12 this round**, and now backed by an explicit ACL (F7), not only by policy |
 
 ## What recovery remains UNVERIFIED / BLOCKED
 
@@ -289,8 +455,20 @@ lists plainly what is impossible today.
 
 ## Migrations applied
 
-`20260814000000`, `20260814010000`, `20260814020000`, `20260814030000`,
-`20260814040000`, plus the additive guard in `20260812070000`.
+Round 1: `20260814000000`, `20260814010000`, `20260814020000`,
+`20260814030000`, `20260814040000`, plus the additive guard in `20260812070000`.
+
+Round 2: `20260814050000` tenant-correlated writes · `20260814060000` counseling
+write boundary · `20260814070000` roadmap tenant scope · `20260814080000` audit
+durability + explicit ACLs · `20260814090000` audit FK detach ·
+`20260814100000` least privilege on `schools`.
+
+Round 3: `20260814110000` review provenance immutable (F2) ·
+`20260814120000` post / course-notice provenance (F3) · `20260814130000` FAQ
+tenant scope (F4) · `20260814140000` audit append-only ACL (F7).
+
+All are applied live and reconciled; `dump-security-snapshot.mjs --check`
+reports the committed snapshot matches the live database.
 
 ## Security test results
 
@@ -326,12 +504,29 @@ now bounded.
 
 ## Rendered QA
 
-Production build against the live database: login, dashboard (full render —
-notifications, timetable, counseling, calendar, completion evidence, all course
-cards), counseling (tenant professor directory, availability calendar, existing
-booking), notifications (12 rows, 5 unread), courses, support (end-to-end
-submission with the correct constrained row shape; QA row deleted).
-**0 browser console errors, 0 server errors.**
+**Round 1 (historical record).** Production build against the live database:
+login, dashboard (full render — notifications, timetable, counseling, calendar,
+completion evidence, all course cards), counseling (tenant professor directory,
+availability calendar, existing booking), notifications (12 rows, 5 unread),
+courses, support (end-to-end submission with the correct constrained row shape;
+QA row deleted). 0 browser console errors, 0 server errors.
+
+**Round 3 — UNVERIFIED — the browser preview tool was blocked by this session's
+permission classifier, so no page was rendered.** The round-1 evidence above
+predates the F8, F9 and F11 changes and therefore does **not** cover them. The
+following user-visible paths changed this round and have **no rendered
+evidence**:
+
+- `/support` now refuses a sessionless submission (F8)
+- `/admin` shows a new `result=stale` banner when a decision loses the CAS (F5)
+- `/professor` assistant workspace renders tenant counseling data with
+  `professor: null` (F9)
+- the notification bell's Realtime channel (F11)
+
+They are covered by the production build, `tsc --noEmit`, and unit guards
+(`support-boundary` 13, `roadmap-transition` 7, `notification-realtime` 5,
+`notification-tenant-scope` 3) — which is not the same as having been looked at.
+Re-running rendered QA over these four paths is a prerequisite for merge.
 
 ## Remaining risks (after the review round)
 
@@ -347,8 +542,19 @@ Ranked. Full detail in KI-022.
 5. `next` one patch behind a Server-Function disclosure advisory.
 6. Raw DB errors logged around sensitive tables; the allowlist governs 6 of ~116
    log sites.
-7. Realtime notifications silently non-delivering.
+7. ~~Realtime notifications silently non-delivering.~~ **Superseded by F11** —
+   the two client-side defects are fixed; live delivery is UNVERIFIED, not
+   known-broken.
 8. Per-user session revocation still impossible (8h HMAC, no store).
+9. **No rendered QA covers the round-3 UI changes** (F5, F8, F9, F11). See the
+   Rendered QA section.
+10. **Probe crash safety is not claimed.** SIGINT and SIGTERM run cleanup once
+    and exit 130/143, verified by unit tests with an injected process handle.
+    SIGKILL, a power loss or a host crash leave ledgered fixtures behind; the
+    next run's residue verification is what catches that, not the probe itself.
+    The subprocess signal tests **skip on Windows** with an explicit reason
+    (POSIX signals are not deliverable to a child process there) — a skip, never
+    a pass.
 
 ## Relevant commits
 
@@ -358,6 +564,11 @@ audit trail → documentation.
 
 ## Stage 10 inputs
 
+- **Rendered QA over the four round-3 UI paths** (`/support` sessionless
+  refusal, `/admin` stale banner, `/professor` assistant workspace, the
+  notification bell's Realtime channel). Required before merge, not after.
+- **Prove Realtime delivery end to end** — a real socket, a real INSERT, both a
+  direct notification and a role broadcast.
 - **First action: `next` → 15.5.21.** Deferred here only to keep an RLS
   regression attributable.
 - **Create a non-production Supabase project.** It unblocks the rebuild proof,

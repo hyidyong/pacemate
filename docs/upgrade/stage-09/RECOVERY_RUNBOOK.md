@@ -178,26 +178,66 @@ revoke all on public.<table> from anon, authenticated;
 RLS is already enabled on all 54 tables, so removing the grant is sufficient and
 reversible.
 
-**Clean up after an abnormal probe exit.** `try/finally` does not run on SIGKILL
-or a host OOM kill, so a killed probe can leave marked fixtures behind. The
-independent recovery mechanism is operator-run:
+**Clean up after an abnormal probe exit.** Ctrl-C and SIGTERM are handled: the
+probe runs its cleanup ledger exactly once and exits 130/143. **SIGKILL, a host
+OOM kill or a power loss are NOT handled and no crash safety is claimed** — a
+`try/finally` cannot run when the process is destroyed. A probe killed that way
+leaves marked fixtures behind, and the independent recovery mechanism is
+operator-run:
 
 ```bash
 node scripts/security/rls-probe.mjs --sweep
 ```
 
 It removes every marked row and Auth user, then re-verifies, and exits non-zero
-if anything remains.
+if anything remains. Run it before trusting any subsequent probe result.
 
-**Verify.** Run the probe:
+**Audit test events are permanent and are not residue.** `service_role` holds
+only `INSERT` and `SELECT` on `security_events`, so `audit-trail-probe.mjs`
+cannot delete the events it writes. It reports them instead. Do not "clean them
+up" by granting DELETE — that would weaken production append-only behaviour for
+testing convenience, which is the trade this stage explicitly refused.
+
+**Verify.** Run the probe. It refuses to start without BOTH environment
+variables, by design — the guard runs before the first write, not after:
 
 ```bash
 PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref> node scripts/security/rls-probe.mjs
 ```
 
-67 checks across anon, cross-tenant and legitimate-path cases. It provisions and
-removes its own tenants. Also `node scripts/verify-notification-rls.mjs` for the
-Stage 8 notification properties.
+96 checks across anon, cross-tenant and legitimate-path cases. It provisions and
+removes its own tenants and ends with a fatal residue verification.
+
+The host guard will refuse to send the service-role key anywhere that is not
+exactly `https://<ref>.supabase.co` (or `.supabase.in`) — no port, no embedded
+credentials, no lookalike suffix such as `<ref>.supabase.co.attacker.example`.
+Loopback is allowed only with `PACEMATE_SECURITY_PROBE_ALLOW_LOOPBACK=1`. If the
+guard refuses, **check the URL before overriding anything**; that refusal is the
+control working.
+
+Two further probes, each with the same guard and the same fatal residue check:
+
+```bash
+PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref> node scripts/security/audit-trail-probe.mjs
+PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref> node scripts/verify-notification-rls.mjs
+```
+
+12 and 6 checks respectively. `verify-notification-rls.mjs` provisions its own
+two schools, its own disposable auth user and its own notifications — it no
+longer depends on any real demo account, so there is no reusable credential
+involved in running it.
+
+**Detect drift without running anything destructive:**
+
+```bash
+node scripts/security/dump-security-snapshot.mjs --check
+```
+
+Compares the committed `supabase/security-snapshot.json` against the live
+database — policies, grants, effective privileges (`has_table_privilege`),
+PUBLIC privileges, column privileges, function definition hashes and trigger
+state. Non-zero exit means the database and the repository disagree. This is the
+cheapest first check after any suspected authorization regression.
 
 **Cheap manual check** — distinguishes "no grant", "policy denies" and "exposed"
 in one request:

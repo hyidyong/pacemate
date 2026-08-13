@@ -29,6 +29,149 @@ SIGKILL; the independent recovery mechanism is the operator-run
 to the residue list, which a live leak (4 posts, 2 course_reviews) proved is not
 optional.
 
+**Amended in review round 3 (F1).** This decision claimed "all network calls are
+bounded". That was **not true as written**: the timeout covered the response
+headers only, so a server that sent headers and then stalled mid-body held the
+probe open indefinitely — with the ledger un-run. Three further gaps were found
+at the same time: SIGINT/SIGTERM abandoned the ledger entirely; the GoTrue admin
+listing read only its first page, so residue beyond it reported clean; and the
+host guard accepted any hostname ending in `.supabase.co`, including a lookalike
+such as `<ref>.supabase.co.attacker.example`, which would have sent a
+service-role key to an attacker-controlled host.
+
+The decision now reads: **bounded means the deadline covers the body read**
+(`lib/probe-http.mjs` is the single transport), **cleanup is signal-aware and
+runs exactly once** (`lib/probe-lifecycle.mjs`, latched on a promise, exiting
+130/143), **enumeration pages to exhaustion or throws**, and **the destination
+host is validated exactly**, not by suffix. Crash safety is still not claimed.
+
+## D-030 — Provenance is enforced by column privilege, not by policy predicate
+
+Status: Accepted (Stage 9, Codex review round 3, 2026-08-14)
+
+Context: `course_reviews` and `posts` had UPDATE policies that established
+ownership — "you may update the row you authored". Ownership is a property of
+the *caller*; it says nothing about which row the caller is now claiming to have
+authored. A legitimate owner could rewrite `course_id`, `author_id`,
+`school_id`, `community_type` and `board_key`: the columns that decide where the
+row lives, who wrote it, and how much the reader should trust it. The concrete
+attack is content integrity rather than data theft — a student-authored post
+promoting itself into `course_notice`, which renders to students as official
+course communication.
+
+The obvious fix is a policy predicate comparing new to old. It was rejected.
+
+Decision: revoke table-wide UPDATE from the client roles and grant UPDATE on
+exactly the mutable columns.
+
+```sql
+revoke update on public.course_reviews from authenticated, anon;
+grant update (difficulty, workload, grading_style, team_project, content,
+              updated_at)
+  on public.course_reviews to authenticated;
+```
+
+Reason: three things, in order of importance.
+
+1. **It cannot be reasoned about wrongly.** A predicate expresses "this column
+   must not change" as a comparison that has to be correct for every path —
+   including paths that do not name the column. A privilege expresses it as
+   absence. There is no expression to audit.
+2. **It survives a new policy.** Someone adding a policy later cannot
+   accidentally widen what a role may write, because the grant is the ceiling.
+3. **It is visible in the snapshot.** Column privileges are now dumped and
+   asserted, so re-granting `UPDATE` table-wide fails a test.
+
+The finding that produced this decision is also the reason to distrust the
+alternative. The reported F2 exploit returned 403 and looked blocked. It was
+not: PostgREST was re-checking the post-update row against the SELECT policy and
+rejecting it there. A same-tenant control fixture made the same move succeed
+with 204. **A denial produced by a visibility side effect is not an
+authorization control** — and a policy-predicate fix would have been validated
+against exactly that kind of misleading signal.
+
+Consequences: adding a legitimately mutable column to either table now requires
+a migration to grant it, which will look like friction the first time it
+happens. That is the intended cost. `supabase/security-snapshot.test.mjs`
+asserts the provenance columns are ungranted, so the invariant fails a test
+rather than a review.
+
+## D-031 — An operation that cannot prove it won must not have effects
+
+Status: Accepted (Stage 9, Codex review round 3, 2026-08-14)
+
+Context: two independent lost-update races, found as F5 and F6.
+`updateRoadmapRevisionStatus` matched on id and tenant with no expected prior
+state, so two admins deciding simultaneously **both** succeeded — last write
+wins in the table, but both had already fanned out a student-facing
+notification, and a terminal `approved` could be walked back to
+`assistant_reviewed`. `submitProgressFeedback` advanced a student's week without
+checking the week it read was still current, so a racing submission paid for a
+second AI generation and produced a duplicate guide.
+
+Both would ordinarily be filed as concurrency defects. They are recorded as
+security decisions because in each case **the loser still acted**.
+
+Decision: any state transition whose success has an external effect —
+a notification, an AI call, a publication — is a compare-and-set that names its
+expected prior state, and the effect is conditional on the matched-row evidence:
+
+```ts
+const { data: updated } = await client.from("roadmap_revision_requests")
+  .update(patch)
+  .eq("id", requestId).eq("school_id", profile.school_id)
+  .in("status", legalSources)
+  .select("id, title, course_id, course_code");
+
+if (!updated || updated.length !== 1) redirect(`/admin?result=stale&...`);
+```
+
+Zero matched rows means **stale**, never success. The user is told
+("이미 처리된 요청입니다"), the notification is not sent, and the AI call is not
+made.
+
+Reason: "the update returned no error" is not evidence that the update happened.
+PostgREST reports a zero-row UPDATE as a successful request, so an action that
+ignores the row count cannot distinguish winning from losing — and will
+cheerfully notify students about a decision it did not make. Requiring the
+matched row makes the difference impossible to ignore.
+
+Consequences: legal transitions are now data
+(`src/services/roadmap-transitions.ts`), which makes them reviewable and
+testable in isolation. The fakes in the tests model the CAS honestly — they
+return an empty array for a loser, so the tests can fail. A user who loses a
+race sees a new message rather than a silent no-op, which is a deliberate,
+finding-driven UX change.
+
+## D-032 — Every export of a `"use server"` module is a public endpoint, so pure helpers live elsewhere
+
+Status: Accepted (Stage 9, Codex review round 3, 2026-08-14)
+
+Context: the D-031 fix put the transition matrix and a synchronous
+`legalSourcesFor` helper in `admin-approval.actions.ts`, which carries
+`"use server"`. `next build` failed: *"Server Actions must be async functions."*
+Neither `tsc --noEmit` nor `next lint` caught it — only the production build
+did.
+
+Decision: a `"use server"` module exports **only** async server actions. Any
+pure helper it needs lives in a plain module it imports.
+
+Reason: this is not a style rule dressed up as a build constraint. Next.js
+compiles every export of a `"use server"` module into a remotely invocable
+endpoint with a generated action id that ships in the client bundle. Exporting
+an internal authorization table there asks the framework to publish it as a
+callable surface; the framework refuses to build rather than emit something
+half-callable. Given that Stage 9's central finding was *server actions are
+reachable before any page guard runs*, treating this as a build annoyance rather
+than as a boundary would be exactly the wrong lesson.
+
+Consequences: `src/services/server-action-contract.test.mjs` scans every
+`"use server"` module under `src` and fails on any export that is not an async
+function, allowing `export type`/`interface` (erased) and
+`export const f = async () =>`. It was written RED first and reproduced exactly
+the one offender the build named. The class of defect now fails in the unit
+suite in under a second instead of at the end of a production build.
+
 ## D-028 — Ownership is not authorization for a row that references a tenant resource
 
 Status: Accepted (Stage 9, Codex review round, 2026-08-14)

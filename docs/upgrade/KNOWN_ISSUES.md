@@ -9,7 +9,7 @@ Status: OPEN (documented 2026-08-14; full evidence in docs/upgrade/stage-09/).
 Stage 9 closed 8 P0 and 12 P1 findings (IMPLEMENTATION_PLAN.md §2). What
 follows is what it did NOT close, with the reason.
 
-### Codex security review round (2026-08-14) — status changes
+### Codex security review round 2 (2026-08-14) — status changes
 
 All nine findings were verified against the branch before any change and **all
 nine were confirmed**. Eight are closed; the corrections they forced to earlier
@@ -83,6 +83,83 @@ lower-priority least-privilege item on `schools`.
   revocation) is unchanged by this round.
 
 
+### Codex security review round 3 (2026-08-14) — status changes
+
+Twelve findings (F1–F12). All twelve were verified against the repository, the
+migrations, the installed dependencies and live metadata **before** any change,
+and **all twelve were confirmed**. All twelve are closed.
+
+**Two were not what the report said, and are recorded that way rather than
+accepted at face value:**
+
+- **F2.** The reported cross-tenant `course_id` move returned 403, which reads
+  as protection. It was not: PostgREST was rejecting the row because the SELECT
+  policy could not see the post-update row, not because anything constrained the
+  column. A same-tenant `courseAlt` control fixture showed the same move
+  succeeding with **204** — `course_id` was entirely unconstrained, and the 403
+  was an artifact of the reporter's fixture crossing a tenant boundary. The real
+  defect was wider than reported. **A denial produced by a visibility side
+  effect is not an authorization control.**
+- **F11.** The reported `recipient_id` filter was real, but it was one of two
+  defects; the auth handshake also raced the subscription. Fixing only the
+  reported half would have left a channel that authenticates by luck.
+
+**A defect round 3 introduced itself, found by the production build.** The F5
+fix put the transition matrix and a synchronous `legalSourcesFor` helper inside
+`admin-approval.actions.ts`, which carries `"use server"`. Every export of such
+a module becomes a remotely invocable endpoint, so Next.js refuses to build one
+that exports a non-async function — **`next build` failed**, and neither
+`tsc --noEmit` nor `next lint` caught it. Fixed by moving the matrix to
+`src/services/roadmap-transitions.ts`. A new guard,
+`src/services/server-action-contract.test.mjs`, scans every `"use server"`
+module in `src` and fails on any non-async export, so this class of defect now
+fails in the unit suite rather than at build time.
+
+**Earlier Stage 9 claims this round INVALIDATED, corrected in place:**
+
+- *"Anonymous support is preserved"* — **false.** `/support` now requires a
+  session (F8). The page already gated itself while the action did not, and a
+  sessionless submission produced a role broadcast with a NULL tenant that
+  matched no reader: every anonymous inquiry was accepted and then silently
+  unreadable by any administrator. Corrected in AUTHORIZATION_RLS_AUDIT §7.
+- *"No client role can INSERT/UPDATE/DELETE on `security_events`"* — this was
+  true of the **policies** and unverified of the **privileges**, which were
+  whatever the platform defaults happened to be. A policy-only guarantee is not
+  a guarantee. `20260814140000` states the ACL explicitly (F7).
+- *"Realtime … not working, and not fixed"* — superseded; see the entry above.
+- *"The four passwords still require rotation"* — stale; they were rotated in
+  round 2, commit `6a3037e`.
+- The round-2 result counts (85 probe checks, 11 audit checks, 348 tests) are
+  superseded by the round-3 numbers in SECURITY_TEST_MATRIX.md.
+
+**Still open, newly recorded this round:**
+
+- **Rendered browser QA does not cover the round-3 UI changes.**
+  **UNVERIFIED — the browser preview tool was blocked by the session's
+  permission classifier, so no page was rendered.** Four user-visible paths
+  changed and have build, typecheck and unit-guard coverage but no rendered
+  evidence: `/support` sessionless refusal (F8), the `/admin` `result=stale`
+  banner (F5), the `/professor` assistant workspace (F9), and the notification
+  bell's Realtime channel (F11). **Prerequisite for merge.**
+- **Probe crash safety is NOT claimed.** SIGINT and SIGTERM run cleanup exactly
+  once and exit 130/143, verified with an injected process handle and against a
+  real spawned runner. SIGKILL, power loss or a host crash leave ledgered
+  fixtures behind; the next run's residue verification is what catches that.
+  Recovery is operator-run: `node scripts/security/rls-probe.mjs --sweep`.
+- **Three subprocess signal tests SKIP on Windows**, with an explicit reason —
+  POSIX signals are not deliverable to a child process there. The same behaviour
+  is covered platform-independently by `lib/probe-lifecycle.test.mjs`. A skip is
+  never reported as a pass.
+- **Audit test events are permanent.** `service_role` holds only INSERT and
+  SELECT on `security_events`, so `audit-trail-probe.mjs` cannot delete the
+  events it writes; it reports them instead. Production append-only behaviour
+  was deliberately **not** weakened to make the harness tidy.
+- **The `security_events` DELETE note above is now stale in one respect:**
+  `20260814140000` revokes DELETE from `service_role` entirely. Retention
+  pruning therefore requires a privileged out-of-band operation, which is the
+  intended trade. Tamper-proofing is still not claimed — no hash chain, no
+  signature, and a database owner can still rewrite history.
+
 ### BLOCKED on something outside the repository
 
 - **There is no verified recovery point of any kind.** `supabase backups list`
@@ -138,18 +215,27 @@ lower-priority least-privilege item on `schools`.
   un-attributable. First Stage 10 action. The other five audit findings
   (postcss, sharp, nanoid, js-yaml, brace-expansion) are dev-only or
   non-reachable — defer.
-- **Realtime notifications have not been delivering since Stage 8.**
-  `notification-menu.tsx` subscribes through a bare `createClient(url,
-  publishableKey)` that never reads the auth cookie, so the socket authenticates
-  as `anon` — which has had no SELECT policy on `user_notifications` since
-  `20260813030000`. Page loads and the bell are unaffected, so the failure is
-  silent. Stage 9 deliberately did NOT weaken RLS to fix it. The repair is
-  client-side: `createBrowserClient` from `@supabase/ssr` plus
-  `supabase.realtime.setAuth(token)` before `.subscribe()`. The channel is off
-  by default (`enableRealtime`, desktop only). UNVERIFIED in a browser.
+- **Realtime notifications — three defects, all now fixed; delivery still
+  UNVERIFIED.** (1) Stage 8 left `notification-menu.tsx` subscribing through a
+  bare `createClient(url, publishableKey)` that never read the auth cookie, so
+  the socket authenticated as `anon`, which has had no SELECT policy on
+  `user_notifications` since `20260813030000`. (2) Round 2 gave it the user JWT
+  but left the handshake fire-and-forget, so the socket could subscribe before
+  `setAuth()` ran. (3) Round 3 (F11) found the subscription also filtered on
+  `recipient_id`, which can never match a role broadcast — those carry a NULL
+  recipient — so tenant-wide announcements were structurally excluded whatever
+  RLS permitted. Now: `await getSession()` → `setAuth(token)` → `.subscribe()`,
+  unfiltered, with RLS doing the filtering and the client-side recipient check
+  kept only as defence in depth. **RLS was never weakened**, asserted by
+  `notification-realtime.test.mjs`. The channel is off by default
+  (`enableRealtime`, desktop only), so **live delivery is UNVERIFIED — it needs
+  a real socket and a real INSERT, for both a direct notification and a role
+  broadcast.** DEFERRED — Stage 10.
 - **Rate limiting still not implemented.** KI-021's reasoning was re-checked and
   holds. `/support` is now a constrained boundary rather than an open INSERT,
-  which was the actual defect; volume control needs a shared store.
+  and as of round 3 (F8) it also requires a session — which bounds abuse to
+  accounts rather than to the open internet. Volume control still needs a shared
+  store.
 
 ### Recorded with evidence, bounded impact
 

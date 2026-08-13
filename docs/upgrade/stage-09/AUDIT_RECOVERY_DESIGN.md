@@ -134,7 +134,10 @@ Verified with the tooling available, not assumed.
 | Migration history reconciled | **PASS** — 55/55 local↔remote |
 | Probe fixtures create and tear down deterministically | **CORRECTED — this claim was FALSE when first written.** Fault injection later disproved it: the provisioner only handed its fixture list to the caller on the happy path, so a mid-provision failure orphaned everything created so far, including Auth users; 6 of 6 injected failures leaked. A live run also left 4 posts and 2 course_reviews behind while residue verification reported clean, because those tables were missing from the residue list and their parents are ON DELETE SET NULL. Both are fixed (ledger + expanded coverage) and the property now holds — see the row below |
 | Probe cleanup survives failure (Codex F1) | **PASS** — 27 fault-injection tests: every provisioning boundary, the Auth-user boundary, failure during the probe, a provisioner that never returns, DB and Auth deletion failures, unverifiable residue, delete scoping and LIFO ordering. Cleanup failures and unverifiable residue now fail the run |
-| Audit trail resists client mutation | **PASS** — 5/5 live |
+| Audit trail resists client mutation | **PASS — 12/12 live (round 3).** Round 3 (F7) also found that this rested on the *absence of a policy* while the underlying table privileges were platform defaults. `20260814140000` now states the ACL explicitly: everything revoked from `public`, `anon`, `authenticated` and `service_role`, then `SELECT` to `authenticated` and `INSERT, SELECT` to `service_role`. `service_role` deliberately holds neither UPDATE nor DELETE |
+| Probe cleanup survives interruption (round 3, F1) | **PASS** — SIGINT and SIGTERM run cleanup exactly once (latched on a promise) and exit 130/143, verified with an injected process handle in `lib/probe-lifecycle.test.mjs` (10 tests) and against a real spawned runner in `probe-subprocess.test.mjs` (7 tests; 3 signal tests **skip on Windows** with an explicit reason, never a pass). **No crash safety is claimed** — SIGKILL, power loss or a host crash leave ledgered fixtures behind, and what catches that is the next run's residue verification |
+| Probe transport cannot hang (round 3, F1) | **PASS** — one bounded request path (`lib/probe-http.mjs`) whose deadline covers the **body read**, not just the response headers. A mid-body stall aborts within the deadline instead of hanging the run |
+| Residue enumeration is exhaustive (round 3, F1) | **PASS** — `listUsersByEmailPrefix` pages the GoTrue admin API to exhaustion and **throws** if it does not terminate, instead of reporting a clean first page |
 | **Full-chain rebuild into an empty database** | **BLOCKED — NON-PRODUCTION DATABASE REQUIRED.** Docker is not running, there is no `supabase/config.toml`, and the only Supabase project is live production. The D-1 repair is therefore *reasoned and unit-guarded* (`stage9_rls.test.mjs` asserts the column is added before it is asserted on) but **not proven by execution**. |
 | **Restore from backup** | **BLOCKED — NO BACKUP EXISTS TO RESTORE FROM** (PITR off, backup list empty). Not attempted; no destructive drill was run against production. |
 
@@ -142,3 +145,35 @@ Verified with the tooling available, not assumed.
 recovery point of any kind. That is the single most serious operational finding
 of this stage and it cannot be fixed from the repository — it needs a plan/
 dashboard change plus an external backup destination.
+
+
+---
+
+## 7. Round 3 — the audit trail is not weakened for testing
+
+Two constraints were held deliberately, and both cost something:
+
+**The probe cannot delete its own audit rows.** `service_role` holds `INSERT`
+and `SELECT` on `security_events` and nothing else, so the audit-trail probe's
+test events remain in the table permanently. The probe reports them rather than
+cleaning them up. The alternative — granting DELETE so the harness could tidy
+after itself — would have made the append-only property a matter of convention
+in production in order to keep a test run neat. That is the wrong trade.
+
+**Attribution is preserved by snapshot, not by foreign key.** Round 2 found the
+append-only trigger rejecting the `ON DELETE SET NULL` cascade, which turned the
+audit trail into a lock on user deletion — a privacy problem created by an
+integrity mechanism. The FK constraints were dropped and attribution now lives
+in immutable snapshot columns written by a trigger at event time. Verified live
+this round: a profile carrying audit history **can** be deleted, and its
+`actor_ref` and `role_ref` survive the deletion.
+
+## 8. What is still not claimed
+
+- **No RPO, no RTO.** Unchanged and still the most serious operational finding.
+- **Not tamper-proof.** No hash chain, no signature, no append-only storage
+  outside Postgres. An actor with database-owner rights can still rewrite
+  history; the ACL raises the bar, it does not remove the possibility.
+- **Not crash-safe.** See the probe row above.
+- **Full-chain rebuild — BLOCKED — NON-PRODUCTION DATABASE REQUIRED.**
+- **Restore from backup — BLOCKED — NO BACKUP EXISTS TO RESTORE FROM.**

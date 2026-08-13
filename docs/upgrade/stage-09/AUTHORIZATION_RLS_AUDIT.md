@@ -149,9 +149,23 @@ active term with no `school_id` filter; `curriculum-query.server.ts` has no
 `server-only` marker; `course-notices.server.ts` trusts its `studentId`
 parameter.
 
-## 7. The anonymous `/support` boundary
+## 7. The `/support` boundary
 
-**Decision: anonymous support is preserved; the boundary is not.**
+**Decision (REVISED in review round 3, F8): `/support` requires a session.**
+
+The round-1 decision — "anonymous support is preserved; the boundary is not" —
+was **wrong**, and the review round that found it was right. Two halves of the
+same feature disagreed: `/support/page.tsx` already gated itself with
+`requireRoles`, while `submitSupportInquiry` still accepted a sessionless
+submission. And because a sessionless submission had no tenant, it produced a
+role broadcast with `school_id = NULL`, which matches **no reader** under the
+notification policy. Every anonymous inquiry was accepted, persisted, and then
+silently unreadable by any administrator. The feature did not work; it only
+looked like it did.
+
+Option A (require login) was chosen from repository evidence rather than
+preference: the page already enforced it, and KI-021 already recorded
+sessionless submission as a defect.
 
 Before: `anonymous browser → INSERT into user_notifications` with a
 caller-chosen recipient, role, tenant, category and `target_href`. Confirmed
@@ -160,18 +174,25 @@ live — an unauthenticated POST delivered a notification to a named recipient.
 After:
 
 ```
-anonymous browser → submitSupportInquiry (validated server action)
-                  → createUserNotification (service role)
-                  → a row whose every routing field is a constant
+signed-in browser → submitSupportInquiry (validated server action)
+                    ├─ refuses without a profile AND a school_id
+                    → createUserNotification (service role)
+                    → a row whose every routing field is a constant,
+                      tenant-stamped from the SESSION
 ```
 
-The caller controls a title (≤120 chars) and a body (≤500 stored, ≤4000
-accepted). `recipientRole` is always `admin`, `recipientId` always null,
-`category` always `system`, `targetHref` always `/admin`. The tenant is stamped
-from the session when there is one and left null when there is not.
+The caller controls a title (≤120 chars), a body (≤500 stored, ≤4000 accepted)
+and an allowlisted category. `recipientRole` is always `admin`, `recipientId`
+always null, `category` always `system`, `targetHref` always `/admin`. The
+tenant comes from the session and **never** from the form — a submitted
+`schoolId` is ignored.
 
 No client role holds INSERT on `user_notifications` any more, so this action is
 the only way a notification can exist.
+
+Guarded by `src/services/support-boundary.test.mjs` (13 tests), which asserts
+both halves — that the action refuses without a session and that the page still
+gates itself — so the two cannot drift apart again.
 
 Anti-abuse is deliberately bounded to length caps and the fixed routing shape.
 Per-IP throttling is **not** added: campus NAT makes an IP a building, not a
@@ -198,25 +219,49 @@ correct fix and are a schema change with backfill implications across seven
 tables — deliberately not attempted in the same stage as an RLS overhaul, with
 one live tenant and no staging database to rehearse against.
 
-## 9. Realtime
+## 9. Realtime — REVISED IN ROUNDS 2 AND 3
 
 `user_notifications` is the only table in the `supabase_realtime` publication.
-`notification-menu.tsx` subscribes through a bare `createClient(url,
-publishableKey)` that never reads the auth cookie, so the socket authenticates
-as `anon`. Since Stage 8 removed anon's SELECT policy, **live toasts have not
-been delivered**; the bell still fills from the server-rendered list, so the
-regression is silent.
 
-Stage 9 does **not** weaken RLS to make this work — that would undo the fix. The
-correct repair is client-side (`createBrowserClient` from `@supabase/ssr` plus
-`realtime.setAuth(token)`), it changes a user-visible behaviour, and the channel
-is off by default (`enableRealtime` defaults false, desktop only). It is
-recorded as **KI-022** with the exact fix, and the current state is stated
-honestly rather than described as working.
+**Round 1 (the defect).** `notification-menu.tsx` subscribed through a bare
+`createClient(url, publishableKey)` that never read the auth cookie, so the
+socket authenticated as `anon`. Since Stage 8 removed anon's SELECT policy, live
+toasts had not been delivered; the bell still filled from the server-rendered
+list, so the regression was silent. Stage 9 declined to weaken RLS for it.
+
+**Round 2.** The client was moved to `createBrowserClient` from `@supabase/ssr`
+and given the user JWT via `realtime.setAuth(token)`.
+
+**Round 3 (F11) found that round 2 was not sufficient — two further defects:**
+
+1. **The handshake raced the subscription.** `setAuth()` was fire-and-forget, so
+   the socket could open and evaluate RLS as `anon` before the token was
+   installed. It authenticated by luck, not by construction.
+2. **The subscription filtered on `recipient_id`.** A role broadcast carries a
+   NULL recipient, so `recipient_id=eq.<me>` can never match one. Tenant-wide
+   announcements were structurally excluded regardless of what RLS permitted —
+   a client-side filter silently overriding the policy.
+
+Now: `await supabase.auth.getSession()` → `supabase.realtime.setAuth(token)` →
+**then** `.subscribe()`, with an unfiltered
+`{ event: "INSERT", schema: "public", table: "user_notifications" }`
+subscription and RLS doing the filtering. The client-side recipient check
+remains as defence in depth, not as the boundary: it accepts a NULL recipient
+(role broadcast), accepts its own id, and ignores anyone else's.
+
+**RLS was not weakened to make delivery work.** `notification-realtime.test.mjs`
+asserts that the component references neither `service_role` nor
+`SUPABASE_SERVICE_ROLE_KEY`, and pins the ordering of the handshake against the
+subscription so the race cannot return.
+
+**Live delivery is UNVERIFIED — it requires a real socket and a real INSERT,
+for both a direct notification and a role broadcast.** The channel is off by
+default (`enableRealtime` defaults false, desktop only) and the browser preview
+was unavailable this session. DEFERRED — Stage 10.
 
 ---
 
-## Codex security review round (2026-08-14) — NOT SAFE TO MERGE verdict addressed
+## Codex security review round 2 (2026-08-14) — NOT SAFE TO MERGE verdict addressed
 
 Nine findings. **All nine were verified against the branch before any change and
 all nine were confirmed** — none needed push-back. Four were materially worse
@@ -239,3 +284,112 @@ Two probe defects had to be fixed before F2 could even be measured honestly:
 requesting a representation made PostgREST re-check the new row against the
 SELECT policy — producing 403s that looked like protection but vanish when an
 attacker omits the header.
+
+
+---
+
+## Codex security review round 3 (2026-08-14) — authorization findings
+
+Round 3 raised twelve findings; four of them (F2, F3, F4, F7) are changes to the
+authorization model itself and belong in this document. All four were verified
+against the live database before any change, and all four were confirmed.
+
+### F2 / F3 — provenance is immutable, enforced by column privileges
+
+The defect class: an UPDATE policy that only asks *"do you own this row?"*
+cannot constrain *"which row is this?"*. A caller who legitimately owns a review
+or a post could rewrite the columns that establish where the row belongs and who
+wrote it — `course_id`, `author_id`, `school_id`, `community_type`, `board_key`.
+Ownership was checked; provenance was not.
+
+**F2 was wider than reported, and the reported test was misleading.** The
+report's cross-tenant `course_id` move returned 403, which reads as protection.
+It was not: PostgREST was rejecting the row because the SELECT policy could not
+see the *post-update* row, not because anything constrained the column. Adding a
+same-tenant `courseAlt` fixture as a discriminator settled it — the same-tenant
+move succeeded with **204**. `course_id` was entirely unconstrained; the 403 was
+an artifact of the reporter's fixture happening to cross a tenant boundary.
+
+This is why the fix is a **column-level UPDATE grant**, not a policy predicate:
+
+```sql
+revoke update on public.course_reviews from authenticated, anon;
+grant update (difficulty, workload, grading_style, team_project, content,
+              updated_at)
+  on public.course_reviews to authenticated;
+```
+
+The database now refuses the column, so there is no policy expression to reason
+about and no visibility side effect to mistake for enforcement. `posts` gets the
+same treatment in `20260814120000`, which additionally prevents a client from
+authoring into a privileged board:
+
+```sql
+-- INSERT policy gains:
+and not app_private.is_privileged_board_key(board_key)
+```
+
+`course_notice` is trusted content: it renders to students as an official
+notice. A student-authored post must not be able to promote itself into it.
+
+The snapshot now records **column privileges**, and
+`supabase/security-snapshot.test.mjs` asserts that no client role holds UPDATE
+on any provenance column of `posts` or `course_reviews` — so a future migration
+that re-grants `UPDATE` table-wide fails a test rather than silently reopening
+this.
+
+### F4 — a course-less FAQ is not a global FAQ
+
+The FAQ SELECT policy short-circuited on `course_id IS NULL`, treating "no
+course" as "visible to everyone". Tenant scope was derived from the course, so a
+row without one had no tenant and leaked across every university.
+
+`20260814130000` resolves the tenant through the course **or**, when there is no
+course, through `professors.school_id` — the FAQ's author. The `IS NULL`
+short-circuit is gone entirely. Rows that resolve to no tenant by either path
+are surfaced by a `raise warning` at migration time rather than being quietly
+made global.
+
+Verified live in both directions, which matters more than the deny case alone:
+`deny:faq-cross-tenant-courseless` returns 0 rows, and
+`allow:faq-own-tenant-courseless` returns 1 — a fix that hides the FAQ from its
+own tenant would not be a fix.
+
+### F7 — the append-only audit claim now has an ACL behind it
+
+"No client role can write `security_events`" was true of the **policies** and
+unverified of the **privileges**: the table's grants were whatever the platform
+defaults happened to be. A policy-only guarantee is not a guarantee, because a
+privilege can arrive through PUBLIC or through role inheritance without any
+policy changing.
+
+`20260814140000` states them explicitly:
+
+```sql
+revoke all on public.security_events
+  from public, anon, authenticated, service_role;
+grant select          on public.security_events to authenticated;
+grant insert, select  on public.security_events to service_role;
+```
+
+Note that `service_role` does **not** receive UPDATE or DELETE. Production
+append-only behaviour was not weakened for testing convenience: the probe cannot
+delete its own audit rows, so its test events remain in the table permanently
+and the probe reports them rather than cleaning them up.
+
+The snapshot now computes **effective** privileges with `has_table_privilege`
+rather than reading explicit grants only, and asserts separately that nothing at
+all is granted to `PUBLIC` — the role every other role inherits from.
+
+### Round-3 live verification
+
+| Probe | Result |
+|---|---|
+| `rls-probe.mjs` (anon, user A, user B over plain PostgREST, two disposable tenants) | **PASS — 96 checks, 0 failed** |
+| `audit-trail-probe.mjs` | **PASS — 12 checks, 0 failed** |
+| `verify-notification-rls.mjs` (own fixtures, positive and negative) | **PASS — 6 checks, 0 failed** |
+| `dump-security-snapshot.mjs --check` | **PASS — committed snapshot matches the live database** |
+
+Write outcomes are confirmed by a service-role read-back of the persisted row,
+with the mutation posted **without** `Prefer: return=representation` — the
+weakest attacker path. A response representation is never treated as evidence.

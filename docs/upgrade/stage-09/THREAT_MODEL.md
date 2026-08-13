@@ -72,8 +72,8 @@ you" were both load-bearing in places where only a real check would do.
 | SECURITY DEFINER RPC | Sound (Stage 6 hardened them); two helpers were needlessly exposed as public RPC endpoints. |
 | service-role client | Widely used; mostly after a real check, with a handful of substitutions. |
 | SSO provider → callback | Sound (Stage 7), re-verified. |
-| anonymous `/support` | An unauthenticated INSERT into a general-purpose notification table. |
-| Realtime | Subscribes as `anon`; Stage 8's fix silently stopped delivery. |
+| `/support` | *Then:* an unauthenticated INSERT into a general-purpose notification table. *Now (round 3, F8):* a session is required; the page and the action no longer disagree, and the submission is tenant-stamped from the session so an admin can actually read it. |
+| Realtime | *Then:* subscribes as `anon`; Stage 8's fix silently stopped delivery. *Now (round 3, F11):* the socket is authenticated **before** it subscribes, and the subscription no longer filters on `recipient_id` — which had structurally excluded every role broadcast. Live delivery UNVERIFIED. |
 | operational scripts | Two service-role scripts with no guard at all. |
 
 ## 5. Prioritised attack paths (what an attacker would actually do)
@@ -161,7 +161,8 @@ Frontend visibility is never a boundary. Neither is a page guard.
 
 Nine findings. **All nine were verified against the branch before any change and
 all nine were confirmed** — none needed push-back. Four were materially worse
-than reported:
+than reported. (This is review round 2; round 3 follows at the end of this
+document.)
 
 | # | Finding | Verdict |
 |---|---|---|
@@ -180,3 +181,73 @@ Two probe defects had to be fixed before F2 could even be measured honestly:
 requesting a representation made PostgREST re-check the new row against the
 SELECT policy — producing 403s that looked like protection but vanish when an
 attacker omits the header.
+
+
+---
+
+## Review round 3 (2026-08-14) — what the threat model got wrong
+
+Twelve findings, all confirmed. Three of them change how this document should be
+read, because each is a *class* of assumption that was wrong rather than a
+single hole.
+
+### The trust boundary this document forgot: the harness itself
+
+Every "confirmed live" claim above rests on `scripts/security/rls-probe.mjs`.
+Round 3's F1 found that the probe was not a trustworthy instrument: unbounded
+transport (a stalled response body could hang a run indefinitely), no signal
+handling (Ctrl-C abandoned provisioned fixtures and Auth users), an Auth listing
+capped at a single page (so residue beyond it read as "clean"), and a host guard
+that a lookalike domain such as `<ref>.supabase.co.attacker.example` could
+satisfy — which would have sent a service-role key to an attacker-controlled
+host.
+
+**A measuring instrument is part of the attack surface.** It holds the most
+privileged credential in the system and it decides what counts as safe. F1 was
+fixed and independently verified *before* any further destructive live probe was
+run, and the "what makes a PASS trustworthy" table in SECURITY_TEST_MATRIX.md is
+now part of the security evidence rather than an appendix to it.
+
+### Ownership is not provenance
+
+The model above reasons in terms of *who owns a row*. F2 and F3 showed that is
+only half of an authorization question. A caller who legitimately owns a review
+or a post could still rewrite the columns that establish **where the row belongs
+and who wrote it** — `course_id`, `author_id`, `school_id`, `community_type`,
+`board_key` — because an UPDATE policy that asks "do you own this?" cannot
+constrain "which row is this?".
+
+The consequence is a content-integrity attack, not a data-theft one: a
+student-authored post could promote itself into `course_notice`, which renders
+to students as official course communication. Provenance is now immutable
+through **column-level UPDATE grants**, so the database refuses the column
+rather than a policy having to reason about it.
+
+Note also how F2's real severity was nearly missed. The reported exploit
+returned 403, which looks like protection; it was PostgREST re-checking the
+post-update row against the SELECT policy. A same-tenant control fixture showed
+the same move succeeding with 204. **A denial produced by a visibility side
+effect is not an authorization control**, and this document should not treat one
+as evidence.
+
+### A race is an authorization bug when the loser has effects
+
+F5 and F6 were both lost-update races, and both were treated as security
+findings rather than concurrency polish, because in each case the *losing*
+caller still produced an external effect: two admins deciding a roadmap revision
+at once both succeeded and both fanned out a student-facing notification; a
+racing progress submission still paid for an AI generation. An operation that
+cannot establish it won must not act as though it did. Both are now
+compare-and-set, and only the winner has effects.
+
+### Regressions are findings
+
+F8–F11 were four places where an earlier Stage 9 fix had broken behaviour that
+was previously correct: `/support` accepted submissions nobody could read, the
+assistant professor workspace lost its data, a roadmap publication notification
+lost its tenant, and the Realtime channel excluded role broadcasts. A security
+change that quietly disables a feature is a defect of the same seriousness as
+the hole it closed — it is simply one whose victim is a legitimate user. Each
+was fixed by **restoring the property through the correct mechanism** (tenant
+scope, session tenant, RLS-side filtering), never by relaxing the control that
+caused it.

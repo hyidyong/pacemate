@@ -140,7 +140,16 @@ Test row removed; table left at 0 rows.
 | same strings in `.next/server/` | present | present (never shipped to a browser) |
 | demo panel rendered without `PACEMATE_ENABLE_DEMO_LOGIN=1` | rendered | **absent** (verified in the browser) |
 
-## 6. Rendered browser QA (production build, live database)
+## 6. Rendered browser QA (production build, live database) — ROUND 1 ONLY
+
+**This whole section is round-1 evidence and predates the round-3 UI changes.**
+Round 3 could not run rendered QA: the browser preview tool was blocked by the
+session's permission classifier. The four paths changed in round 3 — `/support`
+sessionless refusal (F8), the `/admin` `result=stale` banner (F5), the
+`/professor` assistant workspace (F9) and the notification bell's Realtime
+channel (F11) — have **no rendered evidence** and are marked
+**UNVERIFIED — no page was rendered this round**. Re-running QA over them is a
+prerequisite for merge.
 
 | Flow | Result |
 |---|---|
@@ -149,15 +158,18 @@ Test row removed; table left at 0 rows.
 | `/counseling` | full render — course list, tenant professor directory, availability calendar (2개/5개 per date), existing request with cancel |
 | `/notifications` | 12 notifications, 5 unread, all categories |
 | `/courses` | full catalog |
-| `/support` | anonymous-shaped submission accepted end-to-end; the stored row had `recipient_role=admin`, `recipient_id=NULL`, `target_href=/admin`, `category=system`, tenant stamped — the fixed shape, not a caller-chosen one. QA row deleted afterwards |
+| `/support` | **This row is HISTORICAL and no longer describes the product.** Round 3 (F8) made `/support` require a session; an anonymous-shaped submission is now refused. What it does still evidence is the routing shape: the stored row had `recipient_role=admin`, `recipient_id=NULL`, `target_href=/admin`, `category=system` — fixed, not caller-chosen. QA row deleted afterwards |
 | Browser console errors | **0** |
 | Server errors | **0** |
 
 ## 7. Not covered — stated, not implied
 
-- **Realtime delivery** was not exercised. The channel is off by default and,
-  as documented in the RLS audit §9, has been non-delivering since Stage 8.
-  Marked UNVERIFIED, with the fix recorded in KI-022.
+- **Realtime delivery** was not exercised. Round 3 (F11) fixed the two
+  remaining client-side defects — the handshake raced the subscription, and a
+  `recipient_id` filter structurally excluded every role broadcast — but proving
+  delivery needs a real socket and a real INSERT, for both a direct notification
+  and a role broadcast. The channel is off by default.
+  **UNVERIFIED — no live socket was opened.** DEFERRED — Stage 10.
 - **SSO end-to-end** against a real IdP remains BLOCKED (Stage 7, KI-020) —
   no institution configuration exists. The app-side boundary is covered by the
   43 offline SSO tests, which are green.
@@ -255,29 +267,104 @@ cannot be UPDATED even by service_role; the attribution snapshot populates
 automatically; a profile carrying audit history **can still be deleted**; and its
 attribution survives that deletion. Probe rows removed, residue proven clean.
 
-### Support abuse boundary (Codex F6)
+### Support abuse boundary (Codex F6, revised by round-3 F8)
 
-`src/services/support-boundary.test.mjs`, 9 tests: normal submission, all six
-allowlisted categories, unknown category rejected, oversized category rejected,
-oversized body rejected, oversized title rejected, an anonymous caller controls
-no routing field, a signed-in submission is tenant-stamped from the session, and
-the central chokepoint bounds what is persisted.
+`src/services/support-boundary.test.mjs`, **13 tests**: an unauthenticated
+submission is refused and persists nothing; a session without a tenant is
+refused; a normal signed-in submission creates exactly one notification; the
+submission is routed to the submitter's own tenant so an admin can actually read
+it; all six allowlisted categories; unknown category rejected; oversized
+category, body and title each rejected rather than coerced or truncated; the
+caller controls no routing field; the tenant comes from the session and never
+the form; the page and the action agree that a session is required; and the
+central chokepoint bounds what is persisted.
 
 ### Schema drift (Codex F9)
 
 `supabase/security-snapshot.json`, generated from the live database, with 11
 offline drift-guard tests and a `--check` mode that fails on any difference.
 
-### Totals after the review round
+### Totals after review round 2 (SUPERSEDED — see round 3 below)
 
 | Suite | Result |
 |---|---|
-| Live direct Data API probe | **85 checks, 0 failed** |
-| Live durable audit probe | **11 checks, 0 failed** |
+| Live direct Data API probe | 85 checks, 0 failed |
+| Live durable audit probe | 11 checks, 0 failed |
 | Probe cleanup fault injection | 27/27 |
 | Probe guard | 9/9 |
 | Migration guards | 27/27 |
 | Security snapshot drift guards | 11/11 |
-| Full app suite | 348 tests, 345 pass, **3 fail — the pre-existing KI-002 trio by name** |
-| Typecheck / lint / build | clean / baseline / PASS, budgets met, shared JS 102 kB |
+| Full app suite | 348 tests, 345 pass, 3 fail — the KI-002 trio |
+| Typecheck / lint / build | clean / baseline / PASS |
 | Credential scan of `.next/static/**` | 0 hits |
+
+
+---
+
+## Review round 3 — what makes a PASS trustworthy
+
+Round 3's first and highest-priority finding (F1) was not a hole in the product.
+It was that **the security results themselves could not be trusted**. Everything
+in this document depends on that being fixed first, so it is recorded here as a
+property of the harness rather than as one more test.
+
+A PASS in this matrix must never be produced by any of the following, and the
+harness now structurally prevents each:
+
+| Failure mode | How it is prevented |
+|---|---|
+| A malformed request read as "denied" | Every probe asserts on persisted state, not on the response; a malformed request surfaces as a harness error, not a pass |
+| A missing fixture read as "denied" | Positive fixtures are provisioned and asserted. `verify-notification-rls.mjs` provisions its own two schools, its own auth user and three notifications, and requires all `EXPECTED_CHECKS` to have run |
+| A SELECT policy hiding a successful INSERT | Write outcomes are confirmed by a **service-role read-back** of the row, with the mutation posted **without** `Prefer: return=representation` — the weakest attacker path. This is exactly how F2's real severity was found |
+| An empty representation read as failure | Same: a representation is never evidence |
+| A generic HTTP error read as "denied" | Status alone is never sufficient for a deny verdict on a mutation |
+| A cleanup failure read as success | Residue verification is **fatal**; a non-empty ledger or any surviving row fails the run |
+| A skipped setup read as PASS/SKIPPED | Setup failure aborts the run; a skip must carry an explicit reason string |
+| Regex string matching standing in for behaviour | Source-level guards cover only ordering and structural contracts, and anchor on **code**, never prose — three false failures earlier in this round came from matching text inside comments |
+| A hung request never returning | One bounded transport (`lib/probe-http.mjs`) whose deadline covers the **body read**, not just the headers |
+| Ctrl-C leaving fixtures behind | `lib/probe-lifecycle.mjs` runs cleanup once on SIGINT/SIGTERM (latched on a promise) and exits 130/143 |
+| A single page of Auth users read as "no residue" | `listUsersByEmailPrefix` pages to exhaustion and **throws** if it does not terminate |
+| A lookalike host accepting the probe's credentials | The host guard requires exactly `<ref>.supabase.co`/`.supabase.in`, HTTPS, no port, no embedded credentials. Verified refusals: `...supabase.co.attacker.example`, `http://...`, `...evil.test`, `...supabase.co:8443`, `other.<ref>.supabase.co` |
+
+**Not claimed: crash safety.** SIGKILL, power loss or a host crash leave
+ledgered fixtures behind. What catches that is the *next* run's residue
+verification, not the probe itself. The subprocess signal tests **skip on
+Windows** with an explicit reason — POSIX signals are not deliverable to a child
+process there — and the same behaviour is covered platform-independently by
+`lib/probe-lifecycle.test.mjs` with an injected process handle. A skip is never
+reported as a pass.
+
+**Not weakened: production append-only behaviour.** The audit probe cannot
+delete its own `security_events` rows. Its test events remain in the table
+permanently, and the probe reports them rather than cleaning them up.
+
+### Round-3 totals (all freshly run this session)
+
+| Suite | Result |
+|---|---|
+| Live direct Data API probe (`rls-probe.mjs`) | **PASS — 96 checks, 0 failed**; ledger cleanup complete, residue clean |
+| Live durable audit probe (`audit-trail-probe.mjs`) | **PASS — 12 checks, 0 failed** |
+| Live notification RLS (`verify-notification-rls.mjs`) | **PASS — 6 checks, 0 failed**, own fixtures, cleanup clean |
+| Security snapshot vs live DB (`--check`) | **PASS — matches** |
+| `scripts/**` harness suites | **PASS — 55 tests, 52 pass, 0 fail, 3 skipped** (Windows signals, explicit reason) |
+| `supabase/**` migration + snapshot guards | **PASS — 57 tests, 57 pass, 0 fail** |
+| Whole repository suite | **499 tests, 493 pass, 3 fail, 3 skipped** |
+| The 3 failures | **the KI-002 trio, proven pre-existing** — the same three names fail on `origin/main` in a clean worktree, and both test files are untouched by this branch |
+| `tsc --noEmit` | **PASS — exit 0** |
+| `next lint` | **PASS — exit 0**, 1 pre-existing `no-img-element` warning |
+| `next build` | **PASS — exit 0**, 26 routes, shared JS 102 kB unchanged |
+| Credential scan of shipped output | **PASS — 202 files across `.next/static` + `.next/server`, 0 hits.** The one `password123` match under `.next` is in `.next/cache/webpack/*.pack`, mtime 2026-08-11, **before** the 2026-08-13 rotation commit `6a3037e`; `.next/` is gitignored and never served |
+| `git diff --check` | **PASS — clean** |
+| Rendered browser QA | **UNVERIFIED — the browser preview tool was blocked by this session's permission classifier; no page was rendered** |
+
+### New round-3 offline suites
+
+| Suite | Tests | Covers |
+|---|---|---|
+| `scripts/security/lib/probe-lifecycle.test.mjs` | 10 | signal-aware, once-only cleanup with an injected process handle |
+| `scripts/security/probe-subprocess.test.mjs` | 7 (+3 skipped on Windows) | a real spawned runner: bounded transport, exit codes, residue fatality |
+| `src/services/ai-tutor.cas.test.mjs` | 4 | only the CAS winner pays for generation (F6) |
+| `src/services/roadmap-transition.test.mjs` | 7 | exactly one winner, terminal states, no double notification (F5) |
+| `src/services/notification-tenant-scope.test.mjs` | 3 | the publication broadcast carries its tenant (F10) |
+| `src/components/notifications/notification-realtime.test.mjs` | 5 | auth-before-subscribe, no role-broadcast exclusion, RLS not weakened (F11) |
+| `src/services/server-action-contract.test.mjs` | 2 | every `"use server"` export is async — the defect that broke `next build` |
