@@ -8,37 +8,13 @@
 // Kept separate from scripts/loadtest/lib/supabase-rest.mjs on purpose: that
 // client is shared with the load harness and its error/`Prefer` semantics are
 // depended on there. This one exists to be strict.
+//
+// Codex round 3: the transport moved to probe-http.mjs so ONE bounded
+// implementation covers every probe request, including body consumption.
 
-export const DEFAULT_TIMEOUT_MS = 15_000;
+import { DEFAULT_TIMEOUT_MS, ProbeRequestError, boundedRequest, parseBody } from "./probe-http.mjs";
 
-export class ProbeRequestError extends Error {
-  constructor(message, { status = null, cause = null } = {}) {
-    super(message);
-    this.name = "ProbeRequestError";
-    this.status = status;
-    if (cause) this.cause = cause;
-  }
-}
-
-async function fetchWithDeadline(url, init, timeoutMs) {
-  const controller = new AbortController();
-  // A real AbortError, not a TimeoutError — postgrest-js and undici treat the
-  // two differently, and Stage 8 already learned that lesson the hard way.
-  const timer = setTimeout(
-    () => controller.abort(new DOMException("probe request timed out", "AbortError")),
-    timeoutMs,
-  );
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      throw new ProbeRequestError(`request to ${url} exceeded ${timeoutMs}ms`, { cause: error });
-    }
-    throw new ProbeRequestError(`request to ${url} failed: ${error?.message ?? error}`, { cause: error });
-  } finally {
-    clearTimeout(timer);
-  }
-}
+export { DEFAULT_TIMEOUT_MS, ProbeRequestError };
 
 /** PostgREST with the service-role key. Used for provisioning, verification and cleanup. */
 export function createProbeRest({ url, serviceRoleKey, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl }) {
@@ -48,17 +24,15 @@ export function createProbeRest({ url, serviceRoleKey, timeoutMs = DEFAULT_TIMEO
     Authorization: `Bearer ${serviceRoleKey}`,
     "Content-Type": "application/json",
   };
-  const doFetch = fetchImpl ?? ((u, init) => fetchWithDeadline(u, init, timeoutMs));
-
   async function request(path, init = {}) {
-    const res = await doFetch(`${base}${path}`, {
-      ...init,
-      headers: { ...headers, ...(init.headers ?? {}) },
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new ProbeRequestError(`PostgREST ${init.method ?? "GET"} ${path} → ${res.status}: ${text}`, {
-        status: res.status,
+    const { status, text } = await boundedRequest(
+      `${base}${path}`,
+      { ...init, headers: { ...headers, ...(init.headers ?? {}) } },
+      { timeoutMs, fetchImpl },
+    );
+    if (status < 200 || status >= 300) {
+      throw new ProbeRequestError(`PostgREST ${init.method ?? "GET"} ${path} → ${status}: ${text}`, {
+        status,
       });
     }
     return text ? JSON.parse(text) : null;
@@ -95,50 +69,66 @@ export function createProbeAuthAdmin({ url, serviceRoleKey, timeoutMs = DEFAULT_
     Authorization: `Bearer ${serviceRoleKey}`,
     "Content-Type": "application/json",
   };
-  const doFetch = fetchImpl ?? ((u, init) => fetchWithDeadline(u, init, timeoutMs));
+  const call = (path, init) => boundedRequest(`${base}${path}`, { ...init, headers }, { timeoutMs, fetchImpl });
 
   return {
     async createUser(email, password) {
-      const res = await doFetch(`${base}/users`, {
+      const { status, text } = await call("/users", {
         method: "POST",
-        headers,
         body: JSON.stringify({ email, password, email_confirm: true }),
       });
-      const text = await res.text();
-      if (!res.ok) {
-        throw new ProbeRequestError(`GoTrue create user → ${res.status}: ${text}`, { status: res.status });
+      if (status < 200 || status >= 300) {
+        throw new ProbeRequestError(`GoTrue create user → ${status}: ${text}`, { status });
       }
-      return JSON.parse(text);
+      return parseBody(text);
     },
     async deleteUser(id) {
-      const res = await doFetch(`${base}/users/${id}`, { method: "DELETE", headers });
+      const { status, text } = await call(`/users/${id}`, { method: "DELETE" });
       // 404 means the user is already gone, which is the state cleanup wants.
-      if (!res.ok && res.status !== 404) {
-        const text = await res.text();
-        throw new ProbeRequestError(`GoTrue delete user → ${res.status}: ${text}`, { status: res.status });
+      if ((status < 200 || status >= 300) && status !== 404) {
+        throw new ProbeRequestError(`GoTrue delete user → ${status}: ${text}`, { status });
       }
     },
-    async listUsersByEmailPrefix(prefix) {
-      const res = await doFetch(`${base}/users?per_page=200`, { method: "GET", headers });
-      if (!res.ok) {
-        throw new ProbeRequestError(`GoTrue list users → ${res.status}`, { status: res.status });
+    /**
+     * Codex round 3, F1: this used to issue ONE `per_page=200` request, so a
+     * project with more than 200 auth users could hide probe residue past the
+     * first page and residue verification would report clean. It now paginates
+     * to exhaustion, and a page that cannot be read is an error rather than an
+     * empty result.
+     */
+    async listUsersByEmailPrefix(prefix, { perPage = 200, maxPages = 500 } = {}) {
+      const matches = [];
+      for (let page = 1; page <= maxPages; page += 1) {
+        const { status, text } = await call(`/users?page=${page}&per_page=${perPage}`, { method: "GET" });
+        if (status < 200 || status >= 300) {
+          throw new ProbeRequestError(`GoTrue list users page ${page} → ${status}`, { status });
+        }
+        const body = parseBody(text);
+        const users = Array.isArray(body?.users) ? body.users : [];
+        for (const user of users) {
+          if (typeof user?.email === "string" && user.email.includes(prefix)) matches.push(user);
+        }
+        if (users.length < perPage) return matches;
       }
-      const body = JSON.parse(await res.text());
-      const users = Array.isArray(body?.users) ? body.users : [];
-      return users.filter((user) => typeof user?.email === "string" && user.email.includes(prefix));
+      throw new ProbeRequestError(
+        `GoTrue user enumeration did not terminate within ${maxPages} pages; residue cannot be verified`,
+      );
     },
   };
 }
 
 export function signInFactory({ url, anonKey, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl }) {
-  const doFetch = fetchImpl ?? ((u, init) => fetchWithDeadline(u, init, timeoutMs));
   return async function signIn(email, password) {
-    const res = await doFetch(`${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: { apikey: anonKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const body = JSON.parse(await res.text());
+    const { text } = await boundedRequest(
+      `${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`,
+      {
+        method: "POST",
+        headers: { apikey: anonKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      },
+      { timeoutMs, fetchImpl },
+    );
+    const body = parseBody(text) ?? {};
     if (!body.access_token) {
       throw new ProbeRequestError(`could not sign in probe user: ${body?.error_description ?? body?.msg ?? "no token"}`);
     }

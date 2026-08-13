@@ -431,25 +431,29 @@ test("the sweep reports failures rather than claiming success", async () => {
 // The runner's own lifecycle shape
 // ---------------------------------------------------------------------------
 
-test("the runner provisions inside the try and fails on residue", async () => {
+test("the runner's lifecycle covers provisioning, signals and residue", async () => {
   const { readFileSync } = await import("node:fs");
   const source = readFileSync(new URL("../rls-probe.mjs", import.meta.url), "utf8");
 
-  const tryIndex = source.indexOf("\n  try {");
-  const provisionIndex = source.indexOf("await provisionProbeTenants(ledger)");
-  assert.ok(tryIndex > -1 && provisionIndex > -1, "expected a top-level try and a provisioning call");
-  assert.ok(
-    tryIndex < provisionIndex,
-    "provisioning must happen INSIDE the try, or a partial provision escapes cleanup",
-  );
+  // Provisioning must sit INSIDE the guarded body, or a partial provision
+  // escapes cleanup.
+  const bodyStart = source.indexOf("await lifecycle.run(async () => {");
+  const provision = source.indexOf("await provisionProbeTenants(ledger)");
+  assert.ok(bodyStart > -1, "the runner must use the signal-aware lifecycle");
+  assert.ok(bodyStart < provision, "provisioning must happen inside lifecycle.run");
 
-  // Cleanup and residue verification both run in the finally.
-  assert.match(source, /finally \{\s*cleanupFailures = await ledger\.cleanup\(\);\s*residue = await verifyNoResidue/);
+  // Cleanup and residue verification are the lifecycle's cleanup callback, so
+  // they also run on SIGINT/SIGTERM — not only in a `finally`.
+  assert.match(source, /cleanup: async \(\) => \{[\s\S]*?ledger\.cleanup\(\)[\s\S]*?verifyNoResidue/);
 
-  // The exit code accounts for cleanup and residue, not only the security checks.
+  // The exit code accounts for cleanup and residue, not only security checks.
   assert.match(source, /failed === 0 &&\s*cleanupFailures\.length === 0 &&\s*residue\.clean/);
 
-  // The old swallow-and-log behaviour must not return.
+  // Every probe request goes through the bounded transport; no bare fetch.
+  assert.doesNotMatch(source, /await fetch\(/, "the runner must not call fetch directly");
+  assert.match(source, /createRoleClient/);
+
+  // The swallow-and-log behaviour must not return.
   assert.doesNotMatch(source, /teardownProbeTenants/);
   assert.doesNotMatch(source, /verifyTornDown/);
 });

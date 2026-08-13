@@ -25,14 +25,95 @@
 export const PROBE_MARKER = "pacemate-stage9-probe";
 export const PROBE_TENANT_SLUG_PREFIX = `${PROBE_MARKER}-`;
 
+/**
+ * Hosts a Supabase project can legitimately live on. The check below requires
+ * the hostname to equal `<ref><suffix>` EXACTLY — not merely to start with the
+ * ref, which is what the previous implementation did.
+ */
+export const SUPABASE_HOST_SUFFIXES = [".supabase.co", ".supabase.in"];
+export const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
 export function projectRefFromSupabaseUrl(rawUrl) {
   try {
     const { hostname } = new URL(rawUrl);
-    const [ref] = hostname.split(".");
-    return ref || null;
+    for (const suffix of SUPABASE_HOST_SUFFIXES) {
+      if (hostname.endsWith(suffix)) {
+        const ref = hostname.slice(0, -suffix.length);
+        // A ref is a single label. `a.b.supabase.co` is not a project host.
+        return ref && !ref.includes(".") ? ref : null;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
+}
+
+export function isLoopbackUrl(rawUrl) {
+  try {
+    return LOOPBACK_HOSTS.has(new URL(rawUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Codex round 3, F1 — where privileged credentials may be sent.
+ *
+ * The old guard derived the "project ref" as `hostname.split(".")[0]` and
+ * compared that to the expected ref. Measured against the real function, ALL of
+ * these passed while carrying the service-role key:
+ *
+ *   https://<ref>.supabase.co.attacker.example   crafted suffix
+ *   https://<ref>.evil.test                      unrelated domain
+ *   http://<ref>.supabase.co                     no TLS
+ *
+ * The hostname must now equal `<expectedRef><supabase suffix>` exactly, over
+ * HTTPS, on the default port, with no embedded credentials.
+ *
+ * Loopback is permitted only with an explicit opt-in, and exists so the
+ * harness's own subprocess tests can drive the real runner against a local
+ * stand-in. It is never a path to a remote host.
+ */
+export function evaluateHostGuard(env, rawUrl, expectedRef) {
+  const problems = [];
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return { allowed: false, problems: [`"${rawUrl}" is not a valid URL`], loopback: false };
+  }
+
+  if (url.username || url.password) {
+    problems.push("the Supabase URL must not embed credentials");
+  }
+
+  if (isLoopbackUrl(rawUrl)) {
+    if (env.PACEMATE_SECURITY_PROBE_ALLOW_LOOPBACK !== "1") {
+      problems.push(
+        "loopback targets require PACEMATE_SECURITY_PROBE_ALLOW_LOOPBACK=1 (this exists for the harness's own tests)",
+      );
+    }
+    return { allowed: problems.length === 0, problems, loopback: true };
+  }
+
+  if (url.protocol !== "https:") {
+    problems.push(`privileged credentials may only be sent over https, got ${url.protocol.replace(":", "")}`);
+  }
+  if (url.port) {
+    problems.push(`unexpected port ${url.port} on a Supabase project host`);
+  }
+
+  const expectedHosts = expectedRef
+    ? SUPABASE_HOST_SUFFIXES.map((suffix) => `${expectedRef}${suffix}`)
+    : [];
+  if (expectedRef && !expectedHosts.includes(url.hostname)) {
+    problems.push(
+      `refusing to send privileged credentials to "${url.hostname}"; expected exactly one of ${expectedHosts.join(", ")}`,
+    );
+  }
+
+  return { allowed: problems.length === 0, problems, loopback: false };
 }
 
 /**
@@ -49,19 +130,24 @@ export function evaluateProbeGuard(env, supabaseUrl) {
   }
 
   const expectedRef = env.PACEMATE_SECURITY_PROBE_PROJECT_REF;
+  const host = evaluateHostGuard(env, supabaseUrl, expectedRef);
+  problems.push(...host.problems);
+
   if (!expectedRef) {
     problems.push(
       "set PACEMATE_SECURITY_PROBE_PROJECT_REF to the Supabase project ref you intend to probe",
     );
-  } else if (!actualRef) {
-    problems.push("could not derive a Supabase project ref from the configured URL");
-  } else if (expectedRef !== actualRef) {
-    problems.push(
-      `configured Supabase project is "${actualRef}" but PACEMATE_SECURITY_PROBE_PROJECT_REF is "${expectedRef}"`,
-    );
+  } else if (!host.loopback) {
+    if (!actualRef) {
+      problems.push("could not derive a Supabase project ref from the configured URL");
+    } else if (expectedRef !== actualRef) {
+      problems.push(
+        `configured Supabase project is "${actualRef}" but PACEMATE_SECURITY_PROBE_PROJECT_REF is "${expectedRef}"`,
+      );
+    }
   }
 
-  return { allowed: problems.length === 0, problems, projectRef: actualRef };
+  return { allowed: problems.length === 0, problems, projectRef: actualRef, loopback: host.loopback };
 }
 
 /**

@@ -22,6 +22,8 @@ import { writeFileSync } from "node:fs";
 import { loadEnvLocal, requireEnv } from "../loadtest/lib/env.mjs";
 import { assertSafeToProbe } from "./lib/probe-guard.mjs";
 import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./lib/probe-rest.mjs";
+import { createRoleClient } from "./lib/probe-http.mjs";
+import { createProbeLifecycle, EXIT } from "./lib/probe-lifecycle.mjs";
 import { ProbeLedger, sweepOrphans, verifyNoResidue } from "./lib/probe-ledger.mjs";
 import { PROBE_MARKER, PROBE_PASSWORD, provisionProbeTenants } from "./lib/probe-fixtures.mjs";
 
@@ -65,6 +67,8 @@ const TABLES = [
   ["professors", false, "professor directory incl. email and phone"],
 ];
 
+const PROBE_TIMEOUT_MS = Number(process.env.PACEMATE_SECURITY_PROBE_TIMEOUT_MS ?? 15000);
+
 function makeReporter() {
   const results = [];
   return {
@@ -75,24 +79,11 @@ function makeReporter() {
   };
 }
 
-async function rawFetch(url, path, headers, init = {}) {
-  // `{ ...init, headers }` used to DROP init.headers, so a per-call
-  // `Prefer: return=representation` never reached PostgREST: an INSERT that
-  // succeeded came back 201 with an empty body and read as "denied". That is a
-  // probe that reports safety it has not observed, so the base headers are now
-  // merged UNDER the per-call ones rather than replacing them.
-  const res = await fetch(`${url}/rest/v1/${path}`, {
-    ...init,
-    headers: { ...headers, ...(init.headers ?? {}) },
-  });
-  const text = await res.text();
-  let body = null;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = text;
-  }
-  return { status: res.status, body };
+// Codex round 3, F1: the role probes used bare `fetch` with NO timeout at all.
+// They now share the one bounded transport, whose deadline covers body
+// consumption as well as headers.
+function makeRawFetch(url, timeoutMs) {
+  return (baseHeaders) => createRoleClient({ url, baseHeaders, timeoutMs });
 }
 
 function rowCount(body) {
@@ -129,17 +120,37 @@ async function main() {
   const { check, results } = makeReporter();
 
   const anonHeaders = { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" };
-  const asAnon = (path, init) => rawFetch(url, path, anonHeaders, init);
+  const roleClient = makeRawFetch(url, PROBE_TIMEOUT_MS);
+  const asAnon = roleClient(anonHeaders);
 
   // Codex finding 1: the ledger belongs to the CALLER and provisioning happens
   // INSIDE the try, so a partial provision — or a provisioner that never
   // returns — is still fully cleaned up by the finally below.
   const ledger = new ProbeLedger({ rest, auth });
-  let provisionOrProbeError = null;
   let cleanupFailures = [];
   let residue = { residue: [], unverifiable: ["cleanup did not run"], clean: false };
 
-  try {
+  // Codex round 3, F1: cleanup must also run on Ctrl-C and on `kill`, exactly
+  // once, and the process must not exit before it finishes.
+  const lifecycle = createProbeLifecycle({
+    timeoutMs: Number(process.env.PACEMATE_SECURITY_PROBE_CLEANUP_TIMEOUT_MS ?? 30000),
+    cleanup: async () => {
+      cleanupFailures = await ledger.cleanup();
+      residue = await verifyNoResidue({ rest, auth });
+      const ok = cleanupFailures.length === 0 && residue.clean;
+      if (!ok) {
+        for (const failure of cleanupFailures) {
+          console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id} (${failure.label}): ${failure.message}`);
+        }
+        for (const entry of residue.residue) console.error(`[RESIDUE] ${entry}`);
+        for (const entry of residue.unverifiable) console.error(`[UNVERIFIABLE] ${entry}`);
+        console.error("Run `node scripts/security/rls-probe.mjs --sweep` to remove marked residue.");
+      }
+      return { ok, detail: ok ? "clean" : "residue or cleanup failure" };
+    },
+  });
+
+  const { bodyError: provisionOrProbeError } = await lifecycle.run(async () => {
     console.log(`Provisioning two disposable probe tenants (marker "${PROBE_MARKER}")…`);
     const fixtures = await provisionProbeTenants(ledger);
     const A = fixtures.tenants.A;
@@ -153,9 +164,9 @@ async function main() {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     });
-    const asA = (path, init) => rawFetch(url, path, headersFor(tokenA), init);
-    const asB = (path, init) => rawFetch(url, path, headersFor(tokenB), init);
-    const asProfA = (path, init) => rawFetch(url, path, headersFor(tokenProfA), init);
+    const asA = roleClient(headersFor(tokenA));
+    const asB = roleClient(headersFor(tokenB));
+    const asProfA = roleClient(headersFor(tokenProfA));
 
     // ---------------------------------------------------------------- anon read
     for (const [table, anonReadIntended, why] of TABLES) {
@@ -853,14 +864,7 @@ async function main() {
         `PATCH ${res.status}; is_read is now ${after?.is_read}`,
       );
     }
-  } catch (error) {
-    // Recorded rather than rethrown, so cleanup below always runs and its
-    // outcome is reported alongside the failure that caused it.
-    provisionOrProbeError = error;
-  } finally {
-    cleanupFailures = await ledger.cleanup();
-    residue = await verifyNoResidue({ rest, auth });
-  }
+  });
 
   console.log("\n=== Stage 9 direct Data API probe ===\n");
   let failed = 0;

@@ -1,188 +1,240 @@
-// Live RLS verification for user_notifications (Stage 8 review finding 3).
+// Live RLS verification for user_notifications.
 //
-// Read-only against real rows plus ONE temporary probe row per run, which is
-// always removed. It asserts, against the real database with a real user JWT,
-// the five properties the migration claims:
+// Codex round 3, F1: this script mutated a live project with none of the
+// protections the main probe had gained — no production/host guard, no cleanup
+// ledger, no bounded transport, and residue that could not fail the run. Two of
+// its checks also passed when their FIXTURE WAS MISSING ("SKIPPED — no direct
+// row exists"), which is a security assertion reporting success for a test that
+// never ran. It also signed in as a real demo account, so it depended on
+// production data being in a particular shape.
 //
-//   1. an unauthenticated caller (publishable key only) can read nothing
-//   2. a student can read their own direct notification
-//   3. a student can read a same-tenant role broadcast
-//   4. a student can NOT read a cross-tenant role broadcast
-//   5. a student can NOT update a cross-tenant role broadcast
+// It now shares the probe harness's guarantees:
+//   * the same host/production guard (privileged credentials only to an exact
+//     Supabase project host, over HTTPS);
+//   * the same bounded transport, whose deadline covers body consumption;
+//   * the same cleanup ledger, recording each resource the moment it exists;
+//   * the same signal-aware, once-only cleanup;
+//   * fatal residue — a run that cannot prove it cleaned up exits non-zero;
+//   * POSITIVE FIXTURES: it provisions its own tenants, user and rows, so a
+//     missing fixture is a failure rather than a pass, and it never touches an
+//     existing tenant or user.
 //
-// Usage: node scripts/verify-notification-rls.mjs
-//
-// This is verification, not a load test: it creates a single foreign-tenant
-// probe row via the service role and deletes it in a finally block.
+// Usage:
+//   PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 \
+//   PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref> \
+//   node scripts/verify-notification-rls.mjs
 
 import { loadEnvLocal, requireEnv } from "./loadtest/lib/env.mjs";
-import { createRestClient } from "./loadtest/lib/supabase-rest.mjs";
+import {
+  PROBE_MARKER,
+  PROBE_TENANT_SLUG_PREFIX,
+  assertSafeToProbe,
+} from "./security/lib/probe-guard.mjs";
+import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./security/lib/probe-rest.mjs";
+import { createRoleClient } from "./security/lib/probe-http.mjs";
+import { ProbeLedger, verifyNoResidue } from "./security/lib/probe-ledger.mjs";
+import { createProbeLifecycle } from "./security/lib/probe-lifecycle.mjs";
 
-// Codex F5: the demo password is no longer stored in the repository. It is
-// read from PACEMATE_DEMO_PASSWORDS, which is never committed.
-const DEMO_STUDENT_IDENTIFIER = "student1@pacemate.edu";
-
-function demoPasswordFor(identifier) {
-  const raw = process.env.PACEMATE_DEMO_PASSWORDS;
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    const password = parsed?.[identifier];
-    return typeof password === "string" && password ? password : null;
-  } catch {
-    return null;
-  }
-}
-const PROBE_MARKER = "rls-probe";
+const PROBE_PASSWORD = "Stage9-notif-probe-!aA9";
+const TIMEOUT_MS = Number(process.env.PACEMATE_SECURITY_PROBE_TIMEOUT_MS ?? 15000);
+const EXPECTED_CHECKS = 6;
 
 async function main() {
   const env = loadEnvLocal();
-  const url = requireEnv(env, "NEXT_PUBLIC_SUPABASE_URL");
+  const url = requireEnv(env, "NEXT_PUBLIC_SUPABASE_URL").replace(/\/$/, "");
   const anonKey = requireEnv(env, "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   const serviceKey = requireEnv(env, "SUPABASE_SERVICE_ROLE_KEY");
-  const rest = createRestClient({ url, serviceRoleKey: serviceKey });
 
-  const demoPassword = demoPasswordFor(DEMO_STUDENT_IDENTIFIER);
-  if (!demoPassword) {
-    throw new Error(
-      "PACEMATE_DEMO_PASSWORDS must supply a credential for " +
-        `${DEMO_STUDENT_IDENTIFIER} — demo passwords are no longer stored in the repository.`,
-    );
-  }
+  assertSafeToProbe({ ...env, ...process.env }, url);
+
+  const rest = createProbeRest({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS });
+  const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS });
+  const signIn = signInFactory({ url, anonKey, timeoutMs: TIMEOUT_MS });
+  const asAnon = createRoleClient({
+    url,
+    baseHeaders: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
+    timeoutMs: TIMEOUT_MS,
+  });
 
   const results = [];
-  const check = (id, pass, detail) => results.push({ id, pass, detail });
+  const check = (id, property, pass, detail) => results.push({ id, property, pass, detail });
 
-  // 1. Unauthenticated, publishable key only.
-  const anonRes = await fetch(`${url}/rest/v1/user_notifications?select=id&limit=5`, {
-    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+  const ledger = new ProbeLedger({ rest, auth });
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => {
+      const failures = await ledger.cleanup();
+      const residue = await verifyNoResidue({ rest, auth });
+      const ok = failures.length === 0 && residue.clean;
+      if (!ok) {
+        for (const failure of failures) {
+          console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id}: ${failure.message}`);
+        }
+        for (const entry of residue.residue) console.error(`[RESIDUE] ${entry}`);
+        for (const entry of residue.unverifiable) console.error(`[UNVERIFIABLE] ${entry}`);
+      }
+      return { ok, detail: ok ? "clean" : "residue or cleanup failure" };
+    },
   });
-  const anonRows = anonRes.ok ? await anonRes.json() : [];
-  check(
-    "anon cannot read notifications",
-    anonRes.status === 200 && Array.isArray(anonRows) && anonRows.length === 0,
-    `status ${anonRes.status}, ${Array.isArray(anonRows) ? anonRows.length : "?"} row(s) visible`,
-  );
 
-  // Sign in as a real student.
-  const tokenRes = await fetch(`${url}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: { apikey: anonKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ email: DEMO_STUDENT_IDENTIFIER, password: demoPassword }),
-  });
-  const token = (await tokenRes.json()).access_token;
-  if (!token) throw new Error("could not sign in the demo student; cannot verify authenticated policy");
+  const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-  const asStudent = (path, init = {}) =>
-    fetch(`${url}/rest/v1/${path}`, {
-      ...init,
-      headers: { apikey: anonKey, Authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+  const { bodyError } = await lifecycle.run(async () => {
+    const record = async (table, row) => {
+      const [created] = await rest.insert(table, [row]);
+      ledger.recordRow(table, created.id, table);
+      return created;
+    };
+
+    const home = await record("schools", {
+      name: `${PROBE_MARKER} notif home`,
+      slug: `${PROBE_TENANT_SLUG_PREFIX}notif-home-${runId}`,
+      status: "active",
+    });
+    const foreign = await record("schools", {
+      name: `${PROBE_MARKER} notif foreign`,
+      slug: `${PROBE_TENANT_SLUG_PREFIX}notif-foreign-${runId}`,
+      status: "active",
     });
 
-  const [profile] = await rest.select(
-    "profiles",
-    `select=id,school_id,role&identifier=eq.${encodeURIComponent(DEMO_STUDENT_IDENTIFIER)}`,
-  );
-  if (!profile) throw new Error("demo student profile not found");
+    const email = `${PROBE_MARKER}-notif-${runId}@probe.invalid`;
+    const authUser = await auth.createUser(email, PROBE_PASSWORD);
+    ledger.recordAuthUser(authUser.id, "notif student");
 
-  let probeId = null;
-  let probeSchoolId = null;
+    const profile = await record("profiles", {
+      identifier: email,
+      name: `${PROBE_MARKER} notif student`,
+      role: "student",
+      school_id: home.id,
+      auth_user_id: authUser.id,
+    });
 
-  try {
-    // school_id is a foreign key, so the "other university" has to exist for the
-    // duration of the probe. Both rows are removed in the finally block.
-    const [probeSchool] = await rest.insert("schools", [
-      { name: `${PROBE_MARKER} foreign university`, slug: `${PROBE_MARKER}-${Date.now()}` },
-    ]);
-    probeSchoolId = probeSchool.id;
+    const own = await record("user_notifications", {
+      recipient_id: profile.id,
+      recipient_role: null,
+      school_id: home.id,
+      category: "system",
+      title: `${PROBE_MARKER} own direct ${runId}`,
+      body: `${PROBE_MARKER} own direct body`,
+      target_href: "/notifications",
+    });
+    const sameTenant = await record("user_notifications", {
+      recipient_id: null,
+      recipient_role: "student",
+      school_id: home.id,
+      category: "system",
+      title: `${PROBE_MARKER} same tenant broadcast ${runId}`,
+      body: `${PROBE_MARKER} same tenant body`,
+      target_href: "/notifications",
+    });
+    const foreignBroadcast = await record("user_notifications", {
+      recipient_id: null,
+      recipient_role: "student",
+      school_id: foreign.id,
+      category: "system",
+      title: `${PROBE_MARKER} foreign broadcast ${runId}`,
+      body: `${PROBE_MARKER} foreign body`,
+      target_href: "/notifications",
+    });
 
-    // A cross-tenant role broadcast this student must never see.
-    const [probe] = await rest.insert("user_notifications", [
-      {
-        recipient_id: null,
-        recipient_role: profile.role,
-        school_id: probeSchoolId,
-        category: "counseling",
-        title: `${PROBE_MARKER} foreign tenant`,
-        body: `${PROBE_MARKER} must not be visible cross-tenant`,
-        target_href: "/notifications",
+    const token = await signIn(email, PROBE_PASSWORD);
+    const asStudent = createRoleClient({
+      url,
+      baseHeaders: {
+        apikey: anonKey,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    ]);
-    probeId = probe.id;
-
-    // 2 + 3. Own direct rows and same-tenant role broadcasts.
-    const ownRows = await rest.select(
-      "user_notifications",
-      `select=id&recipient_id=eq.${profile.id}&limit=1`,
-    );
-    if (ownRows.length) {
-      const res = await asStudent(`user_notifications?select=id&id=eq.${ownRows[0].id}`);
-      const rows = await res.json();
-      check("student reads own direct notification", Array.isArray(rows) && rows.length === 1, `${rows.length ?? "?"} row(s)`);
-    } else {
-      check("student reads own direct notification", true, "SKIPPED — no direct row exists for this student");
-    }
-
-    const sameTenant = await rest.select(
-      "user_notifications",
-      `select=id&recipient_id=is.null&recipient_role=eq.${profile.role}&school_id=eq.${profile.school_id}&limit=1`,
-    );
-    if (sameTenant.length) {
-      const res = await asStudent(`user_notifications?select=id&id=eq.${sameTenant[0].id}`);
-      const rows = await res.json();
-      check("student reads same-tenant role broadcast", Array.isArray(rows) && rows.length === 1, `${rows.length ?? "?"} row(s)`);
-    } else {
-      check("student reads same-tenant role broadcast", true, "SKIPPED — no same-tenant broadcast exists");
-    }
-
-    // 4. Cross-tenant read denied.
-    const foreignRead = await asStudent(`user_notifications?select=id&id=eq.${probeId}`);
-    const foreignRows = await foreignRead.json();
-    check(
-      "cross-tenant role broadcast is NOT readable",
-      Array.isArray(foreignRows) && foreignRows.length === 0,
-      `${Array.isArray(foreignRows) ? foreignRows.length : "?"} row(s) visible`,
-    );
-
-    // 5. Cross-tenant update denied (zero rows affected, not an error).
-    const foreignUpdate = await asStudent(`user_notifications?id=eq.${probeId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify({ is_read: true }),
+      timeoutMs: TIMEOUT_MS,
     });
-    const updated = await foreignUpdate.json();
-    const [after] = await rest.select("user_notifications", `select=is_read&id=eq.${probeId}`);
-    check(
-      "cross-tenant role broadcast is NOT updatable",
-      (!Array.isArray(updated) || updated.length === 0) && after?.is_read === false,
-      `patch returned ${Array.isArray(updated) ? updated.length : "error"} row(s); is_read now ${after?.is_read}`,
-    );
-  } finally {
-    if (probeId) {
-      await rest.remove("user_notifications", `id=eq.${probeId}`);
+
+    {
+      const { status, body } = await asAnon("user_notifications?select=id&limit=5");
+      check(
+        "anon-read",
+        "an unauthenticated caller reads no notifications",
+        status !== 200 || (Array.isArray(body) && body.length === 0),
+        `status ${status}, ${Array.isArray(body) ? body.length : "n/a"} row(s)`,
+      );
     }
-    if (probeSchoolId) {
-      await rest.remove("schools", `id=eq.${probeSchoolId}`);
+    {
+      const { status, body } = await asStudent(`user_notifications?select=id&id=eq.${own.id}`);
+      check(
+        "own-direct",
+        "the student CAN read their own direct notification (positive fixture)",
+        status === 200 && Array.isArray(body) && body.length === 1,
+        `status ${status}, ${Array.isArray(body) ? body.length : "n/a"} row(s)`,
+      );
     }
-    const leftoverRows = probeId
-      ? await rest.select("user_notifications", `select=id&id=eq.${probeId}`)
-      : [];
-    const leftoverSchools = await rest.select("schools", `select=id&name=like.*${PROBE_MARKER}*`);
-    console.log(
-      `Probe cleanup: notifications ${leftoverRows.length === 0 ? "removed" : "LEFTOVER"}, schools ${
-        leftoverSchools.length === 0 ? "removed" : "LEFTOVER"
-      } (${(await rest.select("schools", "select=id")).length} school row(s) remain)`,
-    );
-  }
+    {
+      const { status, body } = await asStudent(`user_notifications?select=id&id=eq.${sameTenant.id}`);
+      check(
+        "same-tenant-broadcast",
+        "the student CAN read a same-tenant role broadcast (positive fixture)",
+        status === 200 && Array.isArray(body) && body.length === 1,
+        `status ${status}, ${Array.isArray(body) ? body.length : "n/a"} row(s)`,
+      );
+    }
+    {
+      const { status, body } = await asStudent(
+        `user_notifications?select=id&id=eq.${foreignBroadcast.id}`,
+      );
+      check(
+        "cross-tenant-read",
+        "the student must NOT read another tenant's role broadcast",
+        status === 200 && Array.isArray(body) && body.length === 0,
+        `status ${status}, ${Array.isArray(body) ? body.length : "n/a"} row(s)`,
+      );
+    }
+    {
+      // Outcome read back with the service role, never inferred from the
+      // response representation.
+      const { status } = await asStudent(`user_notifications?id=eq.${foreignBroadcast.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_read: true }),
+      });
+      const [after] = await rest.select(
+        "user_notifications",
+        `select=is_read&id=eq.${foreignBroadcast.id}`,
+      );
+      check(
+        "cross-tenant-update",
+        "the student must NOT mark another tenant's broadcast read",
+        after?.is_read === false,
+        `PATCH ${status}; is_read is now ${after?.is_read}`,
+      );
+    }
+    {
+      const { status } = await asStudent(`user_notifications?id=eq.${own.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_read: true }),
+      });
+      const [after] = await rest.select("user_notifications", `select=is_read&id=eq.${own.id}`);
+      check(
+        "own-update",
+        "the student CAN mark their own notification read (legitimate path)",
+        after?.is_read === true,
+        `PATCH ${status}; is_read is now ${after?.is_read}`,
+      );
+    }
+  });
+
+  const cleanup = lifecycle.cleanupResult ?? { ok: false, detail: "cleanup did not run" };
 
   console.log("\n=== user_notifications RLS ===");
   let failed = 0;
   for (const r of results) {
     if (!r.pass) failed += 1;
-    console.log(`[${r.pass ? "PASS" : "FAIL"}] ${r.id}: ${r.detail}`);
+    console.log(`[${r.pass ? "PASS" : "FAIL"}] ${r.id}\n        ${r.property}\n        ${r.detail}`);
   }
-  console.log(`\n${failed === 0 ? "ALL RLS CHECKS PASSED" : `${failed} CHECK(S) FAILED`}`);
-  process.exit(failed === 0 ? 0 : 1);
+  console.log(`\n${results.length} checks, ${failed} FAILED.`);
+  console.log(cleanup.ok ? "Cleanup verified clean." : `Cleanup NOT clean: ${cleanup.detail}`);
+  if (bodyError) console.error(`\nAborted: ${bodyError.message}`);
+
+  // A run that aborted before provisioning finished must never read as success.
+  const ranEverything = results.length === EXPECTED_CHECKS;
+  if (!ranEverything) console.error(`Only ${results.length} of ${EXPECTED_CHECKS} checks ran.`);
+
+  process.exit(failed === 0 && cleanup.ok && !bodyError && ranEverything ? 0 : 1);
 }
 
 main().catch((error) => {
