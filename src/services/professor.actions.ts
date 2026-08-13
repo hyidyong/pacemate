@@ -616,6 +616,11 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
     title: "담당 교수 로드맵 수정 반영",
     body: `${ownedCourse.courseCode} 과목 로드맵이 교수 수정본으로 업데이트됐습니다.`,
     targetHref: "/roadmap",
+    // Codex round 3, F10: a role broadcast with a NULL school_id matches no
+    // reader — the notification read policy requires school_id IS NOT NULL AND
+    // equal to the reader's tenant — so this published to nobody. The tenant is
+    // derived server-side from the authorized professor's own profile.
+    schoolId: profile.school_id,
   });
 
   revalidatePath("/professor");
