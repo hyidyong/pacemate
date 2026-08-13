@@ -8,7 +8,13 @@
 //   F8  does attribution survive the deletion of the actor it describes, and is
 //       the table genuinely append-only — including for the service role?
 //
-// Every row this creates is removed, and the run fails if anything is left.
+// APPEND-ONLY MEANS THE PROBE CANNOT TIDY UP AFTER ITSELF (Codex round 3, F7).
+// This probe used to delete its own rows, which is why service_role held DELETE
+// on the audit trail — a production privilege kept for testing convenience.
+// That privilege is gone. The probe now writes clearly marked test events and
+// ACCEPTS that they remain in the trail permanently, which is what append-only
+// means. They are REPORTED at the end, never silently ignored, and they contain
+// no personal data. The disposable PROFILE this probe creates is still removed.
 //
 // Usage:
 //   PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 \
@@ -38,6 +44,7 @@ async function main() {
   const check = (id, property, pass, detail) => results.push({ id, property, pass, detail });
 
   const created = { events: [], profiles: [] };
+  // Audit rows are permanent by design; only the profile is disposable.
 
   try {
     // ---- F7: required privileges are present -----------------------------
@@ -145,26 +152,50 @@ async function main() {
       `actor_ref=${afterDeletion?.actor_ref === disposable.id ? "PRESERVED" : "LOST"}, role_ref=${afterDeletion?.actor_role_ref}`,
     );
   } finally {
-    for (const id of created.events) {
-      await rest.remove("security_events", `id=eq.${id}`).catch(() => {});
-    }
+    // Audit events are intentionally NOT deleted — see the header. Only the
+    // disposable profile is removed.
     for (const id of created.profiles) {
       await rest.remove("profiles", `id=eq.${id}`).catch(() => {});
     }
   }
 
-  const leftoverEvents = await rest.select("security_events", `select=id&event=like.${MARKER}*`).catch(() => null);
+  // The append-only guarantee itself, proven rather than asserted.
+  if (created.events.length) {
+    let deleteRefused = false;
+    try {
+      await rest.remove("security_events", `id=eq.${created.events[0]}`);
+    } catch {
+      deleteRefused = true;
+    }
+    const [survivor] = await rest
+      .select("security_events", `select=id&id=eq.${created.events[0]}`)
+      .catch(() => []);
+    check(
+      "f7:delete-refused",
+      "an audit record cannot be DELETED, even by the service role",
+      deleteRefused && Boolean(survivor),
+      `refused=${deleteRefused}, row ${survivor ? "survives" : "GONE"}`,
+    );
+  }
+
+  const auditEvents = await rest.select("security_events", `select=id&event=like.${MARKER}*`).catch(() => null);
   const leftoverProfiles = await rest
     .select("profiles", `select=id&identifier=like.*${MARKER}*`)
     .catch(() => null);
-  const clean = leftoverEvents?.length === 0 && leftoverProfiles?.length === 0;
   check(
-    "cleanup",
-    "the probe leaves nothing behind and can prove it",
-    clean,
-    leftoverEvents === null || leftoverProfiles === null
+    "cleanup:disposable",
+    "every DISPOSABLE resource is removed and the check can be performed",
+    leftoverProfiles !== null && leftoverProfiles.length === 0,
+    leftoverProfiles === null
       ? "UNVERIFIABLE — residue read failed"
-      : `${leftoverEvents.length} event(s), ${leftoverProfiles.length} profile(s)`,
+      : `${leftoverProfiles.length} profile(s) left`,
+  );
+  // Not a leak: audit rows are permanent by design. Reported so the count is
+  // visible and nobody mistakes them for production events.
+  console.log(
+    `
+Audit trail: ${auditEvents === null ? "UNKNOWN" : auditEvents.length} permanent test event(s) ` +
+      `marked "${MARKER}" remain by design (the trail is append-only).`,
   );
 
   console.log("\n=== Stage 9 durable audit trail probe ===\n");
