@@ -117,7 +117,31 @@ export async function createCounselingRequest(formData: FormData) {
     return { ok: false, message: SLOT_NOT_AVAILABLE_MESSAGE };
   }
 
-  const { data, error } = await supabase
+  // Codex round 5, F1. This INSERT used to run through the SESSION client, so
+  // `authenticated` needed table INSERT on counseling_requests — and with that
+  // grant a student could skip this function entirely and POST straight to
+  // PostgREST. The INSERT policy could only check two things (the student is
+  // the caller, the professor is in the same tenant); everything Stage 5
+  // actually enforces lives above: the slot must be one of
+  // getAvailableCounselingSlots(tenant), which is what makes it canonical,
+  // inside the professor's availability, of the professor's slot length, and
+  // within the booking horizon — and `status` is a server constant.
+  //
+  // Measured live before the fix: five direct-INSERT bypasses, all persisted.
+  // A non-slot time, an eight-hour duration, 03:00 outside availability, a
+  // booking 900 days out, and status='approved' created by the student.
+  //
+  // Those invariants are not expressible as an RLS predicate without
+  // reimplementing the slot engine in SQL and keeping two copies in step. So
+  // the boundary moves instead of being duplicated: `authenticated` no longer
+  // holds INSERT (20260814200000), and the write happens here, under the
+  // service role, AFTER the validation above. Reads keep the session client so
+  // RLS still bounds what this student can see.
+  //
+  // The EXCLUDE constraint still arbitrates concurrency — the service role does
+  // not bypass constraints — so the conflict handling below is unchanged.
+  const writer = createSupabaseAdminClient();
+  const { data, error } = await writer
     .from("counseling_requests")
     .insert({
       student_id: profile.id,

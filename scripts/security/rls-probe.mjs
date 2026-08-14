@@ -588,6 +588,137 @@ async function main() {
     ];
 
     // -------------------------------------------------------------------
+    // Codex round 5, F1 — Stage 5's booking invariants must not be bypassable
+    // by talking straight to PostgREST.
+    //
+    // createCounselingRequest() resolves a CANONICAL slot from
+    // getAvailableCounselingSlots(tenant) and writes requested_start,
+    // requested_end and status from that slot — never from the caller. The
+    // INSERT policy checked only two things: the student_id is the caller and
+    // the professor is in the same tenant. Everything Stage 5 actually
+    // enforces — canonical slot, professor availability, duration, horizon,
+    // status starts pending — was enforced ONLY in the action.
+    //
+    // Each attempt below is same-tenant and self-authored, so the only thing
+    // that can deny it is the boundary itself. Outcome comes from a
+    // service-role read-back; a 201 with an empty body is not evidence.
+    // -------------------------------------------------------------------
+    // Each attempt gets its OWN day. `counseling_requests` carries an EXCLUDE
+    // constraint (`counseling_requests_no_active_overlap`), and the first draft
+    // of these checks reused one base time — so two attempts came back 400
+    // because they collided with a row an EARLIER attempt had just created, and
+    // read as "protected" when nothing had authorized anything. A denial
+    // produced by an unrelated constraint is not an authorization control, and
+    // that is the same mistake round 3 caught in F2.
+    const bookingBase = (dayOffset) => {
+      const start = new Date(Date.now() + (8 + dayOffset) * 24 * 3600 * 1000);
+      start.setUTCHours(10, 0, 0, 0);
+      return start;
+    };
+    const iso = (d) => d.toISOString();
+
+    const directBookingAttempts = [
+      {
+        id: "booking:non-slot-time",
+        property: "a time that is not a canonical slot must be denied",
+        row: (s) => ({ requested_start: iso(new Date(s.getTime() + 7 * 60_000)), requested_end: iso(new Date(s.getTime() + 37 * 60_000)) }),
+      },
+      {
+        id: "booking:excessive-duration",
+        property: "a duration beyond the professor's slot length must be denied",
+        row: (s) => ({ requested_start: iso(s), requested_end: iso(new Date(s.getTime() + 8 * 3600_000)) }),
+      },
+      {
+        id: "booking:outside-availability",
+        property: "a time outside the professor's availability must be denied",
+        row: (s) => {
+          const night = new Date(s);
+          night.setUTCHours(3, 0, 0, 0);
+          return { requested_start: iso(night), requested_end: iso(new Date(night.getTime() + 30 * 60_000)) };
+        },
+      },
+      {
+        id: "booking:far-horizon",
+        property: "a booking years into the future must be denied",
+        row: (s) => {
+          const far = new Date(s.getTime() + 900 * 24 * 3600_000);
+          return { requested_start: iso(far), requested_end: iso(new Date(far.getTime() + 30 * 60_000)) };
+        },
+      },
+      {
+        id: "booking:self-approved",
+        property: "a student must NOT create an already-APPROVED counseling request",
+        row: (s) => ({
+          requested_start: iso(s),
+          requested_end: iso(new Date(s.getTime() + 30 * 60_000)),
+          status: "approved",
+        }),
+      },
+    ];
+
+    for (const [index, attempt] of directBookingAttempts.entries()) {
+      const marker = tag(attempt.id);
+      const { status } = await asA("counseling_requests", {
+        method: "POST",
+        headers: headersFor(tokenA),
+        body: JSON.stringify({
+          student_id: A.profile.id,
+          professor_id: A.professor.id,
+          topic: marker,
+          ...attempt.row(bookingBase(index)),
+        }),
+      });
+      const rows = await rest
+        .select("counseling_requests", `select=id&topic=eq.${encodeURIComponent(marker)}`)
+        .catch(() => null);
+      if (rows === null) {
+        check(attempt.id, attempt.property, false, "read-back FAILED — cannot verify");
+        continue;
+      }
+      for (const row of rows) ledger.recordRow("counseling_requests", row.id, attempt.id);
+      check(attempt.id, attempt.property, rows.length === 0, `POST ${status}; ${rows.length} row(s) persisted`);
+    }
+
+    {
+      // Cross-tenant: B's professor, A's student. Denied before and must stay so.
+      const marker = tag("booking-foreign-professor");
+      const s = bookingBase(directBookingAttempts.length);
+      const { status } = await asA("counseling_requests", {
+        method: "POST",
+        headers: headersFor(tokenA),
+        body: JSON.stringify({
+          student_id: A.profile.id,
+          professor_id: B.professor.id,
+          topic: marker,
+          requested_start: iso(s),
+          requested_end: iso(new Date(s.getTime() + 30 * 60_000)),
+        }),
+      });
+      const rows = await rest
+        .select("counseling_requests", `select=id&topic=eq.${encodeURIComponent(marker)}`)
+        .catch(() => []);
+      for (const row of rows) ledger.recordRow("counseling_requests", row.id, marker);
+      check(
+        "booking:foreign-professor",
+        "a student must NOT book a professor in another tenant",
+        rows.length === 0,
+        `POST ${status}; ${rows.length} row(s) persisted`,
+      );
+    }
+    {
+      // POSITIVE SENTINEL for the deny checks above: the student CAN still read
+      // their own counseling request. If they could not, the denials would be
+      // proving the wrong thing.
+      const { status, body } = await asA(`counseling_requests?select=id&id=eq.${A.counseling.id}`);
+      check(
+        "booking:own-request-readable",
+        "the student CAN still read their own counseling request (positive sentinel)",
+        status === 200 && Array.isArray(body) && body.length === 1,
+        `status ${status}, ${Array.isArray(body) ? body.length : "n/a"} row(s)`,
+      );
+    }
+
+    // -------------------------------------------------------------------
     // Codex round 4, finding 6 — official course notices cannot be DELETED by
     // an unauthorized student.
     //
