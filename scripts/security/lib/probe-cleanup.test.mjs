@@ -23,7 +23,7 @@ import { createRunMarker } from "./probe-guard.mjs";
 // tests each mint their own marker rather than sharing a module constant. That
 // is also what the real runners do.
 const RUN_MARKER = createRunMarker();
-import { ProbeLedger, sweepOrphans, verifyNoResidue } from "./probe-ledger.mjs";
+import { ProbeLedger, sweepOrphans, teardown, verifyNoResidue } from "./probe-ledger.mjs";
 import { provisionProbeTenants, provisionTenant } from "./probe-fixtures.mjs";
 
 // ---------------------------------------------------------------------------
@@ -132,13 +132,16 @@ function createFakeRest({ failOn = () => false, failDeleteFor = () => false } = 
 
 function createFakeAuth({ failOnCreate = false, failOnDelete = false, failOnList = false } = {}) {
   const users = new Map();
+  const createCalls = [];
   let seq = 0;
   return {
     users,
-    async createUser(email) {
+    createCalls,
+    async createUser(email, password) {
       if (failOnCreate) throw new Error("injected GoTrue create failure");
       const id = `auth-${++seq}`;
       users.set(id, { id, email });
+      createCalls.push({ email, password });
       return { id, email };
     },
     async deleteUser(id) {
@@ -152,6 +155,44 @@ function createFakeAuth({ failOnCreate = false, failOnDelete = false, failOnList
     },
   };
 }
+
+test("fixture principals share only their own run's secret and still authenticate", async () => {
+  const provision = async (marker) => {
+    const rest = createFakeRest();
+    const auth = createFakeAuth();
+    const ledger = new ProbeLedger({ rest, auth });
+    const fixtures = await provisionProbeTenants(ledger, marker, "run123");
+    return { auth, fixtures, ledger, rest };
+  };
+
+  const first = await provision(createRunMarker("d".repeat(32)));
+  const second = await provision(createRunMarker("e".repeat(32)));
+
+  assert.notEqual(first.fixtures.authSecret, second.fixtures.authSecret);
+  assert.ok(first.auth.createCalls.length >= 6, "every temporary role must be provisioned");
+  assert.ok(
+    first.auth.createCalls.every(({ password }) => password === first.fixtures.authSecret),
+    "all principals in one run must use only that run's in-memory secret",
+  );
+  assert.ok(
+    first.auth.createCalls.every(
+      ({ email, password }) => !email.includes(password) && !password.includes(first.fixtures.runMarker),
+    ),
+    "emails and run identifiers must not reveal the secret",
+  );
+  const signIn = (email, password) =>
+    first.auth.createCalls.some((call) => call.email === email && call.password === password);
+  assert.equal(signIn(first.fixtures.tenants.A.email, first.fixtures.authSecret), true);
+
+  const cleaned = await teardown({
+    ledger: first.ledger,
+    rest: first.rest,
+    auth: first.auth,
+    runMarker: first.fixtures.runMarker,
+  });
+  assert.equal(cleaned.ok, true);
+  assert.equal(first.auth.users.size, 0);
+});
 
 /** The lifecycle the runner uses: provisioning is INSIDE the try. */
 async function runLifecycle({ rest, auth, probe = async () => {} }) {
@@ -480,7 +521,7 @@ test("family recovery removes only structurally valid probe runs", async () => {
   const auth = createFakeAuth();
   auth.listProbeFamilyUsers = async () =>
     [...auth.users.values()].filter((user) =>
-      /^pacemate-probe-[0-9a-f]{32}-(?:prof-)?[ab]-[a-z0-9]+@probe\.invalid$/.test(user.email),
+      /^pacemate-probe-[0-9a-f]{32}-(?:(?:prof-)?[ab]|notif-[ab])-[a-z0-9]+@probe\.invalid$/.test(user.email),
     );
 
   await rest.insert("faqs", [
@@ -490,8 +531,17 @@ test("family recovery removes only structurally valid probe runs", async () => {
     { id: "malformed", question: "pacemate-probe-not-a-run courseless faq" },
     { id: "unexpected-shape", question: `${createRunMarker("c".repeat(32))} ordinary user faq` },
   ]);
+  await rest.insert("schools", [
+    { id: "notif-school", slug: `${runB}-notif-home-run456` },
+    { id: "similar-school", slug: `${runB}-customer-home-run456` },
+  ]);
+  await rest.insert("user_notifications", [
+    { id: "notif-row", title: `${runB} own direct run456` },
+    { id: "similar-notif", title: `${runB} ordinary direct run456` },
+  ]);
   await auth.createUser(`${runA}-a-run123@probe.invalid`);
   await auth.createUser(`${runB}-prof-b-run456@probe.invalid`);
+  await auth.createUser(`${runB}-notif-a-run456@probe.invalid`);
   await auth.createUser("alice+pacemate-probe@example.test");
 
   const exact = await sweepOrphans({ rest, auth, runMarker: runA });
@@ -502,6 +552,14 @@ test("family recovery removes only structurally valid probe runs", async () => {
     "unexpected-shape",
     "words-only",
   ]);
+  assert.deepEqual(rest.tables.get("schools").map((row) => row.id), [
+    "notif-school",
+    "similar-school",
+  ]);
+  assert.deepEqual(rest.tables.get("user_notifications").map((row) => row.id), [
+    "notif-row",
+    "similar-notif",
+  ]);
 
   const family = await ledgerModule.sweepProbeFamily({ rest, auth });
   assert.deepEqual(family.failures, []);
@@ -510,6 +568,8 @@ test("family recovery removes only structurally valid probe runs", async () => {
     "unexpected-shape",
     "words-only",
   ]);
+  assert.deepEqual(rest.tables.get("schools").map((row) => row.id), ["similar-school"]);
+  assert.deepEqual(rest.tables.get("user_notifications").map((row) => row.id), ["similar-notif"]);
   assert.deepEqual([...auth.users.values()].map((user) => user.email), [
     "alice+pacemate-probe@example.test",
   ]);

@@ -34,9 +34,12 @@ import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./security
 import { createAbortScope, createRoleClient } from "./security/lib/probe-http.mjs";
 import { ProbeLedger, teardown } from "./security/lib/probe-ledger.mjs";
 import { createProbeLifecycle } from "./security/lib/probe-lifecycle.mjs";
+import { createProbeRunSecret } from "./security/lib/probe-credentials.mjs";
 
-const PROBE_PASSWORD = "Stage9-notif-probe-!aA9";
 const TIMEOUT_MS = Number(process.env.PACEMATE_SECURITY_PROBE_TIMEOUT_MS ?? 15000);
+const RECOVERY_TIMEOUT_MS = Number(
+  process.env.PACEMATE_SECURITY_PROBE_RECOVERY_TIMEOUT_MS ?? 30000,
+);
 const EXPECTED_CHECKS = 12;
 
 async function main() {
@@ -53,6 +56,7 @@ async function main() {
   const scope = createAbortScope();
   // Codex round 5, F6: ownership is execution-specific.
   const runMarker = createRunMarker();
+  const authSecret = createProbeRunSecret();
 
   const rest = createProbeRest({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS, scope });
   const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS, scope });
@@ -73,6 +77,28 @@ async function main() {
     abortWork: (reason) => scope.abort(reason),
     // F5: wait for the underlying mutations, not just the body.
     awaitMutations: (ms) => scope.settled(ms),
+    recoverAmbiguous: async ({ quiesce }) => {
+      if (!quiesce.bodyStopped) {
+        return {
+          ok: false,
+          detail: `body still active; recover with node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+        };
+      }
+      const settled = await scope.settled(RECOVERY_TIMEOUT_MS);
+      if (!settled.ok) {
+        return {
+          ok: false,
+          detail: `${settled.outstanding} mutation(s) unsettled; recover with node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+        };
+      }
+      const result = await teardown({ ledger, rest, auth, runMarker });
+      return {
+        ok: result.ok,
+        detail: result.ok
+          ? `post-settlement recovery verified zero residue for ${runMarker}`
+          : `${result.detail}; recover with node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+      };
+    },
     // 4C: ledger -> marker sweep -> residue verification.
     cleanup: () => teardown({ ledger, rest, auth, runMarker }),
   });
@@ -103,7 +129,7 @@ async function main() {
     // that makes the defect visible. One student alone cannot show it.
     const makeStudent = async (suffix, label) => {
       const email = `${runMarker}-notif-${suffix}-${runId}@probe.invalid`;
-      const authUser = await auth.createUser(email, PROBE_PASSWORD);
+      const authUser = await auth.createUser(email, authSecret);
       ledger.recordAuthUser(authUser.id, `notif ${label}`);
       const profile = await record("profiles", {
         identifier: email,
@@ -165,7 +191,7 @@ async function main() {
     });
 
     const asUser = async (userEmail) => {
-      const token = await signIn(userEmail, PROBE_PASSWORD);
+      const token = await signIn(userEmail, authSecret);
       return createRoleClient({
         url,
         baseHeaders: {

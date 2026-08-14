@@ -21,8 +21,7 @@
 // marker is a per-execution random token, not a shared constant).
 
 import { createRunMarker, isProbeTenant, tenantSlugPrefix } from "./probe-guard.mjs";
-
-export const PROBE_PASSWORD = "Stage9-probe-!aA9";
+import { createProbeRunSecret } from "./probe-credentials.mjs";
 
 export function makeRunId(now = Date.now(), random = Math.random()) {
   return `${now.toString(36)}${random.toString(36).slice(2, 6)}`;
@@ -46,8 +45,8 @@ async function createRow(ledger, table, row, label) {
   return created;
 }
 
-async function createAuthUser(ledger, email, label) {
-  const user = await ledger.auth.createUser(email, PROBE_PASSWORD);
+async function createAuthUser(ledger, email, authSecret, label) {
+  const user = await ledger.auth.createUser(email, authSecret);
   if (!user?.id) {
     throw new Error(`GoTrue create user returned no id (${label})`);
   }
@@ -58,7 +57,13 @@ async function createAuthUser(ledger, email, label) {
 /**
  * @param {import('./probe-ledger.mjs').ProbeLedger} ledger
  */
-export async function provisionTenant(ledger, label, runId, runMarker) {
+export async function provisionTenant(
+  ledger,
+  label,
+  runId,
+  runMarker,
+  authSecret = createProbeRunSecret(),
+) {
   const slug = `${tenantSlugPrefix(runMarker)}${label}-${runId}`;
 
   const school = await createRow(
@@ -87,7 +92,12 @@ export async function provisionTenant(ledger, label, runId, runMarker) {
   // row) so `app_private.current_professor_id()` resolves for them. Without it
   // no probe can exercise a professor-scoped policy at all.
   const professorEmail = `${runMarker}-prof-${label}-${runId}@probe.invalid`;
-  const professorAuthUser = await createAuthUser(ledger, professorEmail, `professor auth user ${label}`);
+  const professorAuthUser = await createAuthUser(
+    ledger,
+    professorEmail,
+    authSecret,
+    `professor auth user ${label}`,
+  );
 
   const professorProfile = await createRow(
     ledger,
@@ -161,7 +171,7 @@ export async function provisionTenant(ledger, label, runId, runMarker) {
   );
 
   const email = `${runMarker}-${label}-${runId}@probe.invalid`;
-  const authUser = await createAuthUser(ledger, email, `auth user ${label}`);
+  const authUser = await createAuthUser(ledger, email, authSecret, `auth user ${label}`);
 
   const profile = await createRow(
     ledger,
@@ -376,9 +386,14 @@ export async function provisionTenant(ledger, label, runId, runMarker) {
  * These live only in tenant A; tenant B's probes are about cross-tenant reach
  * and do not need them.
  */
-async function provisionStaff(ledger, school, label, runId, role, runMarker) {
+async function provisionStaff(ledger, school, label, runId, role, runMarker, authSecret) {
   const email = `${runMarker}-${role}-${label}-${runId}@probe.invalid`;
-  const authUser = await createAuthUser(ledger, email, `${role} auth user ${label}`);
+  const authUser = await createAuthUser(
+    ledger,
+    email,
+    authSecret,
+    `${role} auth user ${label}`,
+  );
   const profile = await createRow(
     ledger,
     "profiles",
@@ -543,13 +558,30 @@ export async function provisionProbeTenants(ledger, runMarker, runId = makeRunId
   if (typeof runMarker !== "string" || runMarker.length < 20) {
     throw new Error("provisionProbeTenants requires an execution-specific run marker (F6)");
   }
+  const authSecret = createProbeRunSecret();
   const tenants = {};
-  tenants.A = await provisionTenant(ledger, "a", runId, runMarker);
-  tenants.B = await provisionTenant(ledger, "b", runId, runMarker);
+  tenants.A = await provisionTenant(ledger, "a", runId, runMarker, authSecret);
+  tenants.B = await provisionTenant(ledger, "b", runId, runMarker, authSecret);
 
   tenants.A.staff = {
-    assistant: await provisionStaff(ledger, tenants.A.school, "a", runId, "assistant", runMarker),
-    admin: await provisionStaff(ledger, tenants.A.school, "a", runId, "admin", runMarker),
+    assistant: await provisionStaff(
+      ledger,
+      tenants.A.school,
+      "a",
+      runId,
+      "assistant",
+      runMarker,
+      authSecret,
+    ),
+    admin: await provisionStaff(
+      ledger,
+      tenants.A.school,
+      "a",
+      runId,
+      "admin",
+      runMarker,
+      authSecret,
+    ),
   };
 
   const extra = await provisionReadSentinels(ledger, tenants.A, runId, runMarker);
@@ -589,7 +621,7 @@ export async function provisionProbeTenants(ledger, runMarker, runId = makeRunId
     professors: tenants.A.professor.id,
   };
 
-  return { runId, runMarker, tenants, readSentinels };
+  return { runId, runMarker, authSecret, tenants, readSentinels };
 }
 
 export { createRunMarker };

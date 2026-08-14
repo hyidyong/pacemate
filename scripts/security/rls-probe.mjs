@@ -32,7 +32,7 @@ import {
   verifyNoProbeFamilyResidue,
   verifyNoResidue,
 } from "./lib/probe-ledger.mjs";
-import { PROBE_PASSWORD, provisionProbeTenants } from "./lib/probe-fixtures.mjs";
+import { provisionProbeTenants } from "./lib/probe-fixtures.mjs";
 import { evaluateReadIsolation } from "./lib/probe-read-semantics.mjs";
 
 // Every table the app can reach. `expectAnonRead` records the DESIGN intent, so
@@ -249,9 +249,9 @@ async function main() {
     const A = fixtures.tenants.A;
     const B = fixtures.tenants.B;
 
-    const tokenA = await signIn(A.email, PROBE_PASSWORD);
-    const tokenB = await signIn(B.email, PROBE_PASSWORD);
-    const tokenProfA = await signIn(A.professorEmail, PROBE_PASSWORD);
+    const tokenA = await signIn(A.email, fixtures.authSecret);
+    const tokenB = await signIn(B.email, fixtures.authSecret);
+    const tokenProfA = await signIn(A.professorEmail, fixtures.authSecret);
     const headersFor = (token) => ({
       apikey: anonKey,
       Authorization: `Bearer ${token}`,
@@ -686,8 +686,8 @@ async function main() {
     // -------------------------------------------------------------------
     const staffReviewAttempts = [
       { id: "deny:professor-review", role: "professor", token: tokenProfA, authorId: A.professorProfile.id },
-      { id: "deny:assistant-review", role: "assistant", token: await signIn(A.staff.assistant.email, PROBE_PASSWORD), authorId: A.staff.assistant.profile.id },
-      { id: "deny:admin-review", role: "admin", token: await signIn(A.staff.admin.email, PROBE_PASSWORD), authorId: A.staff.admin.profile.id },
+      { id: "deny:assistant-review", role: "assistant", token: await signIn(A.staff.assistant.email, fixtures.authSecret), authorId: A.staff.assistant.profile.id },
+      { id: "deny:admin-review", role: "admin", token: await signIn(A.staff.admin.email, fixtures.authSecret), authorId: A.staff.admin.profile.id },
     ];
 
     // -------------------------------------------------------------------

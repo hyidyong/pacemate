@@ -43,7 +43,7 @@ export const PROBE_MARKER_FAMILY = "pacemate-probe";
 const RUN_MARKER_RE = /^pacemate-probe-[0-9a-f]{32}$/;
 const OWNED_VALUE_RE = /^(pacemate-probe-[0-9a-f]{32})(?=$|[-\s])/;
 const PROBE_AUTH_EMAIL_RE =
-  /^(pacemate-probe-[0-9a-f]{32})-(?:(?:prof-)?[ab]|(?:assistant|admin)-a)-[a-z0-9]{5,}@probe\.invalid$/;
+  /^(pacemate-probe-[0-9a-f]{32})-(?:(?:prof-)?[ab]|(?:assistant|admin)-a|notif-[ab])-[a-z0-9]{5,}@probe\.invalid$/;
 
 /**
  * A marker that belongs to exactly one execution.

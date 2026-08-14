@@ -100,18 +100,18 @@ const FAMILY_CANDIDATE = `like.${PROBE_MARKER_FAMILY}-%25`;
 // after its well-formed random run marker is one of the fixture shapes this
 // runner actually writes for that table.
 const FAMILY_SUFFIX = new Map([
-  ["schools", /^-[ab]-[a-z0-9]{5,}$/],
+  ["schools", /^(?:-[ab]|-notif-(?:home|foreign))-[a-z0-9]{5,}$/],
   ["departments", /^ department [ab]$/],
   ["professors", /^ professor [ab]$/],
   ["courses", /^(?: alt)? course [ab]$/],
-  ["profiles", /^-(?:(?:prof-)?[ab]|(?:assistant|admin)-a|anon-insert)-[a-z0-9]{5,}@probe\.invalid$/],
+  ["profiles", /^-(?:(?:prof-)?[ab]|(?:assistant|admin)-a|anon-insert|notif-(?:a|b|foreign))-[a-z0-9]{5,}@probe\.invalid$/],
   ["counseling_requests", /^(?: confidential counseling topic [ab]|-booking-[a-z0-9-]+)$/],
   ["student_courses", /^(?:|-xt-enrol)$/],
   ["student_mission_progress", /^(?: private feedback [ab]|-(?:st|xt)-mission)$/],
   ["academic_terms", /^$/],
   ["course_offerings", /^$/],
   ["student_weekly_progress", /^ weekly private note$/],
-  ["user_notifications", /^(?: direct| broadcast) [ab]$/],
+  ["user_notifications", /^(?:(?: direct| broadcast) [ab]| own direct [a-z0-9]{5,}| same tenant broadcast [a-z0-9]{5,}| foreign broadcast [a-z0-9]{5,})$/],
   ["study_roadmaps", /^(?: private study roadmap|-(?:st|xt)-roadmap)$/],
   ["study_tasks", /^(?: private study task|-xt-task)$/],
   ["posts", /^(?: post [ab]| official notice|-(?:st|xt)-(?:post|notice)|-edited-post)$/],

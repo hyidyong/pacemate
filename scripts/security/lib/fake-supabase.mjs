@@ -70,6 +70,7 @@ function matchRow(row, query) {
 export async function startFakeSupabase({ scenario = SCENARIOS.normal, authUserCount = 0 } = {}) {
   const tables = new Map();
   const authUsers = new Map();
+  const authSecrets = new Map();
   let seq = 0;
 
   // Pre-seed unrelated auth users so probe users land beyond the first page.
@@ -113,6 +114,7 @@ export async function startFakeSupabase({ scenario = SCENARIOS.normal, authUserC
       if (req.method === "POST") {
         const id = `auth-${++seq}`;
         authUsers.set(id, { id, email: payload.email });
+        authSecrets.set(payload.email, payload.password);
         return send(200, { id, email: payload.email });
       }
       const perPage = Number(url.searchParams.get("per_page") ?? 50);
@@ -123,10 +125,15 @@ export async function startFakeSupabase({ scenario = SCENARIOS.normal, authUserC
     }
     if (url.pathname.startsWith("/auth/v1/admin/users/")) {
       const id = url.pathname.split("/").pop();
+      const email = authUsers.get(id)?.email;
       authUsers.delete(id);
+      if (email) authSecrets.delete(email);
       return send(200, {});
     }
     if (url.pathname === "/auth/v1/token") {
+      if (!payload?.email || authSecrets.get(payload.email) !== payload.password) {
+        return send(400, { error_description: "invalid probe credentials" });
+      }
       return send(200, { access_token: `token-${Math.random().toString(36).slice(2)}` });
     }
 
