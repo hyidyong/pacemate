@@ -58,10 +58,15 @@ const TABLES = [
   ["professor_teaching_slots", false, "tenant timetable data"],
   ["professor_availability", false, "counseling availability — tenant-owned"],
   ["course_professors", false, "tenant catalog mapping"],
-  ["course_reviews", true, "public reviews — PUBLIC-BY-DESIGN"],
-  ["faqs", true, "approved public FAQs — PUBLIC-BY-DESIGN"],
-  ["notices", true, "public notices — PUBLIC-BY-DESIGN"],
-  ["schools", true, "tenant directory needed before login — PUBLIC-BY-DESIGN"],
+  // Codex round 5, F8 — these three said `true` and were WRONG. Stage 9
+  // deliberately closed the anon surface to a single table, and the live grant
+  // set has said `schools` only since 20260814010000. The stale `true` was
+  // invisible because the allow branch passed unconditionally, so the probe's
+  // own metadata could contradict the shipped design without anything failing.
+  ["course_reviews", false, "reviews are tenant-scoped; anon lost SELECT in Stage 9"],
+  ["faqs", false, "FAQs are tenant-scoped; anon lost SELECT in Stage 9"],
+  ["notices", false, "notices are tenant-scoped; anon lost SELECT in Stage 9"],
+  ["schools", true, "tenant directory needed BEFORE login — the one intended anon read"],
   ["departments", false, "tenant catalog"],
   ["courses", false, "tenant catalog"],
   ["professors", false, "professor directory incl. email and phone"],
@@ -174,7 +179,15 @@ async function main() {
     const asProfA = roleClient(headersFor(tokenProfA));
 
     // ---------------------------------------------------------------- anon read
+    //
+    // The positive sentinel for the one intended-public table: the probe's OWN
+    // disposable school. Using a row this run created means the allow check
+    // cannot pass on a coincidence, and cannot fail because production happens
+    // to be empty.
+    const anonSentinelByTable = { schools: A.school.id };
+
     for (const [table, anonReadIntended, why] of TABLES) {
+      const anonSentinelId = anonSentinelByTable[table];
       const { status, body } = await asAnon(`${table}?select=*&limit=3`);
       const count = rowCount(body);
       const readable = status === 200 && (count ?? 0) > 0;
@@ -184,11 +197,27 @@ async function main() {
         .catch(() => 0);
 
       if (anonReadIntended) {
+        // Codex round 5, F8. This branch used to submit the LITERAL `true` as
+        // the verdict, so an intended-public table returning 401 was recorded
+        // as PASS — which is exactly what `course_reviews` did. An allow-path
+        // check that cannot fail is not evidence, and it invalidated the
+        // headline count it contributed to.
+        //
+        // An allow path must now PROVE access: HTTP 200, and a specific row the
+        // probe itself created must be visible. "200 with zero rows" is not
+        // proof for a table that might simply be empty.
+        const sentinel = await asAnon(
+          `${table}?select=id&id=eq.${encodeURIComponent(anonSentinelId ?? "")}`,
+        );
+        const sentinelVisible =
+          sentinel.status === 200 && Array.isArray(sentinel.body) && sentinel.body.length === 1;
         check(
           `anon-read:${table}`,
-          `anon MAY read ${table} (${why})`,
-          true,
-          `status ${status}, ${count ?? "?"} row(s) — public by design`,
+          `anon MAY read ${table} (${why}) — proven with a positive sentinel`,
+          status === 200 && sentinelVisible,
+          `status ${status}, ${count ?? "?"} row(s); sentinel ${sentinel.status}, ${
+            Array.isArray(sentinel.body) ? sentinel.body.length : "n/a"
+          } row(s)`,
         );
       } else if (total === 0) {
         check(

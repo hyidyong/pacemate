@@ -569,3 +569,85 @@ test("F7 — the snapshot still shows no role can delete the audit trail", async
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// Codex round 5, F8 — a check whose verdict is a constant is not a check.
+// ---------------------------------------------------------------------------
+
+test("F8 — no probe check submits a literal PASS verdict", async () => {
+  // The allow branch of the anon-read loop passed the literal `true` as its
+  // `pass` argument. So `anon-read:course_reviews` was recorded as PASS while
+  // the response was 401 — a denial for a table the probe's own metadata called
+  // public-by-design. Four checks could not fail, and they were counted in the
+  // headline total, which is why that total was withdrawn.
+  //
+  // Only a literal `true` is the danger. A literal `false` appears in the
+  // "read-back FAILED — cannot verify" branches, where failing is the CORRECT
+  // outcome: a check that could not be performed must not be reported as
+  // safety. A constant that can only fail is honest; a constant that can only
+  // pass is the bug. This scans for the latter.
+  const { readFileSync } = await import("node:fs");
+  const runners = [
+    "../rls-probe.mjs",
+    "../audit-trail-probe.mjs",
+    "../../verify-notification-rls.mjs",
+  ];
+
+  const offenders = [];
+  for (const runner of runners) {
+    const source = readFileSync(new URL(runner, import.meta.url), "utf8");
+    // check(id, property, VERDICT, detail) — the verdict is the third argument.
+    // Matches a literal true/false in that position, across line breaks.
+    const pattern = /check\(\s*[^,]+,\s*(?:`[^`]*`|"[^"]*"|'[^']*')\s*,\s*true\s*,/g;
+    for (const match of source.matchAll(pattern)) {
+      const line = source.slice(0, match.index).split(/\r?\n/).length;
+      offenders.push(`${runner}:${line} — verdict is the literal true`);
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `these checks cannot fail:\n  ${offenders.join("\n  ")}`,
+  );
+});
+
+test("F8 — the anon ALLOW path requires a positive sentinel, not just a status", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../rls-probe.mjs", import.meta.url), "utf8");
+  const code = source
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("//"))
+    .join("\n");
+
+  const allowBranch = code.slice(code.indexOf("if (anonReadIntended) {"));
+  assert.match(allowBranch, /anonSentinelId/, "the allow path must look for a specific known row");
+  assert.match(allowBranch, /sentinelVisible/, "and require it to be visible");
+  assert.match(
+    allowBranch,
+    /status === 200 && sentinelVisible/,
+    "both a successful status AND the sentinel are required",
+  );
+});
+
+test("F8 — exactly one table is marked anon-readable, matching the live grant set", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../rls-probe.mjs", import.meta.url), "utf8");
+  const table = source.slice(source.indexOf("const TABLES = ["), source.indexOf("];", source.indexOf("const TABLES = [")));
+  const intended = [...table.matchAll(/\["([a-z_]+)",\s*true,/g)].map((m) => m[1]);
+  assert.deepEqual(
+    intended,
+    ["schools"],
+    `the probe's design intent must match the live anon grant set; found: ${intended.join(", ")}`,
+  );
+
+  // And the snapshot must agree — otherwise the probe and the database are
+  // describing different systems, which is how the stale `true` survived.
+  const snapshot = JSON.parse(
+    readFileSync(new URL("../../../supabase/security-snapshot.json", import.meta.url), "utf8"),
+  );
+  const anonTables = snapshot.effective_privileges
+    .filter((row) => row.role === "anon")
+    .map((row) => row.table);
+  assert.deepEqual(anonTables, ["schools"]);
+});
