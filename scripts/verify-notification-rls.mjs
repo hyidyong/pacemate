@@ -37,7 +37,7 @@ import { createProbeLifecycle } from "./security/lib/probe-lifecycle.mjs";
 
 const PROBE_PASSWORD = "Stage9-notif-probe-!aA9";
 const TIMEOUT_MS = Number(process.env.PACEMATE_SECURITY_PROBE_TIMEOUT_MS ?? 15000);
-const EXPECTED_CHECKS = 10;
+const EXPECTED_CHECKS = 12;
 
 async function main() {
   const env = loadEnvLocal();
@@ -296,6 +296,71 @@ async function main() {
         "A marking the broadcast read must NOT mark it read for peer B",
         bAfter.rows.length === 1 && bAfter.rows[0].is_read === false,
         `B now sees ${bAfter.rows.length} row(s), is_read=${bAfter.rows[0]?.is_read}`,
+      );
+    }
+    {
+      // Codex round 5, F4 — a recipient may change their READ STATE, and
+      // nothing else. Row isolation was fixed in round 4; this is about which
+      // COLUMNS of their own row they may write. `authenticated` held UPDATE on
+      // all eleven, so a recipient could rewrite the title, the body, the link
+      // they are about to be sent to, the tenant stamp, even the recipient.
+      const provenance = {
+        title: `${PROBE_MARKER} REWRITTEN title`,
+        body: `${PROBE_MARKER} REWRITTEN body`,
+        target_href: "/admin",
+        recipient_role: "admin",
+        school_id: foreign.id,
+        recipient_id: profileB.id,
+        category: "revision",
+        created_at: "2000-01-01T00:00:00Z",
+      };
+      const [before] = await rest.select(
+        "user_notifications",
+        `select=title,body,target_href,recipient_role,school_id,recipient_id,category,created_at&id=eq.${own.id}`,
+      );
+
+      const outcomes = [];
+      for (const [column, value] of Object.entries(provenance)) {
+        const { status } = await asStudent(`user_notifications?id=eq.${own.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ [column]: value }),
+        });
+        const [after] = await rest.select(
+          "user_notifications",
+          `select=${column}&id=eq.${own.id}`,
+        );
+        const changed = String(after?.[column]) !== String(before?.[column]);
+        outcomes.push({ column, status, changed });
+        if (changed) {
+          // Put it back so the remaining checks see the fixture they expect.
+          await rest.update("user_notifications", `id=eq.${own.id}`, { [column]: before?.[column] });
+        }
+      }
+
+      const mutated = outcomes.filter((o) => o.changed).map((o) => o.column);
+      check(
+        "column:provenance-immutable",
+        "a recipient must NOT rewrite the content or provenance of their own notification",
+        mutated.length === 0,
+        mutated.length
+          ? `MUTATED: ${mutated.join(", ")}`
+          : `all ${outcomes.length} columns refused (statuses ${[...new Set(outcomes.map((o) => o.status))].join("/")})`,
+      );
+    }
+    {
+      // The positive half: the ONE column they may write must still work, or
+      // the fix above would have broken marking notifications read.
+      await rest.update("user_notifications", `id=eq.${own.id}`, { is_read: false });
+      const { status } = await asStudent(`user_notifications?id=eq.${own.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_read: true }),
+      });
+      const [after] = await rest.select("user_notifications", `select=is_read&id=eq.${own.id}`);
+      check(
+        "column:is-read-writable",
+        "a recipient CAN still mark their own notification read (the only writable column)",
+        after?.is_read === true,
+        `PATCH ${status}; is_read is now ${after?.is_read}`,
       );
     }
     {

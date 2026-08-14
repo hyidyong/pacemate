@@ -340,3 +340,86 @@ test("the posts DELETE surface a client keeps is exactly the RLS-governed one", 
   }
   assert.doesNotMatch(authenticated.privileges, /TRUNCATE/);
 });
+
+// ---------------------------------------------------------------------------
+// Codex round 5, F4 — a recipient may change READ STATE, and nothing else.
+// ---------------------------------------------------------------------------
+
+test("no client role holds table-wide UPDATE on user_notifications", () => {
+  // Round 4 fixed WHOSE row is writable. This is WHICH COLUMNS of that row.
+  // Measured before the fix: a recipient rewrote title, body, target_href,
+  // recipient_role, school_id, category and created_at on their own row.
+  const offenders = snapshot.effective_privileges
+    .filter((row) => row.table === "user_notifications" && row.role !== "service_role")
+    .filter((row) => /UPDATE/.test(row.privileges))
+    .map((row) => row.role);
+  assert.deepEqual(offenders, [], `table-wide UPDATE still held by: ${offenders.join(", ")}`);
+});
+
+test("authenticated holds UPDATE on exactly one notification column: is_read", () => {
+  const grants = snapshot.column_privileges.filter(
+    (row) => row.table === "user_notifications" && row.grantee === "authenticated" && row.privilege === "UPDATE",
+  );
+  assert.equal(grants.length, 1, `expected one column-grant row, got ${grants.length}`);
+  assert.deepEqual(
+    grants[0].columns.split(",").sort(),
+    ["is_read"],
+    `writable columns: ${grants[0].columns}`,
+  );
+});
+
+test("the notification row policy still restricts WHICH row, alongside the column grant", () => {
+  // Column privileges say WHAT may be written; policies say WHICH ROW. Neither
+  // substitutes for the other, so both are asserted.
+  const update = snapshot.policies.filter(
+    (row) => row.table === "user_notifications" && row.cmd === "UPDATE",
+  );
+  assert.equal(update.length, 1);
+  assert.match(update[0].using, /recipient_id = app_private\.current_profile_id\(\)/);
+  assert.match(update[0].check, /recipient_id = app_private\.current_profile_id\(\)/);
+});
+
+test("no OTHER table repeats the pattern: server-authored content with table-wide client UPDATE", () => {
+  // The sibling audit round 5 asked for, pinned as a fact rather than a note.
+  //
+  // Every table a client can still UPDATE through a policy is a "users manage
+  // own X" surface — rows the user authors and owns end to end, where writing
+  // the whole row is the point. user_notifications was the only table whose
+  // CONTENT is written by the server and merely acknowledged by the user, and
+  // it is now column-scoped.
+  //
+  // If a new table appears here, someone must decide which of the two it is.
+  const policyTables = new Set(
+    snapshot.policies.filter((p) => ["UPDATE", "ALL"].includes(p.cmd)).map((p) => p.table),
+  );
+  const reachable = snapshot.effective_privileges
+    .filter((row) => row.role === "authenticated" && /UPDATE/.test(row.privileges))
+    .map((row) => row.table)
+    .filter((table) => policyTables.has(table))
+    .sort();
+
+  assert.deepEqual(reachable, [
+    "chat_sessions",
+    "comments",
+    "professor_availability",
+    "professor_question_auto_reply_rules",
+    "professor_teaching_slots",
+    "roadmap_requests",
+    "student_course_schedule_slots",
+    "student_courses",
+    "student_custom_course_schedule_slots",
+    "student_custom_courses",
+    "student_mission_progress",
+    "student_profiles",
+    "study_roadmaps",
+    "study_tasks",
+  ], "a table gained or lost a client-reachable UPDATE surface — decide whether it is user-authored");
+
+  // And the three already narrowed must stay narrowed.
+  for (const table of ["posts", "course_reviews", "user_notifications"]) {
+    assert.ok(
+      !reachable.includes(table),
+      `${table} regained table-wide UPDATE; its provenance columns are writable again`,
+    );
+  }
+});

@@ -175,7 +175,7 @@
       "table": "syllabi"
     },
     {
-      "columns": "body,category,created_at,id,is_read,recipient_id,recipient_role,school_id,target_group,target_href,title",
+      "columns": "is_read",
       "grantee": "authenticated",
       "privilege": "UPDATE",
       "table": "user_notifications"
@@ -228,7 +228,7 @@
       "table": "comments"
     },
     {
-      "privileges": "INSERT,SELECT",
+      "privileges": "SELECT",
       "role": "authenticated",
       "table": "counseling_requests"
     },
@@ -633,7 +633,7 @@
       "table": "syllabi"
     },
     {
-      "privileges": "SELECT,UPDATE",
+      "privileges": "SELECT",
       "role": "authenticated",
       "table": "user_notifications"
     },
@@ -987,7 +987,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "INSERT,SELECT",
+      "privileges": "SELECT",
       "table": "counseling_requests"
     },
     {
@@ -1392,7 +1392,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "SELECT,UPDATE",
+      "privileges": "SELECT",
       "table": "user_notifications"
     },
     {
@@ -1465,14 +1465,6 @@
       "roles": "authenticated",
       "table": "comments",
       "using": "(EXISTS ( SELECT 1\n   FROM (posts\n     JOIN profiles p ON ((p.id = comments.author_id)))\n  WHERE ((posts.id = comments.post_id) AND (p.auth_user_id = ( SELECT auth.uid() AS uid)) AND (((p.role = 'student'::user_role) AND (posts.community_type = 'student'::text)) OR ((p.role = 'professor'::user_role) AND (posts.community_type = 'professor'::text))))))"
-    },
-    {
-      "check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = counseling_requests.student_id) AND (p.auth_user_id = ( SELECT auth.uid() AS uid)) AND (p.role = 'student'::user_role) AND (EXISTS ( SELECT 1\n           FROM professors pr\n          WHERE ((pr.id = counseling_requests.professor_id) AND (pr.school_id = p.school_id)))))))",
-      "cmd": "INSERT",
-      "policy": "users create counseling requests",
-      "roles": "authenticated",
-      "table": "counseling_requests",
-      "using": ""
     },
     {
       "check": "",
