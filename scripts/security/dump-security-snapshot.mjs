@@ -103,11 +103,51 @@ select json_build_object(
   ),
   'event_triggers', (
     select coalesce(json_agg(json_build_object(
-      'name', evtname, 'event', evtevent, 'enabled', evtenabled,
-      'tags', coalesce(array_to_string(evttags, ','), ''),
-      'function', p.proname
-    ) order by evtname), '[]'::json)
-    from pg_event_trigger e join pg_proc p on p.oid = e.evtfoid
+      'name', e.evtname,
+      'event', e.evtevent,
+      'enabled', e.evtenabled,
+      'tags', coalesce((
+        select string_agg(tag, ',' order by tag)
+        from unnest(e.evttags) as tag
+      ), ''),
+      'definition', event_definition.definition,
+      'definition_md5', md5(event_definition.definition),
+      'handler_schema', n.nspname,
+      'handler_name', p.proname,
+      'handler_args', pg_get_function_identity_arguments(p.oid),
+      'handler_identity', format(
+        '%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)
+      ),
+      'handler_owner', pg_get_userbyid(p.proowner),
+      'handler_definition_md5', md5(pg_get_functiondef(p.oid)),
+      'handler_security_definer', p.prosecdef,
+      'handler_config', coalesce(array_to_string(p.proconfig, ','), ''),
+      'handler_acl', coalesce(p.proacl::text, 'DEFAULT'),
+      'handler_acl_is_default', p.proacl is null,
+      'handler_execute_public', has_function_privilege('public', p.oid, 'EXECUTE'),
+      'handler_execute_anon', has_function_privilege('anon', p.oid, 'EXECUTE'),
+      'handler_execute_authenticated', has_function_privilege('authenticated', p.oid, 'EXECUTE'),
+      'handler_execute_service_role', has_function_privilege('service_role', p.oid, 'EXECUTE')
+    ) order by e.evtname), '[]'::json)
+    from pg_event_trigger e
+    join pg_proc p on p.oid = e.evtfoid
+    join pg_namespace n on n.oid = p.pronamespace
+    cross join lateral (
+      select format(
+        'CREATE EVENT TRIGGER %I ON %s%s EXECUTE FUNCTION %I.%I();',
+        e.evtname,
+        e.evtevent,
+        case
+          when e.evttags is null then ''
+          else format(
+            ' WHEN TAG IN (%s)',
+            (select string_agg(quote_literal(tag), ', ' order by tag) from unnest(e.evttags) as tag)
+          )
+        end,
+        n.nspname,
+        p.proname
+      ) as definition
+    ) event_definition
   ),
   'triggers', (
     select coalesce(json_agg(json_build_object(

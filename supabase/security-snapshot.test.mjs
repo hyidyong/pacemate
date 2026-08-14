@@ -24,6 +24,29 @@ const snapshot = JSON.parse(
 
 const grantsFor = (grantee) => snapshot.grants.filter((row) => row.grantee === grantee);
 const policiesFor = (table) => snapshot.policies.filter((row) => row.table === table);
+const eventTriggerSecurityState = (row) =>
+  JSON.stringify({
+    name: row.name,
+    enabled: row.enabled,
+    event: row.event,
+    tags: row.tags,
+    definition: row.definition,
+    definition_md5: row.definition_md5,
+    handler_schema: row.handler_schema,
+    handler_name: row.handler_name,
+    handler_args: row.handler_args,
+    handler_identity: row.handler_identity,
+    handler_owner: row.handler_owner,
+    handler_definition_md5: row.handler_definition_md5,
+    handler_security_definer: row.handler_security_definer,
+    handler_config: row.handler_config,
+    handler_acl: row.handler_acl,
+    handler_acl_is_default: row.handler_acl_is_default,
+    handler_execute_public: row.handler_execute_public,
+    handler_execute_anon: row.handler_execute_anon,
+    handler_execute_authenticated: row.handler_execute_authenticated,
+    handler_execute_service_role: row.handler_execute_service_role,
+  });
 
 test("the snapshot is populated and plausible", () => {
   assert.ok(snapshot.tables.length > 40, `only ${snapshot.tables.length} tables`);
@@ -461,7 +484,55 @@ test("the future-function event trigger exists, is enabled, and covers both sche
   assert.notEqual(trigger.enabled, "D", "the event trigger is DISABLED");
   assert.equal(trigger.event, "ddl_command_end");
   assert.deepEqual(trigger.tags.split(",").sort(), ["ALTER FUNCTION", "CREATE FUNCTION"]);
-  assert.equal(trigger.function, "revoke_public_function_execute");
+  assert.equal(trigger.handler_schema, "app_private");
+  assert.equal(trigger.handler_name, "revoke_public_function_execute");
+  assert.equal(trigger.handler_args, "");
+  assert.equal(trigger.handler_identity, "app_private.revoke_public_function_execute()");
+  assert.equal(typeof trigger.handler_owner, "string");
+  assert.ok(trigger.handler_owner.length > 0);
+  assert.match(trigger.handler_definition_md5 ?? "", /^[0-9a-f]{32}$/);
+  assert.equal(trigger.handler_security_definer, true);
+  assert.match(trigger.handler_config, /search_path/);
+  assert.equal(typeof trigger.handler_acl, "string");
+  assert.equal(typeof trigger.handler_acl_is_default, "boolean");
+  for (const role of ["public", "anon", "authenticated", "service_role"]) {
+    assert.equal(typeof trigger[`handler_execute_${role}`], "boolean");
+  }
+  assert.match(trigger.definition ?? "", /app_private\.revoke_public_function_execute\(\)/);
+  assert.match(trigger.definition_md5 ?? "", /^[0-9a-f]{32}$/);
+});
+
+test("event-trigger handler substitution and security-state drift change the snapshot", () => {
+  const trigger = snapshot.event_triggers.find(
+    (row) => row.name === "revoke_public_function_execute_trg",
+  );
+  assert.ok(trigger);
+  const baseline = eventTriggerSecurityState(trigger);
+  const substitutions = [
+    ["handler schema", { handler_schema: "other_schema", handler_identity: "other_schema.revoke_public_function_execute()" }],
+    ["handler body", { handler_definition_md5: "0".repeat(32) }],
+    ["handler owner", { handler_owner: `${trigger.handler_owner}_other` }],
+    ["handler security mode", { handler_security_definer: !trigger.handler_security_definer }],
+    ["handler config", { handler_config: "search_path=public" }],
+    ["handler ACL", { handler_execute_anon: !trigger.handler_execute_anon }],
+    ["disabled trigger", { enabled: "D" }],
+    ["event type", { event: "sql_drop" }],
+    ["tag filter", { tags: "CREATE FUNCTION" }],
+    ["trigger definition", { definition_md5: "f".repeat(32) }],
+  ];
+
+  for (const [label, patch] of substitutions) {
+    assert.notEqual(
+      eventTriggerSecurityState({ ...trigger, ...patch }),
+      baseline,
+      `${label} substitution was invisible to the snapshot`,
+    );
+  }
+  assert.notEqual(
+    JSON.stringify(snapshot.event_triggers.filter((row) => row.name !== trigger.name)),
+    JSON.stringify(snapshot.event_triggers),
+    "removing the event trigger was invisible to the snapshot",
+  );
 });
 
 test("the enforcing function is itself SECURITY DEFINER with a pinned search_path", () => {
