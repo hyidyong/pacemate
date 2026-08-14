@@ -17,7 +17,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PROBE_TENANT_SLUG_PREFIX, createRunMarker } from "./probe-guard.mjs";
+import { createRunMarker } from "./probe-guard.mjs";
 
 // Codex round 5, F6: ownership is per execution now, so these fault-injection
 // tests each mint their own marker rather than sharing a module constant. That
@@ -81,7 +81,10 @@ function createFakeRest({ failOn = () => false, failDeleteFor = () => false } = 
     async insert(table, rows) {
       calls.push({ op: "insert", table });
       if (failOn(table, "insert")) throw new Error(`injected insert failure on ${table}`);
-      const created = rows.map((row) => ({ ...row, id: `${table}-${++seq}` }));
+      const created = rows.map((row) => ({
+        ...row,
+        id: row.id ?? `${table}-${++seq}`,
+      }));
       rowsOf(table).push(...created);
       return created;
     },
@@ -276,7 +279,7 @@ test("cleanup runs even when provisionTenant never returns", async () => {
     return original(table, rows);
   };
 
-  const provisioning = provisionTenant(ledger, "a", "hang", RUN_MARKER);
+  const provisioning = provisionTenant(ledger, "a", "hang1", RUN_MARKER);
   // Give the provisioner enough turns to reach the stall.
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
@@ -461,6 +464,55 @@ test("the orphan sweep removes residue left by a killed run", async () => {
   assert.deepEqual(failures, []);
   assert.equal(residue.clean, true, `residue after sweep: ${JSON.stringify(residue)}`);
   assert.equal(auth.users.size, 0);
+});
+
+test("family recovery removes only structurally valid probe runs", async () => {
+  const ledgerModule = await import("./probe-ledger.mjs");
+  assert.equal(
+    typeof ledgerModule.sweepProbeFamily,
+    "function",
+    "family recovery must be separate from exact-run ownership",
+  );
+
+  const runA = createRunMarker("a".repeat(32));
+  const runB = createRunMarker("b".repeat(32));
+  const rest = createFakeRest();
+  const auth = createFakeAuth();
+  auth.listProbeFamilyUsers = async () =>
+    [...auth.users.values()].filter((user) =>
+      /^pacemate-probe-[0-9a-f]{32}-(?:prof-)?[ab]-[a-z0-9]+@probe\.invalid$/.test(user.email),
+    );
+
+  await rest.insert("faqs", [
+    { id: "run-a", question: `${runA} courseless faq a` },
+    { id: "run-b", question: `${runB} courseless faq b` },
+    { id: "words-only", question: "notes containing pacemate-probe in the middle" },
+    { id: "malformed", question: "pacemate-probe-not-a-run courseless faq" },
+    { id: "unexpected-shape", question: `${createRunMarker("c".repeat(32))} ordinary user faq` },
+  ]);
+  await auth.createUser(`${runA}-a-run123@probe.invalid`);
+  await auth.createUser(`${runB}-prof-b-run456@probe.invalid`);
+  await auth.createUser("alice+pacemate-probe@example.test");
+
+  const exact = await sweepOrphans({ rest, auth, runMarker: runA });
+  assert.deepEqual(exact.failures, []);
+  assert.deepEqual(rest.tables.get("faqs").map((row) => row.id).sort(), [
+    "malformed",
+    "run-b",
+    "unexpected-shape",
+    "words-only",
+  ]);
+
+  const family = await ledgerModule.sweepProbeFamily({ rest, auth });
+  assert.deepEqual(family.failures, []);
+  assert.deepEqual(rest.tables.get("faqs").map((row) => row.id).sort(), [
+    "malformed",
+    "unexpected-shape",
+    "words-only",
+  ]);
+  assert.deepEqual([...auth.users.values()].map((user) => user.email), [
+    "alice+pacemate-probe@example.test",
+  ]);
 });
 
 test("the sweep reports failures rather than claiming success", async () => {

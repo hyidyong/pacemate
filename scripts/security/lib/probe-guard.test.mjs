@@ -9,6 +9,7 @@ import {
   PROBE_TENANT_SLUG_PREFIX,
   assertScopedFilter,
   assertSafeToProbe,
+  createRunMarker,
   evaluateProbeGuard,
   isProbeTenant,
   projectRefFromSupabaseUrl,
@@ -57,7 +58,10 @@ test("assertSafeToProbe throws rather than returning a falsy verdict", () => {
 });
 
 test("a tenant is disposable only when the database row carries the marker", () => {
-  assert.equal(isProbeTenant({ slug: `${PROBE_TENANT_SLUG_PREFIX}a-123` }), true);
+  const runMarker = createRunMarker("a".repeat(32));
+  assert.equal(isProbeTenant({ slug: `${runMarker}-a-run123` }, runMarker), true);
+  assert.equal(isProbeTenant({ slug: `${runMarker}-a-run123` }), true);
+  assert.equal(isProbeTenant({ slug: `${PROBE_TENANT_SLUG_PREFIX}a-123` }), false);
   // Naming the real tenant, or any tenant without the marker, proves nothing.
   assert.equal(isProbeTenant({ slug: null }), false);
   assert.equal(isProbeTenant({ slug: "kmu" }), false);
@@ -71,9 +75,10 @@ test("deletes must be marker-scoped or id-scoped — never a whole table", () =>
   assert.throws(() => assertScopedFilter(undefined), /Refusing an unscoped delete/);
   assert.equal(assertScopedFilter("id=eq.abc"), "id=eq.abc");
   assert.equal(assertScopedFilter("id=in.(a,b)"), "id=in.(a,b)");
+  const runMarker = createRunMarker("b".repeat(32));
   assert.equal(
-    assertScopedFilter(`title=like.*${PROBE_MARKER}*`),
-    `title=like.*${PROBE_MARKER}*`,
+    assertScopedFilter(`title=like.${runMarker}%25`),
+    `title=like.${runMarker}%25`,
   );
 });
 

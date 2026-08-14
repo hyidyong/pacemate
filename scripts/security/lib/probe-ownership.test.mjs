@@ -26,7 +26,7 @@ test("F6 — every run gets a distinct, high-entropy marker", () => {
 });
 
 test("F6 — a weak or forged marker is refused rather than used", () => {
-  assert.throws(() => createRunMarker("short"), /at least 16 hex/);
+  assert.throws(() => createRunMarker("short"), /exactly 32 hex/);
   assert.throws(() => ownedByRun("pacemate-stage9-probe"), /refusing to build an ownership filter/);
   assert.throws(() => ownedByRun(""), /refusing to build an ownership filter/);
   assert.throws(() => ownedByRun(undefined), /refusing to build an ownership filter/);

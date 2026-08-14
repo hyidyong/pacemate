@@ -40,6 +40,10 @@
  * so ownership is provable rather than probable.
  */
 export const PROBE_MARKER_FAMILY = "pacemate-probe";
+const RUN_MARKER_RE = /^pacemate-probe-[0-9a-f]{32}$/;
+const OWNED_VALUE_RE = /^(pacemate-probe-[0-9a-f]{32})(?=$|[-\s])/;
+const PROBE_AUTH_EMAIL_RE =
+  /^(pacemate-probe-[0-9a-f]{32})-(?:(?:prof-)?[ab]|(?:assistant|admin)-a)-[a-z0-9]{5,}@probe\.invalid$/;
 
 /**
  * A marker that belongs to exactly one execution.
@@ -54,10 +58,26 @@ export function createRunMarker(randomHex) {
     // dependency-free for the pure-function tests.
     // eslint-disable-next-line no-undef
     globalThis.crypto.randomUUID().replace(/-/g, "");
-  if (!/^[0-9a-f]{16,}$/.test(token)) {
-    throw new Error(`probe run marker must be at least 16 hex characters, got "${token}"`);
+  if (!/^[0-9a-f]{32}$/.test(token)) {
+    throw new Error(`probe run marker must be exactly 32 hex characters, got "${token}"`);
   }
   return `${PROBE_MARKER_FAMILY}-${token}`;
+}
+
+export function isRunMarker(value) {
+  return typeof value === "string" && RUN_MARKER_RE.test(value);
+}
+
+/** Return the exact run marker only when a value starts with its full structure. */
+export function runMarkerFromOwnedValue(value) {
+  if (typeof value !== "string") return null;
+  return OWNED_VALUE_RE.exec(value)?.[1] ?? null;
+}
+
+/** Auth identities have a stricter shape than ordinary marker-bearing text. */
+export function runMarkerFromProbeAuthEmail(email) {
+  if (typeof email !== "string") return null;
+  return PROBE_AUTH_EMAIL_RE.exec(email)?.[1] ?? null;
 }
 
 /**
@@ -65,7 +85,7 @@ export function createRunMarker(randomHex) {
  * whose text merely contains the marker somewhere is not this run's row.
  */
 export function ownedByRun(runMarker) {
-  if (typeof runMarker !== "string" || !runMarker.startsWith(`${PROBE_MARKER_FAMILY}-`)) {
+  if (!isRunMarker(runMarker)) {
     throw new Error(`refusing to build an ownership filter from "${runMarker}"`);
   }
   // The predicate is interpolated into a query STRING, where a bare `%` begins
@@ -220,8 +240,10 @@ export function isProbeTenant(school, runMarker) {
   // THIS execution, not merely to the probe family. Passing no marker keeps the
   // family check, which is what the operator recovery sweep needs when it is
   // cleaning up after a run whose token nobody recorded.
-  const prefix = runMarker ? `${runMarker}-` : `${PROBE_MARKER_FAMILY}-`;
-  return school.slug.startsWith(prefix) || school.slug.startsWith(PROBE_TENANT_SLUG_PREFIX);
+  const marker = runMarkerFromOwnedValue(school.slug);
+  if (!marker) return false;
+  if (runMarker && marker !== runMarker) return false;
+  return new RegExp(`^${marker}-[ab]-[a-z0-9]{5,}$`).test(school.slug);
 }
 
 /**
@@ -235,7 +257,7 @@ export function assertScopedFilter(filter) {
   // for one hard-coded legacy string, which a per-run marker does not contain.
   const scoped =
     typeof filter === "string" &&
-    (filter.includes(PROBE_MARKER_FAMILY) ||
+    (/(^|[^0-9a-f])pacemate-probe-[0-9a-f]{32}(?=$|[^0-9a-f])/.test(filter) ||
       filter.includes(PROBE_MARKER) ||
       /(^|&)id=(eq|in)\./.test(filter));
   if (!scoped) {

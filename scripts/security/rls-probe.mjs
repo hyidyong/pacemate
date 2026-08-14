@@ -24,7 +24,14 @@ import { PROBE_MARKER_FAMILY, assertSafeToProbe, createRunMarker } from "./lib/p
 import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./lib/probe-rest.mjs";
 import { createAbortScope, createRoleClient } from "./lib/probe-http.mjs";
 import { createProbeLifecycle, EXIT } from "./lib/probe-lifecycle.mjs";
-import { ProbeLedger, sweepOrphans, teardown, verifyNoResidue } from "./lib/probe-ledger.mjs";
+import {
+  ProbeLedger,
+  sweepOrphans,
+  sweepProbeFamily,
+  teardown,
+  verifyNoProbeFamilyResidue,
+  verifyNoResidue,
+} from "./lib/probe-ledger.mjs";
 import { PROBE_PASSWORD, provisionProbeTenants } from "./lib/probe-fixtures.mjs";
 import { evaluateReadIsolation } from "./lib/probe-read-semantics.mjs";
 
@@ -74,6 +81,9 @@ const TABLES = [
 ];
 
 const PROBE_TIMEOUT_MS = Number(process.env.PACEMATE_SECURITY_PROBE_TIMEOUT_MS ?? 15000);
+const PROBE_RECOVERY_TIMEOUT_MS = Number(
+  process.env.PACEMATE_SECURITY_PROBE_RECOVERY_TIMEOUT_MS ?? 30000,
+);
 
 function makeReporter() {
   const results = [];
@@ -138,11 +148,16 @@ async function main() {
       );
       process.exit(1);
     }
+    const family = !sweepMarker;
     const target = sweepMarker ?? PROBE_MARKER_FAMILY;
     console.log(`Sweeping rows owned by "${target}"…`);
-    const { removed, failures } = await sweepOrphans({ rest, auth, runMarker: target });
+    const { removed, failures } = family
+      ? await sweepProbeFamily({ rest, auth })
+      : await sweepOrphans({ rest, auth, runMarker: target });
     console.log(removed.length ? `Swept: ${removed.join(", ")}` : "Nothing to sweep.");
-    const residue = await verifyNoResidue({ rest, auth, runMarker: target });
+    const residue = family
+      ? await verifyNoProbeFamilyResidue({ rest, auth })
+      : await verifyNoResidue({ rest, auth, runMarker: target });
     if (failures.length || !residue.clean) {
       console.error(`Sweep incomplete. failures=${JSON.stringify(failures)} residue=${JSON.stringify(residue)}`);
       process.exit(1);
@@ -174,6 +189,43 @@ async function main() {
     abortWork: (reason) => scope.abort(reason),
     // F5: wait for the UNDERLYING mutations, not just for the body.
     awaitMutations: (ms) => scope.settled(ms),
+    // A request may ignore AbortSignal and commit after the first sweep. Wait a
+    // second bounded phase for the real attempt, then sweep this exact run
+    // again. If it still has not settled, the marker printed below is the
+    // durable recovery descriptor and the process exits non-zero.
+    recoverAmbiguous: async ({ quiesce }) => {
+      if (!quiesce.bodyStopped) {
+        return {
+          ok: false,
+          detail:
+            `probe body is still active; recovery remains ` +
+            `node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+        };
+      }
+      console.error(
+        `[recovery] waiting up to ${PROBE_RECOVERY_TIMEOUT_MS}ms for ambiguous mutations ` +
+          `owned by ${runMarker}`,
+      );
+      const settled = await scope.settled(PROBE_RECOVERY_TIMEOUT_MS);
+      if (!settled.ok) {
+        return {
+          ok: false,
+          detail:
+            `${settled.outstanding} mutation(s) remain unsettled; recover with ` +
+            `node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+        };
+      }
+      const result = await teardown({ ledger, rest, auth, runMarker });
+      cleanupFailures = result.failures;
+      sweepFailures = result.swept?.failures ?? [];
+      residue = result.residue;
+      return {
+        ok: result.ok,
+        detail: result.ok
+          ? `post-settlement recovery verified zero residue for ${runMarker}`
+          : `${result.detail}; recover with node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+      };
+    },
     // 4C: ledger -> marker sweep -> residue verification, all three must agree.
     cleanup: async () => {
       const result = await teardown({ ledger, rest, auth, runMarker });
@@ -187,7 +239,10 @@ async function main() {
     },
   });
 
-  const { bodyError: provisionOrProbeError } = await lifecycle.run(async () => {
+  const {
+    bodyError: provisionOrProbeError,
+    cleanup: lifecycleCleanup,
+  } = await lifecycle.run(async () => {
     console.log(`Provisioning two disposable probe tenants (run marker "${runMarker}")…`);
     console.log("If this run is killed, recover with: node scripts/security/rls-probe.mjs --sweep --run " + runMarker);
     const fixtures = await provisionProbeTenants(ledger, runMarker);
@@ -1498,6 +1553,9 @@ async function main() {
   if (provisionOrProbeError) {
     console.error(`\nProbe aborted: ${provisionOrProbeError.message}`);
   }
+  if (!lifecycleCleanup?.ok) {
+    console.error(`\nLifecycle cleanup/recovery failed: ${lifecycleCleanup?.detail ?? "unknown"}`);
+  }
 
   // A run that cannot PROVE it cleaned up is not a passing run, whatever the
   // security checks said.
@@ -1510,6 +1568,7 @@ async function main() {
     // failure means cleanup is UNPROVEN — which is failure, not silence.
     sweepFailures.length === 0 &&
     residue.clean &&
+    lifecycleCleanup?.ok === true &&
     !provisionOrProbeError;
   process.exit(ok ? 0 : 1);
 }

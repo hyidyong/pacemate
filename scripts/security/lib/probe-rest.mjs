@@ -13,6 +13,7 @@
 // implementation covers every probe request, including body consumption.
 
 import { DEFAULT_TIMEOUT_MS, ProbeRequestError, boundedRequest, parseBody } from "./probe-http.mjs";
+import { isRunMarker, runMarkerFromProbeAuthEmail } from "./probe-guard.mjs";
 
 export { DEFAULT_TIMEOUT_MS, ProbeRequestError };
 
@@ -75,6 +76,23 @@ export function createProbeAuthAdmin({ url, serviceRoleKey, timeoutMs = DEFAULT_
   };
   const call = (path, init) => boundedRequest(`${base}${path}`, { ...init, headers }, { timeoutMs, fetchImpl, scope });
 
+  async function listUsersMatching(predicate, { perPage = 200, maxPages = 500 } = {}) {
+    const matches = [];
+    for (let page = 1; page <= maxPages; page += 1) {
+      const { status, text } = await call(`/users?page=${page}&per_page=${perPage}`, { method: "GET" });
+      if (status < 200 || status >= 300) {
+        throw new ProbeRequestError(`GoTrue list users page ${page} → ${status}`, { status });
+      }
+      const body = parseBody(text);
+      const users = Array.isArray(body?.users) ? body.users : [];
+      for (const user of users) if (predicate(user)) matches.push(user);
+      if (users.length < perPage) return matches;
+    }
+    throw new ProbeRequestError(
+      `GoTrue user enumeration did not terminate within ${maxPages} pages; residue cannot be verified`,
+    );
+  }
+
   return {
     async createUser(email, password) {
       const { status, text } = await call("/users", {
@@ -107,26 +125,20 @@ export function createProbeAuthAdmin({ url, serviceRoleKey, timeoutMs = DEFAULT_
      * against a per-run random token.
      */
     async listUsersByEmailPrefix(prefix, { perPage = 200, maxPages = 500 } = {}) {
-      if (typeof prefix !== "string" || prefix.length < 16) {
+      if (!isRunMarker(prefix)) {
         throw new ProbeRequestError(
           `refusing to enumerate auth users by the weak prefix "${prefix}"; ownership must be execution-specific`,
         );
       }
-      const matches = [];
-      for (let page = 1; page <= maxPages; page += 1) {
-        const { status, text } = await call(`/users?page=${page}&per_page=${perPage}`, { method: "GET" });
-        if (status < 200 || status >= 300) {
-          throw new ProbeRequestError(`GoTrue list users page ${page} → ${status}`, { status });
-        }
-        const body = parseBody(text);
-        const users = Array.isArray(body?.users) ? body.users : [];
-        for (const user of users) {
-          if (typeof user?.email === "string" && user.email.startsWith(prefix)) matches.push(user);
-        }
-        if (users.length < perPage) return matches;
-      }
-      throw new ProbeRequestError(
-        `GoTrue user enumeration did not terminate within ${maxPages} pages; residue cannot be verified`,
+      return listUsersMatching(
+        (user) => runMarkerFromProbeAuthEmail(user?.email) === prefix,
+        { perPage, maxPages },
+      );
+    },
+    async listProbeFamilyUsers(options = {}) {
+      return listUsersMatching(
+        (user) => runMarkerFromProbeAuthEmail(user?.email) !== null,
+        options,
       );
     },
   };

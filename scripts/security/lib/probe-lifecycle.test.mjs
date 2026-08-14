@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
 
+import { boundedRequest, createAbortScope } from "./probe-http.mjs";
 import { EXIT, createProbeLifecycle } from "./probe-lifecycle.mjs";
 
 const quietLogger = { error() {}, log() {} };
@@ -285,4 +286,81 @@ test("4A — a normal run does not abort the scope", async () => {
   await lifecycle.run(async () => "done");
 
   assert.equal(aborted, false, "an uninterrupted run must not cancel its own requests");
+});
+
+test("an ambiguous late commit is swept again after the underlying mutation settles", async () => {
+  const scope = createAbortScope();
+  const rows = [];
+  const order = [];
+  let releaseServer;
+  const server = new Promise((resolve) => {
+    releaseServer = () => {
+      rows.push({ id: "owned-late-row" });
+      order.push("server-commit");
+      resolve({ status: 201, headers: new Headers(), text: async () => "{}" });
+    };
+  });
+
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => {
+      order.push("cleanup");
+      rows.splice(0);
+      return { ok: true, detail: "first pass complete" };
+    },
+    awaitMutations: (ms) => scope.settled(ms),
+    quiesceTimeoutMs: 20,
+    recoverAmbiguous: async () => {
+      order.push("recovery-wait");
+      const settled = await scope.settled(200);
+      if (!settled.ok) return { ok: false, detail: "still unsettled" };
+      order.push("recovery-sweep");
+      rows.splice(0);
+      return { ok: true, detail: "late mutation recovered" };
+    },
+    logger: quietLogger,
+  });
+
+  setTimeout(releaseServer, 70);
+  const result = await lifecycle.run(async () => {
+    await assert.rejects(
+      boundedRequest(
+        "https://probe.test/late",
+        { method: "POST" },
+        { timeoutMs: 10, fetchImpl: () => server, scope },
+      ),
+      /exceeded 10ms/,
+    );
+  });
+
+  assert.deepEqual(order, [
+    "cleanup",
+    "recovery-wait",
+    "server-commit",
+    "recovery-sweep",
+  ]);
+  assert.deepEqual(rows, [], "the late-owned row must be removed by the recovery pass");
+  assert.equal(result.cleanup.ok, true);
+});
+
+test("a permanently unsettled mutation fails with durable recovery information", async () => {
+  let recoveryCalls = 0;
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => ({ ok: true, detail: "first pass complete" }),
+    awaitMutations: async () => ({ ok: false, outstanding: 1 }),
+    quiesceTimeoutMs: 10,
+    recoverAmbiguous: async () => {
+      recoveryCalls += 1;
+      return {
+        ok: false,
+        detail: "run pacemate-probe-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa remains recoverable",
+      };
+    },
+    logger: quietLogger,
+  });
+
+  const result = await lifecycle.run(async () => {});
+
+  assert.equal(recoveryCalls, 1);
+  assert.equal(result.cleanup.ok, false);
+  assert.match(result.cleanup.detail, /pacemate-probe-[a-f0-9]{32}/);
 });

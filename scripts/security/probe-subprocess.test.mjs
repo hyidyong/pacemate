@@ -32,9 +32,16 @@ import { SCENARIOS, startFakeSupabase } from "./lib/fake-supabase.mjs";
 const RUNNER = fileURLToPath(new URL("./rls-probe.mjs", import.meta.url));
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
-function runProbe({ url, extraEnv = {}, signal = null, signalAfterMs = 1200, timeoutMs = 45_000 }) {
+function runProbe({
+  url,
+  args = [],
+  extraEnv = {},
+  signal = null,
+  signalAfterMs = 1200,
+  timeoutMs = 45_000,
+}) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [RUNNER], {
+    const child = spawn(process.execPath, [RUNNER, ...args], {
       cwd: REPO_ROOT,
       env: {
         ...process.env,
@@ -66,6 +73,38 @@ function runProbe({ url, extraEnv = {}, signal = null, signalAfterMs = 1200, tim
     });
   });
 }
+
+test("the documented --sweep --family command executes and preserves bystanders", async () => {
+  const fake = await startFakeSupabase();
+  const runA = `${PROBE_MARKER_FAMILY}-${"a".repeat(32)}`;
+  const runB = `${PROBE_MARKER_FAMILY}-${"b".repeat(32)}`;
+  try {
+    fake.rowsOf("faqs").push(
+      { id: "probe-a", question: `${runA} courseless faq a` },
+      { id: "probe-b", question: `${runB} courseless faq b` },
+      { id: "bystander", question: `${runA} ordinary user faq` },
+    );
+    fake.authUsers.set("probe-auth-a", {
+      id: "probe-auth-a",
+      email: `${runA}-a-run123@probe.invalid`,
+    });
+    fake.authUsers.set("bystander-auth", {
+      id: "bystander-auth",
+      email: "alice+pacemate-probe@example.test",
+    });
+
+    const run = await runProbe({ url: fake.url, args: ["--sweep", "--family"] });
+
+    assert.equal(run.code, 0, run.output);
+    assert.match(run.output, /Sweep verified clean/);
+    assert.deepEqual(fake.rowsOf("faqs"), [
+      { id: "bystander", question: `${runA} ordinary user faq` },
+    ]);
+    assert.deepEqual([...fake.authUsers.keys()], ["bystander-auth"]);
+  } finally {
+    await fake.close();
+  }
+});
 
 test("a normal run against the stand-in exits after cleaning up, and says so", async () => {
   const fake = await startFakeSupabase();

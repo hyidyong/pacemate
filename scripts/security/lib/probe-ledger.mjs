@@ -29,7 +29,12 @@
 // --sweep`), which finds and removes marked residue from any previous run. It is
 // not automatic.
 
-import { assertScopedFilter, ownedByRun } from "./probe-guard.mjs";
+import {
+  PROBE_MARKER_FAMILY,
+  assertScopedFilter,
+  ownedByRun,
+  runMarkerFromOwnedValue,
+} from "./probe-guard.mjs";
 
 /**
  * Tables the sweep and the residue check know about, with the text column that
@@ -86,6 +91,60 @@ export const MARKED_COLUMNS = [
 export function markedTablesFor(runMarker) {
   const predicate = ownedByRun(runMarker);
   return MARKED_COLUMNS.map(([table, column]) => [table, column, predicate]);
+}
+
+const FAMILY_CANDIDATE = `like.${PROBE_MARKER_FAMILY}-%25`;
+
+// Family recovery is intentionally narrower than exact-run recovery. The
+// prefix query is enumeration only; a row becomes deletable only when the text
+// after its well-formed random run marker is one of the fixture shapes this
+// runner actually writes for that table.
+const FAMILY_SUFFIX = new Map([
+  ["schools", /^-[ab]-[a-z0-9]{5,}$/],
+  ["departments", /^ department [ab]$/],
+  ["professors", /^ professor [ab]$/],
+  ["courses", /^(?: alt)? course [ab]$/],
+  ["profiles", /^-(?:(?:prof-)?[ab]|(?:assistant|admin)-a|anon-insert)-[a-z0-9]{5,}@probe\.invalid$/],
+  ["counseling_requests", /^(?: confidential counseling topic [ab]|-booking-[a-z0-9-]+)$/],
+  ["student_courses", /^(?:|-xt-enrol)$/],
+  ["student_mission_progress", /^(?: private feedback [ab]|-(?:st|xt)-mission)$/],
+  ["academic_terms", /^$/],
+  ["course_offerings", /^$/],
+  ["student_weekly_progress", /^ weekly private note$/],
+  ["user_notifications", /^(?: direct| broadcast) [ab]$/],
+  ["study_roadmaps", /^(?: private study roadmap|-(?:st|xt)-roadmap)$/],
+  ["study_tasks", /^(?: private study task|-xt-task)$/],
+  ["posts", /^(?: post [ab]| official notice|-(?:st|xt)-(?:post|notice)|-edited-post)$/],
+  ["course_reviews", /^(?: review [ab]|-(?:st|xt|student|professor|assistant|admin)-review|-edited-review)$/],
+  ["roadmap_revision_requests", /^ revision [ab]$/],
+  ["faqs", /^ courseless faq [ab]$/],
+  ["chat_sessions", /^ chat session$/],
+  ["chat_messages", /^ private chat message$/],
+  ["escalations", /^ private professor question$/],
+  ["comments", /^ private comment$/],
+  ["reports", /^ private abuse report$/],
+  ["professor_admin_tasks", /^ private professor task$/],
+  ["professor_question_auto_reply_rules", /^ pattern$/],
+  ["syllabi", /^ private syllabus$/],
+  ["professor_teaching_slots", /^ period$/],
+  ["notices", /^ private notice$/],
+]);
+
+function familyRunMarkerFor(table, value) {
+  const marker = runMarkerFromOwnedValue(value);
+  const suffix = marker ? value.slice(marker.length) : null;
+  return marker && FAMILY_SUFFIX.get(table)?.test(suffix) ? marker : null;
+}
+
+async function familyRowsFor(rest, table, column) {
+  const rows = await rest.select(
+    table,
+    `select=id,${column}&${column}=${FAMILY_CANDIDATE}`,
+  );
+  if (!Array.isArray(rows)) {
+    throw new Error(`${table}: unexpected response shape while enumerating probe-family rows`);
+  }
+  return rows.filter((row) => familyRunMarkerFor(table, row?.[column]) !== null);
 }
 
 /**
@@ -212,6 +271,34 @@ export async function verifyNoResidue({ rest, auth, runMarker }) {
   return { residue, unverifiable, clean: residue.length === 0 && unverifiable.length === 0 };
 }
 
+/** Verify every structurally valid run in the probe family is absent. */
+export async function verifyNoProbeFamilyResidue({ rest, auth }) {
+  const residue = [];
+  const unverifiable = [];
+
+  for (const [table, column] of MARKED_COLUMNS) {
+    try {
+      const rows = await familyRowsFor(rest, table, column);
+      if (rows.length) residue.push(`${table}: ${rows.length} row(s)`);
+    } catch (error) {
+      unverifiable.push(`${table}: ${error?.message ?? error}`);
+    }
+  }
+
+  if (auth) {
+    try {
+      const users = await auth.listProbeFamilyUsers();
+      if (users.length) residue.push(`auth.users: ${users.length} user(s)`);
+    } catch (error) {
+      unverifiable.push(`auth.users: ${error?.message ?? error}`);
+    }
+  } else {
+    unverifiable.push("auth.users: no auth client supplied");
+  }
+
+  return { residue, unverifiable, clean: residue.length === 0 && unverifiable.length === 0 };
+}
+
 /**
  * Codex round 4, 4C — the standard three-phase teardown every probe uses.
  *
@@ -291,6 +378,50 @@ export async function sweepOrphans({ rest, auth, runMarker }) {
   if (auth) {
     try {
       const users = await auth.listUsersByEmailPrefix(runMarker);
+      for (const user of users) {
+        try {
+          await auth.deleteUser(user.id);
+          removed.push(`auth.users: ${user.id}`);
+        } catch (error) {
+          failures.push(`auth.users ${user.id}: ${error?.message ?? error}`);
+        }
+      }
+    } catch (error) {
+      failures.push(`auth.users listing: ${error?.message ?? error}`);
+    }
+  }
+
+  return { removed, failures };
+}
+
+/**
+ * Explicit multi-run recovery. Candidate enumeration may use the family prefix
+ * for READS, but deletion is only by exact row id after the value's full
+ * `pacemate-probe-<32 hex>` structure has been validated locally.
+ */
+export async function sweepProbeFamily({ rest, auth }) {
+  const removed = [];
+  const failures = [];
+
+  for (const [table, column] of [...MARKED_COLUMNS].reverse()) {
+    try {
+      const rows = await familyRowsFor(rest, table, column);
+      for (const row of rows) {
+        try {
+          await rest.remove(table, assertScopedFilter(`id=eq.${row.id}`));
+          removed.push(`${table}: ${row.id}`);
+        } catch (error) {
+          failures.push(`${table} ${row.id}: ${error?.message ?? error}`);
+        }
+      }
+    } catch (error) {
+      failures.push(`${table} listing: ${error?.message ?? error}`);
+    }
+  }
+
+  if (auth) {
+    try {
+      const users = await auth.listProbeFamilyUsers();
       for (const user of users) {
         try {
           await auth.deleteUser(user.id);

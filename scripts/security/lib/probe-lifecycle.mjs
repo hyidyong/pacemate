@@ -41,6 +41,11 @@ export const EXIT = {
  */
 export function createProbeLifecycle({
   cleanup,
+  // Called only after the ordinary cleanup pass when quiescence is ambiguous.
+  // It must wait for the real mutation attempts (bounded), sweep the same run
+  // again, and verify residue. The callback is deliberately separate from
+  // `abortWork`: cancellation is a request, recovery is proof.
+  recoverAmbiguous = null,
   abortWork = () => {},
   // Codex round 5, F5: resolves when every in-flight MUTATION has genuinely
   // settled. Supplied by the scope; without it the lifecycle can only wait for
@@ -54,6 +59,8 @@ export function createProbeLifecycle({
 }) {
   let cleanupPromise = null;
   let cleanupResult = null;
+  let recoveryPromise = null;
+  let recoveryResult = null;
   let signalsSeen = [];
   let bodySettled = null;
   let quiesced = false;
@@ -98,10 +105,24 @@ export function createProbeLifecycle({
    */
   async function quiesceNormally() {
     if (typeof awaitMutations !== "function") {
-      return { ok: true, detail: "no mutation registry", ambiguous: false };
+      return {
+        ok: true,
+        detail: "no mutation registry",
+        ambiguous: false,
+        bodyStopped: true,
+        mutationsSettled: true,
+      };
     }
     const drained = await awaitMutations(quiesceTimeoutMs);
-    if (drained?.ok) return { ok: true, detail: "all mutations settled", ambiguous: false };
+    if (drained?.ok) {
+      return {
+        ok: true,
+        detail: "all mutations settled",
+        ambiguous: false,
+        bodyStopped: true,
+        mutationsSettled: true,
+      };
+    }
     logger.error(
       `[quiesce] ${drained?.outstanding ?? "?"} mutation(s) still in flight at the end of the run;` +
         " a late commit is possible, so this run cannot be reported clean",
@@ -110,6 +131,8 @@ export function createProbeLifecycle({
       ok: false,
       detail: `${drained?.outstanding ?? "?"} mutation(s) unsettled`,
       ambiguous: true,
+      bodyStopped: true,
+      mutationsSettled: false,
     };
   }
 
@@ -127,6 +150,8 @@ export function createProbeLifecycle({
       }
 
       const problems = [];
+      let bodyStopped = true;
+      let mutationsSettled = true;
 
       // 1. The body: the caller's own async function.
       if (bodySettled) {
@@ -141,6 +166,7 @@ export function createProbeLifecycle({
               `[quiesce] the probe body did not stop within ${quiesceTimeoutMs}ms; cleaning up anyway`,
             );
             problems.push("body did not quiesce");
+            bodyStopped = false;
           }
         } finally {
           clearTimeout(timer);
@@ -157,12 +183,25 @@ export function createProbeLifecycle({
               `${quiesceTimeoutMs}ms — a late commit is possible; forcing marker recovery`,
           );
           problems.push(`${drained?.outstanding ?? "?"} mutation(s) unsettled`);
+          mutationsSettled = false;
         }
       }
 
       return problems.length === 0
-        ? { ok: true, detail: "body stopped and all mutations settled", ambiguous: false }
-        : { ok: false, detail: problems.join("; "), ambiguous: true };
+        ? {
+            ok: true,
+            detail: "body stopped and all mutations settled",
+            ambiguous: false,
+            bodyStopped,
+            mutationsSettled,
+          }
+        : {
+            ok: false,
+            detail: problems.join("; "),
+            ambiguous: true,
+            bodyStopped,
+            mutationsSettled,
+          };
     })();
     return quiescePromise;
   }
@@ -193,6 +232,45 @@ export function createProbeLifecycle({
     return cleanupPromise;
   }
 
+  async function runRecoveryOnce(reason, stopped) {
+    if (!stopped?.ambiguous) return { ok: true, detail: "no ambiguity recovery needed" };
+    if (recoveryPromise) return recoveryPromise;
+    recoveryPromise = (async () => {
+      if (typeof recoverAmbiguous !== "function") {
+        recoveryResult = {
+          ok: false,
+          detail: `${stopped.detail}; no ambiguity recovery callback is installed`,
+        };
+        return recoveryResult;
+      }
+      try {
+        recoveryResult = await recoverAmbiguous({ reason, quiesce: stopped });
+      } catch (error) {
+        recoveryResult = { ok: false, detail: error?.message ?? String(error) };
+      }
+      return recoveryResult ?? { ok: false, detail: "ambiguity recovery returned no result" };
+    })();
+    return recoveryPromise;
+  }
+
+  async function cleanupAndRecover(reason, stopped) {
+    const initial = await runCleanupOnce(reason);
+    if (!stopped?.ambiguous) return initial;
+
+    const recovered = await runRecoveryOnce(reason, stopped);
+    cleanupResult = recovered.ok
+      ? {
+          ...recovered,
+          detail: `${initial?.detail ?? "initial cleanup complete"}; ${recovered.detail ?? "ambiguity recovered"}`,
+        }
+      : {
+          ...recovered,
+          ok: false,
+          detail: `${initial?.detail ?? "initial cleanup complete"}; ${recovered.detail ?? stopped.detail}`,
+        };
+    return cleanupResult;
+  }
+
   const handlers = new Map();
 
   /**
@@ -220,8 +298,8 @@ export function createProbeLifecycle({
     logger.error("\n[probe:cancel] cancellation requested — quiescing, then cleaning up");
     void (async () => {
       const stopped = await quiesce("probe:cancel");
-      const result = await runCleanupOnce("probe:cancel");
-      const ok = Boolean(result?.ok) && stopped.ok;
+      const result = await cleanupAndRecover("probe:cancel", stopped);
+      const ok = Boolean(result?.ok);
       if (!ok) {
         logger.error(`[cleanup] FAILED after probe:cancel: ${result?.detail ?? stopped.detail}`);
       }
@@ -242,13 +320,7 @@ export function createProbeLifecycle({
         void (async () => {
           // 4A: stop the work before destroying anything it may still create.
           const stopped = await quiesce(signal);
-          const result = await runCleanupOnce(signal);
-          if (!stopped.ok && result?.ok) {
-            // Cleanup looked clean, but we could not prove the body had
-            // stopped, so we cannot prove nothing was created after it ran.
-            result.ok = false;
-            result.detail = `${result.detail ?? "clean"}; but ${stopped.detail}`;
-          }
+          const result = await cleanupAndRecover(signal, stopped);
           const code = result?.ok
             ? signal === "SIGINT"
               ? EXIT.sigint
@@ -294,21 +366,23 @@ export function createProbeLifecycle({
           bodyError = error;
         }
       })();
-      let stopped = { ok: true, detail: "not interrupted", ambiguous: false };
+      let stopped = {
+        ok: true,
+        detail: "not interrupted",
+        ambiguous: false,
+        bodyStopped: true,
+        mutationsSettled: true,
+      };
       try {
         await bodySettled;
         // Even on the happy path, a mutation whose wrapper timed out may still
         // be open. Quiescing here is what stops cleanup racing it.
         stopped = await quiesceNormally();
       } finally {
-        await runCleanupOnce(bodyError ? "error" : "normal");
+        await cleanupAndRecover(bodyError ? "error" : "normal", stopped);
         uninstall();
       }
       const result = cleanupResult ?? { ok: false, detail: "cleanup did not run" };
-      if (!stopped.ok && result.ok) {
-        result.ok = false;
-        result.detail = `${result.detail}; but ${stopped.detail}`;
-      }
       return { value, bodyError, quiesce: stopped, cleanup: result };
     },
   };
