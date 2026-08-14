@@ -30,7 +30,10 @@ function toDataUrl(code) {
 // createSupabaseServerClient instead of the module-level anon client. The lazy
 // indirection is unchanged and still matters — see the comment above.
 const SESSION_CLIENT_STUB = toDataUrl(
-  "export const createSupabaseServerClient = async () => ({ from: (...args) => globalThis.__stage8AiClient.from(...args) });",
+  // `rpc` is forwarded too: since Codex round 4 finding 3 the weekly advance is
+  // a transactional RPC rather than a direct UPDATE, and a stub that silently
+  // lacked it would fail with a TypeError instead of exercising the path.
+  "export const createSupabaseServerClient = async () => ({ from: (...args) => globalThis.__stage8AiClient.from(...args), rpc: (...args) => globalThis.__stage8AiClient.rpc(...args) });",
 );
 const SESSION_SERVICE_STUB = toDataUrl(
   "export const getDemoProfile = async () => globalThis.__stage8AiProfile;",
@@ -90,8 +93,14 @@ const COURSE_ROWS = {
 // The enrollment carries the AUTHORITATIVE week. A caller-supplied week that
 // merely falls in 1..30 is not evidence of anything.
 const AUTHORITATIVE_WEEK = 3;
+// Codex round 4, finding 3: the enrollment now has an explicit primary key,
+// because the advance is addressed BY THAT KEY rather than by a broad
+// student+course predicate.
+const ATTACKER_ENROLMENT = "e0000000-0000-4000-8000-00000000000a";
+const VICTIM_ENROLMENT = "e0000000-0000-4000-8000-00000000000b";
 const ENROLLMENTS = [
-  { student_id: ATTACKER, course_id: COURSE, status: "interested", current_week: AUTHORITATIVE_WEEK },
+  { id: ATTACKER_ENROLMENT, student_id: ATTACKER, course_id: COURSE, status: "interested", current_week: AUTHORITATIVE_WEEK },
+  { id: VICTIM_ENROLMENT, student_id: VICTIM, course_id: COURSE, status: "interested", current_week: AUTHORITATIVE_WEEK },
 ];
 
 function makeRecordingClient() {
@@ -124,8 +133,31 @@ function makeRecordingClient() {
     return api;
   }
 
+  const rpcCalls = [];
+
   return {
     writes,
+    rpcCalls,
+    // Codex round 4, finding 3. The advance is now one transactional RPC keyed
+    // by the enrollment's primary key. The fake models the compare-and-set the
+    // real function performs: the row must exist, belong to the caller, and
+    // still be at the expected week, or nothing happens and nothing is written.
+    async rpc(name, args) {
+      rpcCalls.push({ name, args });
+      const enrollment = ENROLLMENTS.find((e) => e.id === args.p_enrollment_id);
+      if (!enrollment || enrollment.current_week !== args.p_expected_week) {
+        return { data: { outcome: "stale" }, error: null };
+      }
+      writes.push({
+        table: "student_mission_progress",
+        op: "rpc-feedback",
+        payload: { student_id: enrollment.student_id, course_id: enrollment.course_id },
+      });
+      return {
+        data: { outcome: "advanced", advanced_to: args.p_expected_week + 1, course_id: enrollment.course_id },
+        error: null,
+      };
+    },
     from(table) {
       if (table === "courses") {
         return { select: () => query(Object.values(COURSE_ROWS)) };
@@ -137,29 +169,19 @@ function makeRecordingClient() {
         }));
         return {
           select: () => query(enrollmentRows),
+          // A direct UPDATE on student_courses is no longer part of the design.
+          // Recording it means a regression to the broad predicate shows up as
+          // a recorded write rather than passing silently.
           update: (payload) => {
             const record = { table, op: "update", payload, filters: {} };
             writes.push(record);
-            // Codex round 3, F6: the CAS returns the rows it MATCHED. The fake
-            // must model a zero-row miss, or a losing caller looks like a
-            // winner and the test proves nothing.
-            const casResult = () => {
-              const enrollment = ENROLLMENTS.find(
-                (e) => e.student_id === record.filters.student_id && e.course_id === record.filters.course_id,
-              );
-              const matched =
-                Boolean(enrollment) &&
-                (record.filters.current_week === undefined ||
-                  record.filters.current_week === enrollment.current_week);
-              return { data: matched ? [{ id: "enrolment" }] : [], error: null };
-            };
             const api = {
               eq: (column, value) => {
                 record.filters[column] = value;
                 return api;
               },
-              select: () => Promise.resolve(casResult()),
-              then: (resolve, reject) => Promise.resolve(casResult()).then(resolve, reject),
+              select: () => Promise.resolve({ data: [], error: null }),
+              then: (resolve, reject) => Promise.resolve({ data: [], error: null }).then(resolve, reject),
             };
             return api;
           },
@@ -296,19 +318,25 @@ test("submitProgressFeedback never advances another student's course week", asyn
     "must never write progress rows for another student",
   );
 
-  // Advancing the CALLER's own week is the legitimate behaviour; what must never
-  // happen is that update landing on the victim's row.
-  const weekUpdates = client.writes.filter((write) => write.table === "student_courses");
-  for (const update of weekUpdates) {
+  // Advancing the CALLER's own enrollment is the legitimate behaviour; what must
+  // never happen is the transition landing on the victim's row. Since finding 3
+  // the transition names an exact enrollment id, so this is checkable directly.
+  assert.equal(
+    client.writes.filter((write) => write.table === "student_courses").length,
+    0,
+    "the action must not UPDATE student_courses directly any more",
+  );
+  for (const call of client.rpcCalls) {
+    assert.equal(call.name, "advance_student_week");
     assert.notEqual(
-      update.filters.student_id,
-      VICTIM,
-      "must never advance another student's current_week",
+      call.args.p_enrollment_id,
+      VICTIM_ENROLMENT,
+      "must never advance another student's enrollment",
     );
     assert.equal(
-      update.filters.student_id,
-      ATTACKER,
-      "the week update must be scoped to the authenticated caller",
+      call.args.p_enrollment_id,
+      ATTACKER_ENROLMENT,
+      "the transition must name the authenticated caller's own enrollment",
     );
   }
 });
@@ -511,12 +539,17 @@ test("submitProgressFeedback advances the enrollment using the server-derived we
     spy.restore();
   }
 
-  const advance = client.writes.find((w) => w.table === "student_courses");
-  assert.ok(advance, "the legitimate path must still advance the enrollment");
+  assert.equal(client.rpcCalls.length, 1, "the legitimate path must still advance the enrollment");
+  const [advance] = client.rpcCalls;
+  assert.equal(advance.name, "advance_student_week");
   assert.equal(
-    advance.payload.current_week,
-    AUTHORITATIVE_WEEK + 1,
-    "the next week must be derived from the stored week, not from caller input",
+    advance.args.p_expected_week,
+    AUTHORITATIVE_WEEK,
+    "the expected week must be the STORED week, not caller input",
   );
-  assert.equal(advance.filters.student_id, ATTACKER, "the advance must be scoped to the caller");
+  assert.equal(
+    advance.args.p_enrollment_id,
+    ATTACKER_ENROLMENT,
+    "the advance must name the caller's own enrollment row",
+  );
 });

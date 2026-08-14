@@ -582,6 +582,123 @@ async function main() {
       { id: "deny:admin-review", role: "admin", token: await signIn(A.staff.admin.email, PROBE_PASSWORD), authorId: A.staff.admin.profile.id },
     ];
 
+    // -------------------------------------------------------------------
+    // Codex round 4, finding 3 — the weekly advance is ONE atomic transition
+    // against ONE exact enrollment.
+    //
+    // student_courses is UNIQUE on (student_id, course_id, STATUS), so a
+    // student legitimately has SEVERAL rows for one course. The old CAS matched
+    // student+course+week and advanced every one of them. A second enrollment
+    // with a different status is provisioned here so "only the exact row moved"
+    // is an observation rather than an assumption.
+    // -------------------------------------------------------------------
+    const [secondEnrolment] = await rest.insert("student_courses", [
+      {
+        student_id: A.profile.id,
+        course_id: A.course.id,
+        status: "completed",
+        semester_label: "2026-1",
+        source_text: PROBE_MARKER,
+      },
+    ]);
+    ledger.recordRow("student_courses", secondEnrolment.id, "second enrolment (status=completed)");
+
+    const weekOf = async (id) => {
+      const [row] = await rest.select("student_courses", `select=current_week&id=eq.${id}`);
+      return row?.current_week ?? null;
+    };
+    const callAdvance = (client, token, body) =>
+      client("rpc/advance_student_week", {
+        method: "POST",
+        headers: token ? headersFor(token) : anonHeaders,
+        body: JSON.stringify(body),
+      });
+
+    {
+      const before = await weekOf(A.enrolment.id);
+      const otherBefore = await weekOf(secondEnrolment.id);
+      const { status, body } = await callAdvance(asA, tokenA, {
+        p_enrollment_id: A.enrolment.id,
+        p_expected_week: before,
+        p_feedback: `${PROBE_MARKER} advance feedback`,
+      });
+      const after = await weekOf(A.enrolment.id);
+      const otherAfter = await weekOf(secondEnrolment.id);
+
+      check(
+        "ai:advance-exact-enrolment",
+        "advancing moves ONLY the named enrollment, not every row for that course",
+        after === before + 1 && otherAfter === otherBefore,
+        `rpc ${status} ${JSON.stringify(body?.outcome ?? body)}; target ${before}→${after}, sibling ${otherBefore}→${otherAfter}`,
+      );
+
+      // The feedback is written INSIDE the transition, by the winner only.
+      const progress = await rest.select(
+        "student_mission_progress",
+        `select=id&student_id=eq.${A.profile.id}&week_number=eq.${before}&actual_progress_feedback=eq.${encodeURIComponent(`${PROBE_MARKER} advance feedback`)}`,
+      );
+      for (const row of progress) ledger.recordRow("student_mission_progress", row.id, "advance feedback");
+      check(
+        "ai:advance-writes-feedback",
+        "the winner's feedback is persisted by the same transition (positive fixture)",
+        progress.length === 1,
+        `${progress.length} progress row(s)`,
+      );
+    }
+    {
+      // A stale expected week is a LOSER: no advance, and no feedback written.
+      const before = await weekOf(A.enrolment.id);
+      const staleFeedback = `${PROBE_MARKER} stale feedback`;
+      const { status, body } = await callAdvance(asA, tokenA, {
+        p_enrollment_id: A.enrolment.id,
+        p_expected_week: before - 1,
+        p_feedback: staleFeedback,
+      });
+      const after = await weekOf(A.enrolment.id);
+      const written = await rest.select(
+        "student_mission_progress",
+        `select=id&actual_progress_feedback=eq.${encodeURIComponent(staleFeedback)}`,
+      );
+      for (const row of written) ledger.recordRow("student_mission_progress", row.id, "stale feedback LEAK");
+      check(
+        "ai:advance-stale-writes-nothing",
+        "a stale expected week advances nothing AND persists no feedback",
+        after === before && written.length === 0,
+        `rpc ${status} ${JSON.stringify(body?.outcome ?? body)}; week ${before}→${after}, ${written.length} feedback row(s)`,
+      );
+    }
+    {
+      // B is a real signed-in student in ANOTHER tenant naming A's enrollment.
+      const before = await weekOf(A.enrolment.id);
+      const { status, body } = await callAdvance(asB, tokenB, {
+        p_enrollment_id: A.enrolment.id,
+        p_expected_week: before,
+        p_feedback: `${PROBE_MARKER} foreign advance`,
+      });
+      const after = await weekOf(A.enrolment.id);
+      check(
+        "ai:advance-foreign-enrolment",
+        "another student must NOT advance an enrollment that is not theirs",
+        after === before,
+        `rpc ${status} ${JSON.stringify(body?.outcome ?? body)}; week ${before}→${after}`,
+      );
+    }
+    {
+      const before = await weekOf(A.enrolment.id);
+      const { status } = await callAdvance(asAnon, null, {
+        p_enrollment_id: A.enrolment.id,
+        p_expected_week: before,
+        p_feedback: `${PROBE_MARKER} anon advance`,
+      });
+      const after = await weekOf(A.enrolment.id);
+      check(
+        "ai:advance-anon-denied",
+        "anon must not be able to EXECUTE the transition at all",
+        status === 401 || status === 403 || after === before,
+        `rpc ${status}; week ${before}→${after}`,
+      );
+    }
+
     for (const attempt of staffReviewAttempts) {
       const marker = tag(`${attempt.role}-review`);
       const res = await asA("course_reviews", {

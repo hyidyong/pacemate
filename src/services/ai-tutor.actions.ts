@@ -42,22 +42,35 @@ async function authorizeCourseForStudent(
   studentId: string,
   schoolId: string,
   courseId: string,
-): Promise<{ currentWeek: number } | null> {
+): Promise<{ enrollmentId: string; currentWeek: number } | null> {
   if (!courseId) return null;
 
   const { data, error } = await (await createSupabaseServerClient())
     .from("student_courses")
-    .select("course_id, current_week, course:courses!inner(id, school_id)")
+    // Codex round 4, finding 3: `id` is now selected and carried out of here.
+    // It used to be discarded, which forced every downstream write to re-find
+    // the row with a broad predicate that matched more rows than were
+    // authorized.
+    .select("id, course_id, current_week, course:courses!inner(id, school_id)")
     .eq("student_id", studentId)
     .eq("course_id", courseId)
     .eq("course.school_id", schoolId)
+    // student_courses is UNIQUE on (student_id, course_id, STATUS), so a student
+    // legitimately has several rows for one course (KI-012). `.limit(1)` with no
+    // ORDER BY made "which one" arbitrary — a different row could be authorized
+    // on each request. Newest-touched first, with `id` as a total tiebreak, so
+    // the choice is deterministic and reproducible.
+    .order("updated_at", { ascending: false })
+    .order("id", { ascending: true })
     .limit(1)
     .maybeSingle();
 
   if (error || !data) return null;
 
-  const currentWeek = (data as { current_week?: number }).current_week;
-  return isValidWeek(currentWeek) ? { currentWeek } : null;
+  const row = data as { id?: string; current_week?: number };
+  if (typeof row.id !== "string" || !isValidWeek(row.current_week)) return null;
+
+  return { enrollmentId: row.id, currentWeek: row.current_week };
 }
 
 // A course week is a small positive integer, matched by the
@@ -216,51 +229,47 @@ export async function submitProgressFeedback(
   // was only ever an equality token checked above.
   const authorizedWeek = enrollment.currentWeek;
 
-  // 1. Save Feedback to current week
-  const { error: feedbackError } = await (await createSupabaseServerClient()).from("student_mission_progress").upsert({
-    student_id: studentId,
-    course_id: courseId,
-    week_number: authorizedWeek,
-    actual_progress_feedback: feedback,
-  }, { onConflict: "student_id,course_id,week_number" });
-
-  if (feedbackError) {
-    console.error("Failed to save progress feedback:", feedbackError);
-  }
-
-  // 2. Trigger AI generation for NEXT week. The final week of a course has no
-  // next week to advance into; stop rather than writing a value the
-  // student_courses_current_week_range constraint would reject.
-  const nextWeek = authorizedWeek + 1;
-  if (!isValidWeek(nextWeek)) {
-    return;
-  }
-
-  // Compare-and-set on the week we authorized against, so two concurrent
-  // submissions cannot advance the enrollment twice.
+  // Codex round 4, finding 3. This used to be two separate PostgREST round
+  // trips: upsert the feedback, then compare-and-set the week. Three things
+  // were wrong with that and only the third was visible in round 3.
   //
-  // Codex round 3, F6: this used to check only `weekError`. A CAS that matches
-  // ZERO rows is not an error — it is a LOSER, and the previous code treated it
-  // as success and carried on to generateWeeklyGuide(). Two concurrent
-  // submissions therefore both advanced past the guard and both spent an OpenAI
-  // call. `.select()` makes the matched row the evidence: exactly one caller may
-  // continue.
-  const { data: advanced, error: weekError } = await (await createSupabaseServerClient())
-    .from("student_courses")
-    .update({ current_week: nextWeek })
-    .eq("student_id", studentId)
-    .eq("course_id", courseId)
-    .eq("current_week", authorizedWeek)
-    .select("id");
+  //   * the CAS matched `student_id + course_id + current_week`, and
+  //     student_courses is UNIQUE on (student_id, course_id, STATUS), so it
+  //     could advance MORE ROWS than authorization had inspected;
+  //   * the feedback write ran FIRST, so a caller that went on to lose the race
+  //     had already persisted;
+  //   * two round trips cannot be atomic, so reordering them only moves the
+  //     problem — CAS-then-feedback leaves a half-transition if the second call
+  //     fails, and the expected week no longer matches so no retry can repair it.
+  //
+  // One transactional RPC does all of it against the EXACT enrollment row,
+  // holding a row lock, and tells us whether we won. The function re-derives the
+  // actor and re-checks ownership and tenancy itself: the enrollment id below
+  // came from our own authorized read, but it still crosses a trust boundary.
+  const { data: transition, error: transitionError } = await (await createSupabaseServerClient())
+    .rpc("advance_student_week", {
+      p_enrollment_id: enrollment.enrollmentId,
+      p_expected_week: authorizedWeek,
+      p_feedback: feedback,
+    });
 
-  if (weekError) {
-    console.error("Failed to advance current week:", weekError);
+  if (transitionError) {
+    console.error("Failed to record weekly progress:", transitionError);
     return;
   }
 
-  // Zero rows means somebody else advanced this enrollment first. That is a
-  // stale request, not a failure: return quietly and spend nothing.
-  if (!advanced || advanced.length !== 1) {
+  const outcome = (transition as { outcome?: string; advanced_to?: number } | null)?.outcome;
+
+  // 'stale' means zero rows matched: somebody else advanced this enrollment
+  // first, or it is not ours to advance. Never a success, and nothing was
+  // written. 'final_week' means the feedback was kept but there is no next week
+  // to generate for. Only 'advanced' has earned a paid model call.
+  if (outcome !== "advanced") {
+    return;
+  }
+
+  const nextWeek = (transition as { advanced_to?: number }).advanced_to;
+  if (!isValidWeek(nextWeek)) {
     return;
   }
 
