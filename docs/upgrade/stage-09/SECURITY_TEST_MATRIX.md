@@ -419,3 +419,74 @@ the guarantees behind it were conditional, and one whole case was missing.
 | `ai:advance-anon-denied` | anon cannot execute the transition (401) |
 | `broadcast-peer-isolation` | A marking a broadcast read leaves peer B unread |
 | `mark-all-peer-isolation` | mark-all does not touch a peer |
+
+
+---
+
+## Review round 5 — the retraction, and what replaced it
+
+### `108/0` IS WITHDRAWN
+
+The anon-read loop's ALLOW branch submitted the literal `true` as its verdict:
+
+```js
+check(`anon-read:${table}`, `anon MAY read ${table}`, true, …)
+```
+
+Four checks could only pass, and `anon-read:course_reviews` was recorded PASS
+while the response was **401**. A total that includes checks which cannot fail
+is not evidence. Every prior citation of `108/0` is retracted.
+
+It also concealed a second defect: three of those four entries claimed
+`course_reviews`, `faqs` and `notices` were PUBLIC-BY-DESIGN, when the live
+grant set has said `schools` only since `20260814010000`. The probe's own
+metadata contradicted the shipped design and nothing failed, because the branch
+that read it could not fail.
+
+**Replacement, freshly run: 115 checks, 0 failed — all of which can fail.** The
+allow path now requires HTTP 200 AND a positive sentinel row this run created.
+"200 with zero rows" is not proof for a table that might simply be empty.
+
+Three class-level guards were added so this cannot recur anywhere:
+
+| Guard | What it forbids |
+|---|---|
+| no literal PASS verdict | any `check(…, true, …)` in any of the three runners. A literal `false` is allowed and correct — it appears in the "read-back FAILED — cannot verify" branches, where failing is the right answer. A constant that can only fail is honest; one that can only pass is the bug |
+| allow paths need a sentinel | the anon ALLOW branch must reference a specific known row and require it visible |
+| intent must match reality | the probe's "anon-readable" list must equal the live grant set exactly |
+
+### Updated trustworthiness table
+
+| Guarantee | Round-4 state | Round-5 state |
+|---|---|---|
+| Cleanup waits for in-flight work | Waited for the BODY — but the body ends when its wrapper rejects, and round 4 made the wrapper reject independently of the fetch | Waits for the underlying MUTATION to settle, tracked in a registry on the scope. Unsettled work is AMBIGUOUS: the sweep runs and the run cannot be reported clean |
+| Cleanup owns what it deletes | One fixed marker, SUBSTRING match — unrelated real data containing the phrase was deletable | A 128-bit per-run token, PREFIX match. Auth enumeration is `startsWith`, and refuses a prefix under 16 characters |
+| A failed sweep fails the run | teardown computed it; the runner discarded it, so `[SWEEP FAILED]` exited 0 | The exit expression includes it, and the summary prints the failures |
+
+### Round-5 live results
+
+| Suite | Result |
+|---|---|
+| `rls-probe.mjs` | **PASS — 115 checks, 0 failed**, residue clean |
+| `audit-trail-probe.mjs` | **PASS — 12 checks, 0 failed** |
+| `verify-notification-rls.mjs` | **PASS — 12 checks, 0 failed** |
+| `dump-security-snapshot.mjs --check` | **PASS — matches** |
+
+### New round-5 suites
+
+| Suite | Tests | Covers |
+|---|---|---|
+| `scripts/script-syntax.test.mjs` | 3 | every committed .js/.mjs/.cjs parses; the demo script RUNS and refuses without credentials |
+| `scripts/security/lib/probe-ownership.test.mjs` | 11 | run-scoped ownership, bystander survival, the mutation registry, sweep-failure fatality |
+| `src/services/privileged-action-authorization.test.mjs` | 10 | the F2/F3 role and tenant matrices, asserting ZERO privileged writes on every denial |
+
+### New round-5 live checks
+
+| Check | Property |
+|---|---|
+| `booking:non-slot-time` / `excessive-duration` / `outside-availability` / `far-horizon` / `self-approved` | five Stage 5 invariants, each unbypassable via direct INSERT |
+| `booking:foreign-professor` | cross-tenant booking still denied |
+| `booking:own-request-readable` | positive sentinel — the student can still READ their own request |
+| `column:provenance-immutable` | all 8 non-`is_read` columns refused (403) |
+| `column:is-read-writable` | the one writable column still works |
+| `anon-read:schools` | the allow path, proven with a sentinel row this run created |

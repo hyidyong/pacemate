@@ -209,3 +209,48 @@ run the database contains N rows whose `event` begins `stage9-audit-probe.`.
 That is correct behaviour, not a leak. They carry no personal data. Removing
 them requires a privileged out-of-band operation, which is the same constraint
 a real retention policy will face — and that constraint is the point.
+
+
+---
+
+## 10. Round 5 — what "cleaned up" now means, and what it still does not
+
+Round 4 claimed cleanup quiesced before destroying. It waited for the BODY — the
+caller's async function — which is not the same thing. Round 4's own deadline
+fix made the request wrapper reject independently of the underlying fetch, so:
+
+    abort -> wrapper rejects -> body returns -> quiesce says "stopped"
+    -> cleanup deletes -> process exits -> the server commits the create
+
+Aborting an AbortController ASKS the transport to stop. It does not prove the
+server did not already process the request.
+
+**Now:** the scope keeps a registry of in-flight MUTATIONS keyed on the
+underlying attempt. Cleanup waits on that, not on the wrapper. Reads are not
+tracked — a GET that never returned created nothing. Service-role provisioning
+clients share the registry. Quiesce is one shared promise, so simultaneous
+signals await the same pass. If the registry will not drain, the run is
+AMBIGUOUS: the marker sweep runs anyway and the run cannot be reported clean.
+
+**Ownership** is a 128-bit per-execution token matched by PREFIX (D-037), so a
+sweep can demonstrate that each row it deletes belongs to it. Unrelated data
+containing the probe wording survives — asserted by a test that seeds bystander
+rows carrying the legacy marker, the family prefix, and another run's marker.
+
+**A failed sweep now fails the run.** teardown had been computing
+`swept.failures` and the runner discarding it, so `[SWEEP FAILED]` exited 0. The
+sweep is the only thing that can find a row whose id the ledger never learned,
+so its failure means cleanup is UNPROVEN — which is failure.
+
+### Still NOT claimed
+
+- **Crash safety.** SIGKILL, power loss and host crashes leave ledgered fixtures
+  behind. Recovery is the next run's residue check plus the operator-run
+  `--sweep --run <marker>`, and every run prints that command on startup.
+- **That a late commit is impossible.** It is now *detected* — the run reports
+  ambiguity and sweeps — rather than assumed away.
+- **POSIX signal delivery on Windows.** Unchanged: the handler is proven by an
+  IPC-cancel test against the real runner; the OS routing is not exercisable.
+- **Audit probe residue is permanent by design.** `service_role` holds only
+  INSERT and SELECT on `security_events`, so the probe cannot delete the events
+  it writes and no DELETE was granted to let it.

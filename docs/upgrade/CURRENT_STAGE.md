@@ -4,14 +4,14 @@
 
 Stage 9 / 10
 Security / Privacy / Audit / Recovery
-Status: IN PROGRESS on branch `upgrade/stage-9`, revised through **four**
+Status: IN PROGRESS on branch `upgrade/stage-9`, revised through **five**
 external Codex security review rounds (2026-08-14), each of which returned
-**NOT SAFE TO MERGE**. Round 4 raised nine substantive findings; every one was
-verified against the code, the migrations and live metadata before any change,
-and every one was confirmed. All are closed. Awaiting external review.
+**NOT SAFE TO MERGE**. Round 5 raised eleven findings; every one was verified
+against the code, the migrations and live metadata before any change, and every
+one was confirmed. All are closed. Awaiting external review.
 Base: `main` @ `fd44172` (Stage 8 PR #42 merged 2026-08-12, verified).
-See docs/upgrade/stage-09/HANDOFF.md — read its **round-4** section first, as it
-corrects claims made in rounds 1–3.
+See docs/upgrade/stage-09/HANDOFF.md — read its **round-5** section first, as it
+corrects claims made in rounds 1–4.
 
 **The next action is another independent Codex security review.**
 
@@ -30,7 +30,9 @@ the browser holds a Supabase publishable key (so PostgREST is directly
 reachable), and a Next.js server action runs before any page guard.
 
 Measured, not asserted: a direct-Data-API probe against two disposable tenants
-scored **26 failures out of 67 checks before, 0 out of 108 after**.
+scored **26 failures out of 67 checks before, 0 out of 115 after**.
+(The `108/0` figure previously cited here is WITHDRAWN: round 5 found four of
+those checks passed a literal `true` and could not fail. See HANDOFF round 5.)
 Unauthenticated, an attacker could read every profile, student record, enrolment
 and syllabus; rewrite any profile; create a profile with `role=admin`; fabricate
 or delete counseling availability; and deliver a notification to any user. Four
@@ -106,10 +108,13 @@ guard immediately caught two demo-era RPCs `anon` could still call, and verifyin
 the notice-DELETE property turned up `authenticated` holding TRUNCATE — which
 RLS cannot restrain — on 31 of 54 tables.
 
-## Verified this stage (round-4 numbers, all freshly run)
+## Verified this stage (round-5 numbers, all freshly run)
 
-- Live direct-Data-API probe **108 checks / 0 failed**, residue clean
-- Live durable-audit probe **12 / 0**; live notification RLS **10 / 0**
+- Live direct-Data-API probe **115 checks / 0 failed**, residue clean — and
+  every one of the 115 can now fail, which was not true of the withdrawn 108
+- Live durable-audit probe **12 / 0**; live notification RLS **12 / 0**
+- Whole repository suite **594 tests, 588 pass, 3 fail, 3 skipped**
+- Stage 5 / 6 / 7 / 8 regressions: 19/19 · 15/15 · 32/32 · 15/15
 - Whole repository suite: see the final battery below
 - The 3 failures are the **pre-existing KI-002 trio**, confirmed by running the
   same two untouched test files on `origin/main` in a clean worktree — the same
@@ -129,13 +134,14 @@ RLS cannot restrain — on 31 of 54 tables.
 
 ## NOT verified / BLOCKED
 
-- **Rendered browser QA — UNVERIFIED — the browser preview tool was blocked by
-  the session's permission classifier, so no page was rendered.** The
-  user-visible changes from rounds 3 and 4 (`/support` sessionless refusal,
-  `/admin` stale banner, `/professor` assistant workspace, the notification
-  bell, `/reviews` refusing a non-student, and per-person notification read
-  state) have build, typecheck and unit-guard coverage but no rendered
-  evidence. Required before merge.
+- **Rendered browser QA — PASS for four flows, run in round 5.** The assistant
+  `/professor` workspace (the one round 4 could not check, and the one that
+  turned out to be broken), the professor workspace unchanged, student
+  counseling booking after the INSERT revoke, and notification mark-read after
+  the column-level UPDATE restriction. Details and evidence in HANDOFF round 5.
+- **Two flows remain UNVERIFIED in a browser — roadmap feedback and professor
+  course settings.** Both are covered by unit tests that drive the REAL actions
+  against fakes recording every write, but neither was exercised in a browser.
 - **Realtime delivery — UNVERIFIED — requires a real socket and a real INSERT.**
   Both client-side defects are fixed and RLS was not weakened, but the channel
   is off by default and end-to-end delivery was never exercised.

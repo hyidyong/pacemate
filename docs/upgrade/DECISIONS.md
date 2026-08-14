@@ -817,6 +817,139 @@ Consequences: `npm run build && node scripts/check-bundle-budgets.mjs` is the
 bundle gate; budgets must be revised deliberately in the same commit as an
 intentional size change.
 
+## D-035 — When an invariant cannot be expressed as a policy, move the boundary; do not duplicate it
+
+Status: Accepted (Stage 9, Codex review round 5, 2026-08-14)
+
+Context: `authenticated` held INSERT on `counseling_requests`, and the INSERT
+policy could only check the caller's identity and the professor's tenant. Stage
+5's real invariants — the slot must be canonical, inside the professor's
+availability, of that professor's slot length, within the booking horizon, and
+`status` must start pending — lived in the server action. Five direct-INSERT
+bypasses were confirmed live, all persisting with HTTP 201.
+
+The obvious response is to grow the policy. It was rejected.
+
+Decision: when an invariant cannot be expressed in SQL without reimplementing
+application logic, revoke the client's direct write and let the authorized
+server path be the only way in.
+
+Reason: encoding the slot engine as an RLS predicate means TWO definitions of
+"a valid slot" — one in TypeScript, one in SQL — that must be kept in step
+forever by people who will not remember. Two definitions that can disagree is a
+worse failure mode than the one being fixed, because the disagreement is silent.
+A single authoritative boundary is checkable; two are only hopeful.
+
+Consequences: reads still go through the caller's session, so RLS still bounds
+what a student can SEE — this decision is about writes only. Database
+constraints keep doing what they are good at: the EXCLUDE constraint still
+arbitrates concurrent bookings, because the service role does not bypass
+constraints. And the probe now asserts the five invariants against the Data API
+directly, so a future re-grant fails a security check rather than a unit test.
+
+The same shape already applied to notifications and roadmap revisions in earlier
+rounds. This makes it explicit.
+
+## D-036 — A test that cannot fail is worse than no test
+
+Status: Accepted (Stage 9, Codex review round 5, 2026-08-14)
+
+Context: the security probe's anon-read loop passed the literal `true` as the
+verdict for every table marked "public by design":
+
+```js
+check(`anon-read:${table}`, `anon MAY read ${table}`, true, …)
+```
+
+Four checks could only pass. One recorded PASS against an HTTP 401. They were
+counted in a headline figure — `108/0` — that was then cited across eight
+documents as evidence the platform was safe.
+
+It also hid a second defect. Three of those four entries described tables as
+anon-readable that Stage 9 had deliberately closed. The probe's own metadata
+contradicted the shipped design, and nothing failed, because the branch that
+read the metadata could not fail.
+
+Decision: an assertion whose verdict is a constant `true` is forbidden, and a
+guard scans every probe for the pattern. An allow-path check must prove access —
+a success status AND a specific row the run itself created. A deny-path check
+must have a positive sentinel proving the resource was reachable to begin with.
+
+Reason: a passing test is a claim. A test that cannot fail makes the claim
+without checking it, and does so invisibly, because green is the expected
+colour. The damage is not the missing coverage — it is the confidence.
+
+Consequences: the literal `false` IS allowed, and appears in the
+"read-back FAILED — cannot verify" branches. A constant that can only fail is
+honest: it reports that verification did not happen. A constant that can only
+pass is the bug. The guard flags only `true`, and says why.
+
+Every figure derived from the old loop is withdrawn rather than adjusted. The
+replacement is 115 checks, 0 failed, all of which can fail.
+
+## D-037 — Cleanup ownership must be provable, not probable
+
+Status: Accepted (Stage 9, Codex review round 5, 2026-08-14)
+
+Context: every probe run shared one fixed marker string and swept with
+`like.*marker*` — a SUBSTRING match. A genuine post, FAQ or course review whose
+text merely CONTAINED the phrase was a deletion candidate for any run, against
+the live production database. Two concurrent runs could not be told apart, so
+one run's recovery sweep would delete the other's live fixtures mid-flight.
+
+Decision: every execution mints a 128-bit random marker, every fixture carries
+it, and ownership is matched by PREFIX. Auth enumeration is `startsWith`, not
+`includes`, and refuses a prefix shorter than 16 characters. The operator sweep
+must be told what to target — `--run <marker>` for one execution or `--family`
+for the shared prefix — and refuses to guess.
+
+Reason: a destructive operation against a live database should be able to
+demonstrate that each row it deletes belongs to it. "Probably ours" is not a
+property a sweep can have while remaining safe; "created by this execution" is.
+Every run prints its own recovery command on startup, so an interrupted run
+leaves the operator with the exact token rather than a category.
+
+Consequences: recovering from a run whose marker nobody recorded now needs
+`--family`, which is deliberate friction on the only path that can touch more
+than one run's rows. A test seeds bystander rows containing the legacy marker,
+the family prefix and a DIFFERENT run's full marker, and asserts all three
+survive a complete run.
+
+## D-038 — An enforced invariant beats a configured default
+
+Status: Accepted (Stage 9, Codex review round 5, 2026-08-14)
+
+Context: PostgreSQL's built-in default for a FUNCTION is EXECUTE TO PUBLIC, and
+every role inherits PUBLIC. Round 4 responded with `ALTER DEFAULT PRIVILEGES …
+REVOKE EXECUTE ON FUNCTIONS FROM anon`. It had no effect: anon's access came
+through PUBLIC, not through an anon grant, so there was nothing to revoke.
+
+Worse, a default ACL is keyed on the role that CREATES the object, and
+`pg_default_acl` holds separate rows here for `postgres` and `supabase_admin`.
+The migration connection is not a member of the latter, so one creation path
+could not be configured at all. After setting the postgres default correctly, a
+newly created function STILL arrived with `=X/postgres`.
+
+Decision: enforce the invariant with an event trigger on `ddl_command_end` that
+revokes EXECUTE from PUBLIC and anon after every CREATE/ALTER FUNCTION in the
+schemas this repository owns. Default privileges are still set where we have
+membership, as defence in depth.
+
+Reason: a default is advice to whoever creates the object. An event trigger is a
+rule about the object. When you cannot enumerate every creator — and here we
+demonstrably cannot — only the second is a control. It also fails in the safe
+direction: a function that needs anon EXECUTE requires an explicit, reviewable
+grant afterwards, rather than getting it by omission.
+
+Consequences: verification could not live in the installing migration, because
+an event trigger created in a transaction does not fire for DDL later in that
+same transaction; nor could the probe functions be created inside a `DO` block,
+where the trigger also did not fire. `20260814230000` therefore creates them as
+top-level statements in its own transaction and asks the database who may
+execute them. The snapshot captures `pg_default_acl` and `pg_event_trigger`, and
+one guard deliberately RECORDS that the supabase_admin default still grants
+anon — so nobody removes the trigger believing the defaults are sufficient.
+
 ## D-033 — A shared row cannot carry per-person state
 
 Status: Accepted (Stage 9, Codex review round 4, 2026-08-14)

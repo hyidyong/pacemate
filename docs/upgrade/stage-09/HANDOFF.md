@@ -2,18 +2,161 @@
 
 ## Status
 
-On `upgrade/stage-9` after **four** external Codex security review rounds, each
+On `upgrade/stage-9` after **five** external Codex security review rounds, each
 of which returned **NOT SAFE TO MERGE**. Base `main` @ `fd44172` (Stage 8 PR #42
 merged 2026-08-12, verified). Not merged — that is the human's call. Stage 10
 not started. **The next action is another independent Codex security review.**
 
-Read the **round-4** section first (immediately below): it corrects claims made
-in rounds 1–3, which are kept as the historical record rather than edited into
+Read the **round-5** section first (immediately below): it corrects claims made
+in rounds 1–4, which are kept as the historical record rather than edited into
 agreement.
+
+**The `108/0` probe figure cited in the round-4 section is WITHDRAWN.** Round 5
+found that four of those checks could only pass. The corrected figure is
+115 checks, 0 failed.
 
 Status markers used in this document mean exactly one of:
 `PASS` (with evidence) · `UNVERIFIED — <exact missing evidence>` ·
 `BLOCKED — <exact external dependency>` · `DEFERRED — <exact stage/reason>`.
+
+---
+
+## Codex review round 5 (2026-08-14)
+
+Eleven findings. Every one was verified against the code, the migrations and
+live metadata **before** any change, and **every one was confirmed**. Two were
+wider than reported, and verifying three of them turned up defects nobody had
+reported at all — including one in the previous round's own fix.
+
+| # | Finding | Verdict | Status |
+|---|---|---|---|
+| F1 | Stage 5 booking invariants bypassable via direct INSERT | **CONFIRMED — 5 of 5 bypasses persisted** | CLOSED |
+| F2 | Professor course settings trust a caller-supplied courseId | **CONFIRMED** | CLOSED |
+| F3 | Roadmap feedback accepts any authenticated role | **CONFIRMED** | CLOSED |
+| F4 | Recipients hold table-wide UPDATE on notifications | **CONFIRMED — 7 of 8 columns rewritable** | CLOSED |
+| F5 | Cleanup can race a late commit | **CONFIRMED** | CLOSED |
+| F6 | Sweep ownership is a shared marker, substring-matched | **CONFIRMED** | CLOSED |
+| F7 | A sweep failure still exits 0 | **CONFIRMED** | CLOSED |
+| F8 | The anon allow-path assertion cannot fail | **CONFIRMED — and it hid a second defect** | CLOSED |
+| F9 | Future functions inherit PUBLIC EXECUTE | **CONFIRMED, and round 4's fix was ineffective** | CLOSED |
+| F10 | Assistant `/professor` workspace is broken | **CONFIRMED** | CLOSED, rendered-QA verified |
+| F11 | `ensure-demo-operator-auth.mjs` does not parse | **CONFIRMED — and a second defect beside it** | CLOSED |
+
+### THE 108/0 FIGURE IS WITHDRAWN
+
+F8 is the reason. The anon-read loop's ALLOW branch passed the literal `true` as
+its verdict:
+
+```js
+check(`anon-read:${table}`, `anon MAY read ${table}`, true, …)
+```
+
+Four checks could only pass. `anon-read:course_reviews` was recorded PASS while
+the response was **401**. Any total that included them was not evidence, so
+every prior citation of `108/0` in these documents is retracted.
+
+It concealed a second defect. Those four entries claimed `course_reviews`,
+`faqs` and `notices` were PUBLIC-BY-DESIGN. Stage 9 deliberately closed the anon
+surface to one table and the live grant set has said `schools` only since
+`20260814010000`. The probe's own metadata contradicted the shipped design for
+three tables, and nothing failed — because the branch reading that metadata
+could not fail.
+
+**Corrected figure, freshly run: 115 checks, 0 failed** — and all 115 can now
+fail. The allow path requires HTTP 200 *and* a positive sentinel row this run
+created; "200 with zero rows" is not proof for a table that might be empty.
+
+### The two that were wider than reported
+
+**F9 — round 4's fix did nothing.** `20260814190000` revoked anon's EXECUTE and
+set `alter default privileges … revoke execute on functions from anon`. But a
+new function's ACL read `{=X/postgres, …}` — the empty grantee is PUBLIC, and
+anon's access came from there, so revoking from anon removed nothing. Worse,
+default privileges are keyed on the CREATING role, and `pg_default_acl` holds
+separate rows here for `postgres` and `supabase_admin`; the migration connection
+is not a member of the latter. The invariant is now ENFORCED by an event trigger
+on `ddl_command_end` rather than configured, because that does not care who
+creates the function.
+
+**F11 — a second defect beside the reported one.** The unparseable string was
+real. Fixing it exposed that connection details were validated FIRST and by
+`throw`, so the credential refusal below was unreachable without live
+credentials — the fail-closed path could not be observed at all.
+
+### Defects found while fixing, not reported by anyone
+
+- **F1's own test.** The first draft reused one base time for all five booking
+  attempts, and the EXCLUDE constraint rejected two of them because they
+  collided with a row a PREVIOUS attempt had just created. Those two read
+  400/"protected" while nothing had authorized anything. Disjoint days showed
+  all five succeeding. Same trap as round 3's F2.
+- **F6's rollout.** `assertScopedFilter` recognised only the legacy marker, so
+  every run-scoped delete was refused as unscoped; and the `%` wildcard was
+  interpolated raw into a query string, where it begins a percent-escape —
+  PostgREST answered 500 on every residue read. F7's new fatal exit caught both
+  by failing the run instead of passing it.
+- **F9's verification.** An event trigger created in a transaction does not fire
+  for DDL later in that transaction, and did not fire for DDL inside a
+  `DO $$ … $$` body either. A first attempt also used `acl LIKE '%=X/%'`, which
+  matches `postgres=X/postgres` — the owner's own grant — and failed a migration
+  against a function that was already correct. A false alarm about a working
+  control is the mirror image of a false pass.
+
+### Round-5 migrations
+
+`20260814200000` counseling write boundary · `20260814210000` notification
+UPDATE(is_read) only · `20260814220000` future-function EXECUTE event trigger ·
+`20260814230000` empirical proof of the above.
+
+### Round-5 verification
+
+| Check | Result |
+|---|---|
+| Live direct Data API probe | **PASS — 115 checks, 0 failed**, residue clean |
+| Live durable audit probe | **PASS — 12 checks, 0 failed** |
+| Live notification RLS | **PASS — 12 checks, 0 failed** (was 10; two are the new column checks) |
+| Security snapshot vs live DB | **PASS — matches** |
+| Whole repository suite | **594 tests, 588 pass, 3 fail (KI-002), 3 skipped** |
+| Stage 5 / 6 / 7 / 8 regressions | 19/19 · 15/15 · 32/32 · 15/15 |
+| `tsc` / `lint` / `build` | exit 0 / 0 errors / exit 0 |
+| Credential scan | 202 shipped files; no secret VALUE, no client-bundle marker |
+| `git diff --check` | clean |
+| **Rendered browser QA** | **PASS for four flows — see below** |
+
+### Rendered QA — no longer UNVERIFIED
+
+Rounds 3 and 4 recorded this as UNVERIFIED because the preview tool was blocked.
+It ran this round.
+
+| Flow | Result |
+|---|---|
+| assistant `/professor` | **PASS** — 조교 워크스페이스 renders with 상담 신청 현황 (전체 3건 · 대기 1건) and 교육과정 수정 요청 (3건); no "교수 역할로 로그인" anywhere; 0 console errors |
+| professor `/professor` | **PASS** — unchanged: profile, calendar, availability, teaching slots |
+| student counseling booking | **PASS** — "상담 신청을 보냈습니다." after F1 revoked authenticated INSERT |
+| notification mark-read | **PASS** — clicking an unread card took 김학생 from 5 unread to 4 in the database |
+
+**QA residue:** the booking created one real row; the UI cancel did not take, so
+it was removed by its exact id and verified — 0 rows remain from that window.
+
+**Still not rendered, stated rather than implied:** roadmap feedback (student
+allowed / staff refused) and professor course settings (own course allowed /
+foreign refused). Both are covered by `privileged-action-authorization.test.mjs`
+driving the REAL actions against fakes that record every write, but neither was
+exercised in a browser.
+
+### Claims from earlier rounds that round 5 invalidated
+
+1. **`108/0` — withdrawn.** See above. Replaced by 115/0.
+2. *"anon holds one table privilege and no function EXECUTE"* — true of
+   functions that EXISTED. A function created afterwards was anon-executable in
+   both schemas until `20260814220000`.
+3. *"Counseling mutations are server-only"* (round 1, on UPDATE/DELETE) — true
+   as written, but INSERT was never in scope and was wide open to the Data API.
+4. *"Round 4 fixed the probe's cleanup guarantees"* — the wrapper's rejection was
+   still being treated as the operation ending, and the sweep's failure was
+   still being dropped from the exit code.
+5. *"The 3 skips are POSIX signal delivery on Windows"* — unchanged and still
+   accurate; the handler itself remains proven by the IPC-cancel test.
 
 ---
 

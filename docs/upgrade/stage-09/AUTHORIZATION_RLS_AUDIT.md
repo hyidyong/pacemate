@@ -513,3 +513,98 @@ One detail worth keeping: the notice-delete checks returned **HTTP 204** while
 the row survived. PostgREST reports a zero-row DELETE as success, so the status
 code said "deleted". The verdict comes from a service-role read-back, which is
 the only reason those checks are meaningful.
+
+
+---
+
+## Codex security review round 5 (2026-08-14) — authorization findings
+
+**First, a retraction.** The `108 checks, 0 failed` figure recorded in the
+round-4 section above is WITHDRAWN. Four of those checks — the anon-read ALLOW
+branch — passed a literal `true` and could not fail; one of them recorded PASS
+against an HTTP 401. The corrected, freshly-run figure is **115 checks, 0
+failed**, and all 115 can fail.
+
+### F1 — Stage 5's booking invariants were not a database boundary
+
+`authenticated` held table INSERT on `counseling_requests`, and the INSERT
+policy could only ask two questions: is `student_id` the caller, and is
+`professor_id` a professor in the caller's school. Everything Stage 5 actually
+enforces lived in `createCounselingRequest()`: the slot must come from
+`getAvailableCounselingSlots(tenant)`, which is what makes it canonical, inside
+the professor's availability, of that professor's slot length and within the
+booking horizon — and `status` is a server constant.
+
+Measured live, all five persisted with HTTP 201: a 10:07 non-slot time, an
+eight-hour duration, 03:00 outside availability, a booking 900 days out, and
+`status = 'approved'` set by the student.
+
+**A note on the measurement, because the first attempt was wrong.** An earlier
+draft reused one base time for every attempt, and the EXCLUDE constraint
+`counseling_requests_no_active_overlap` rejected two of them — because they
+collided with a row a PREVIOUS attempt in the same loop had just created. Those
+two returned 400 and read as "protected" while nothing had authorized anything.
+Disjoint days showed all five succeeding. **A denial produced by an unrelated
+constraint is not an authorization control**, which is the same trap round 3
+caught in F2.
+
+**The boundary moved rather than being duplicated.** Those invariants are not
+expressible as an RLS predicate without reimplementing the slot engine in SQL
+and keeping two definitions of "a valid slot" in step forever. `20260814200000`
+revokes INSERT from `anon` and `authenticated` and drops the now-unreachable
+policy; the action performs its INSERT under the service role after its existing
+validation. Reads still go through the caller's session, so RLS still decides
+what a student sees, and the EXCLUDE constraint still arbitrates concurrency.
+
+### F2 / F3 — a caller-supplied id is not authorization
+
+`removeCourseAssignment` checked `role === "professor"` and then handed the
+caller's own `courseId` to a service-role write. `submitRoadmapFeedback`
+required a session and checked the course's tenant but never the ROLE, so staff
+could file a report stored and displayed as "학생 익명 제보".
+
+Two conditions must BOTH hold before a privileged course write, and neither
+implies the other: the course is in the caller's tenant, AND the caller is
+assigned to it. Assignment alone is insufficient because `course_professors` has
+no composite foreign key, so a cross-tenant assignment row is structurally
+creatable (KI-022). One helper now answers both for all three privileged course
+actions, and every write uses the VERIFIED id.
+
+### F4 — a recipient may change read state, and nothing else
+
+Round 4 fixed WHOSE notification row is writable. It did not touch WHICH
+COLUMNS, and `authenticated` held table-wide UPDATE. Measured: a recipient
+rewrote seven of eight columns on their own row — `title`, `body`,
+`target_href`, `recipient_role`, `school_id`, `category`, `created_at`.
+`target_href` is followed by `markNotificationReadAndGo`, so a recipient could
+repoint their own notification anywhere in the app.
+
+`recipient_id` was the one that held, and only incidentally: the policy's WITH
+CHECK rejects reassigning the row away from yourself. **A column protected as a
+side effect of a row predicate is not a column that is protected.**
+
+`20260814210000` revokes table UPDATE and grants `UPDATE (is_read)`. Column
+privileges say WHAT may be written; policies say WHICH ROW. Neither substitutes
+for the other, and the snapshot now asserts both.
+
+Sibling audit: of the 25 tables `authenticated` can UPDATE, 11 have no UPDATE
+policy at all (inert) and 14 are reachable — every one of them a "users manage
+own X" surface the user authors end to end. `user_notifications` was the only
+table whose content is server-authored and merely acknowledged.
+
+### Updated authorization matrix rows
+
+| Resource | Change |
+|---|---|
+| `counseling_requests` | **no client INSERT.** Creation is the server action under the service role, after full Stage 5 validation. Reads and the cancel CAS are unchanged |
+| `user_notifications` | `authenticated` UPDATE is **column-scoped to `is_read`**; the row is still bounded by `recipient_id = current_profile_id()` |
+| every function | a function created TOMORROW is not anon-executable, enforced by an event trigger rather than by default privileges — see HANDOFF round 5, F9 |
+
+### Round-5 live verification
+
+| Probe | Result |
+|---|---|
+| `rls-probe.mjs` | **PASS — 115 checks, 0 failed**, residue clean |
+| `audit-trail-probe.mjs` | **PASS — 12 checks, 0 failed** |
+| `verify-notification-rls.mjs` | **PASS — 12 checks, 0 failed** |
+| `dump-security-snapshot.mjs --check` | **PASS — matches the live database** |

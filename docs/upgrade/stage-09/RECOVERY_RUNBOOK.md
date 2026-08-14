@@ -194,11 +194,21 @@ killed that way leaves marked fixtures behind. The next run's automatic marker
 sweep will find them, and the independent operator-run recovery is:
 
 ```bash
-node scripts/security/rls-probe.mjs --sweep
+node scripts/security/rls-probe.mjs --sweep --run <marker-from-the-killed-run>
 ```
 
-It removes every marked row and Auth user, then re-verifies, and exits non-zero
-if anything remains. Run it before trusting any subsequent probe result.
+Codex round 5, F6: the sweep no longer accepts "just clean up whatever looks
+like a probe". Ownership used to be one fixed marker matched by SUBSTRING, so a
+genuine post, FAQ or review whose text merely CONTAINED that phrase was a
+deletion candidate — and two concurrent runs could delete each other's live
+fixtures. Every run now mints a 128-bit token and matching is by PREFIX.
+
+`--run <marker>` targets exactly one execution. `--family` accepts the shared
+prefix and is the only path that can touch more than one run's rows; use it only
+when no probe is running. Without one of the two the sweep refuses and exits 1.
+
+It removes the matching rows and Auth users, re-verifies, and exits non-zero if
+anything remains. Run it before trusting any subsequent probe result.
 
 **Audit test events are permanent and are not residue.** `service_role` holds
 only `INSERT` and `SELECT` on `security_events`, so `audit-trail-probe.mjs`
@@ -213,10 +223,19 @@ variables, by design — the guard runs before the first write, not after:
 PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref> node scripts/security/rls-probe.mjs
 ```
 
-108 checks across anon, cross-tenant and legitimate-path cases. It provisions
+115 checks across anon, cross-tenant and legitimate-path cases. It provisions
 and removes its own tenants and ends with a THREE-PHASE teardown: ledger
 cleanup, then an automatic marker sweep, then residue verification. The run is
-clean only when all three agree.
+clean only when all three agree — and since round 5's F7 the runner's EXIT CODE
+includes the sweep result, which teardown had been computing and the runner
+discarding.
+
+(An earlier `108/0` figure is withdrawn: four of those checks submitted a
+literal `true` as their verdict and could not fail. All 115 can.)
+
+**Every run prints its own marker and its recovery command on startup**, e.g.
+`node scripts/security/rls-probe.mjs --sweep --run pacemate-probe-<token>`.
+Keep that line if a run is interrupted — the sweep now refuses to guess.
 
 **Why the sweep is automatic (Codex round 4, 4C).** A create request that times
 out may still have committed: the row exists and the client never learned its

@@ -231,6 +231,63 @@ rather than by trusting the report:**
   course. A product decision, recorded here rather than smuggled into a
   security fix.
 
+### Codex security review round 5 (2026-08-14) — status changes
+
+Eleven findings. Every one was verified against the code, the migrations and
+live metadata before any change, and every one was confirmed. All are closed.
+
+**RETRACTION — the `108/0` probe figure is WITHDRAWN.** The anon-read ALLOW
+branch passed a literal `true` as its verdict, so four checks could only pass;
+one recorded PASS against an HTTP 401. Any total including them was not
+evidence. Corrected and freshly run: **115 checks, 0 failed**, all of which can
+now fail. Every document that cited `108/0` has been updated.
+
+That defect concealed a second: three of the four entries described
+`course_reviews`, `faqs` and `notices` as anon-readable, which Stage 9 closed in
+`20260814010000`. The probe's own metadata contradicted the shipped design and
+nothing failed, because the branch reading it could not fail.
+
+**Round 4's F9 fix did not work.** `alter default privileges … revoke execute
+from anon` removed nothing, because anon's EXECUTE came through PUBLIC. Default
+privileges are also keyed on the CREATING role, and this database has more than
+one. Now enforced by an event trigger instead (D-038).
+
+**Defects found while fixing, that nobody reported:**
+
+- The first draft of the F1 booking test reused one base time, so the EXCLUDE
+  constraint rejected two attempts that had collided with rows the same loop had
+  just created — reading as "protected" while nothing had authorized anything.
+- Rolling out run-scoped markers broke `assertScopedFilter` (it recognised only
+  the legacy string) and produced HTTP 500 on every residue read (a bare `%` in
+  a query string is a malformed percent-escape). F7's new fatal exit caught both
+  by failing the run rather than passing it.
+- A `%=X/%` ACL check matches `postgres=X/postgres`, the owner's own grant, and
+  failed a migration against a function that was already correct.
+
+**Newly recorded this round:**
+
+- **The `--sweep` recovery command now requires a target.** `--run <marker>` for
+  one execution, `--family` for the shared prefix. Every run prints its own
+  recovery command on startup; keep that line if a run is interrupted, because
+  the sweep no longer guesses.
+- **Two rendered-QA flows remain UNVERIFIED**: roadmap feedback (student allowed
+  / staff refused) and professor course settings (own course allowed / foreign
+  refused). Both are covered by `privileged-action-authorization.test.mjs`
+  driving the REAL actions against fakes that record every write, but neither
+  was exercised in a browser. The four flows that WERE rendered are listed in
+  HANDOFF round 5.
+- **11 inert UPDATE grants remain.** `authenticated` holds table UPDATE on 11
+  tables that have no UPDATE policy at all, so RLS denies every row. Left alone
+  deliberately: revoking changes no behaviour today and could silently break a
+  future intended policy. Recorded rather than tidied.
+- **`supabase_admin`'s default ACL still grants anon EXECUTE on new functions**
+  in `public`. It cannot be changed from a migration (the connection is not a
+  member of that role). The event trigger is what makes it harmless, and a
+  snapshot guard records the dependency so the trigger is not removed on the
+  belief that defaults suffice.
+- **Course reviews and roadmap feedback have no enrolment requirement.**
+  Deliberately not invented in either round; a product decision.
+
 ### BLOCKED on something outside the repository
 
 - **There is no verified recovery point of any kind.** `supabase backups list`
