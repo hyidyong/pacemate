@@ -637,7 +637,10 @@ async function main() {
         table: "study_roadmaps",
         findColumn: "title",
         findValue: tag("st-roadmap"),
-        row: { student_id: A.profile.id, course_id: A.course.id, title: tag("st-roadmap") },
+        // The private-read sentinel already occupies (student, primary course),
+        // so use the second same-tenant course to prove the legitimate INSERT
+        // path without tripping the unrelated unique constraint.
+        row: { student_id: A.profile.id, course_id: A.courseAlt.id, title: tag("st-roadmap") },
       },
       {
         id: "allow:A-post-own-tenant",

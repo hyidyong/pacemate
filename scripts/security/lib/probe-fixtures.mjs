@@ -542,7 +542,6 @@ async function provisionReadSentinels(ledger, tenant, runId, runMarker) {
   const notice = await createRow(ledger, "notices", {
     title: `${runMarker} private notice`,
     content: `${runMarker} private notice body`,
-    course_id: tenant.course.id,
     created_by: tenant.professorProfile.id,
   }, "read sentinel notice");
 
