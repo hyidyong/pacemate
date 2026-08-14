@@ -26,6 +26,7 @@ import { createAbortScope, createRoleClient } from "./lib/probe-http.mjs";
 import { createProbeLifecycle, EXIT } from "./lib/probe-lifecycle.mjs";
 import { ProbeLedger, sweepOrphans, teardown, verifyNoResidue } from "./lib/probe-ledger.mjs";
 import { PROBE_PASSWORD, provisionProbeTenants } from "./lib/probe-fixtures.mjs";
+import { evaluateReadIsolation } from "./lib/probe-read-semantics.mjs";
 
 // Every table the app can reach. `expectAnonRead` records the DESIGN intent, so
 // the probe reports "anon can read a table it should not" rather than merely
@@ -207,60 +208,51 @@ async function main() {
 
     // ---------------------------------------------------------------- anon read
     //
-    // The positive sentinel for the one intended-public table: the probe's OWN
-    // disposable school. Using a row this run created means the allow check
-    // cannot pass on a coincidence, and cannot fail because production happens
-    // to be empty.
-    const anonSentinelByTable = { schools: A.school.id };
-
+    // Every table gets a row owned by this run. Service-role readback proves
+    // that exact row exists before anon is asked for the same id; an empty
+    // table, failed verifier or generic transport error therefore cannot be
+    // mistaken for RLS protection.
     for (const [table, anonReadIntended, why] of TABLES) {
-      const anonSentinelId = anonSentinelByTable[table];
-      const { status, body } = await asAnon(`${table}?select=*&limit=3`);
-      const count = rowCount(body);
-      const readable = status === 200 && (count ?? 0) > 0;
-      const total = await rest
-        .select(table, "select=id&limit=1")
-        .then((rows) => rows.length)
-        .catch(() => 0);
+      const anonSentinelId = fixtures.readSentinels[table];
+      let authorizedBody = null;
+      let authorizedError = null;
+      try {
+        authorizedBody = await rest.select(
+          table,
+          `select=id&id=eq.${encodeURIComponent(anonSentinelId ?? "")}`,
+        );
+      } catch (error) {
+        authorizedError = error;
+      }
 
-      if (anonReadIntended) {
-        // Codex round 5, F8. This branch used to submit the LITERAL `true` as
-        // the verdict, so an intended-public table returning 401 was recorded
-        // as PASS — which is exactly what `course_reviews` did. An allow-path
-        // check that cannot fail is not evidence, and it invalidated the
-        // headline count it contributed to.
-        //
-        // An allow path must now PROVE access: HTTP 200, and a specific row the
-        // probe itself created must be visible. "200 with zero rows" is not
-        // proof for a table that might simply be empty.
-        const sentinel = await asAnon(
+      let anonymous = { status: null, body: null };
+      let unauthorizedError = null;
+      try {
+        anonymous = await asAnon(
           `${table}?select=id&id=eq.${encodeURIComponent(anonSentinelId ?? "")}`,
         );
-        const sentinelVisible =
-          sentinel.status === 200 && Array.isArray(sentinel.body) && sentinel.body.length === 1;
-        check(
-          `anon-read:${table}`,
-          `anon MAY read ${table} (${why}) — proven with a positive sentinel`,
-          status === 200 && sentinelVisible,
-          `status ${status}, ${count ?? "?"} row(s); sentinel ${sentinel.status}, ${
-            Array.isArray(sentinel.body) ? sentinel.body.length : "n/a"
-          } row(s)`,
-        );
-      } else if (total === 0) {
-        check(
-          `anon-read:${table}`,
-          `anon must NOT read ${table} (${why})`,
-          !readable,
-          `status ${status}, ${count ?? "?"} row(s) — table is EMPTY, absence of rows is not proof of denial`,
-        );
-      } else {
-        check(
-          `anon-read:${table}`,
-          `anon must NOT read ${table} (${why})`,
-          !readable,
-          `status ${status}, ${count ?? "?"} row(s) visible with the publishable key alone`,
-        );
+      } catch (error) {
+        unauthorizedError = error;
       }
+
+      const verdict = evaluateReadIsolation({
+        intendedPublic: anonReadIntended,
+        sentinelId: anonSentinelId,
+        authorizedStatus: authorizedError ? null : 200,
+        authorizedBody,
+        authorizedError,
+        unauthorizedStatus: anonymous.status,
+        unauthorizedBody: anonymous.body,
+        unauthorizedError,
+      });
+      check(
+        `anon-read:${table}`,
+        anonReadIntended
+          ? `anon MAY read ${table} (${why}) — exact controlled sentinel required`
+          : `anon must NOT read ${table} (${why}) — authorized sentinel proven first`,
+        verdict.pass,
+        verdict.detail,
+      );
     }
 
     // --------------------------------------------------------------- anon write

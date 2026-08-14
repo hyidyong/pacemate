@@ -54,6 +54,9 @@ export const MARKED_COLUMNS = [
   ["counseling_requests", "topic"],
   ["student_courses", "source_text"],
   ["student_mission_progress", "actual_progress_feedback"],
+  ["academic_terms", "semester_label"],
+  ["course_offerings", "section_label"],
+  ["student_weekly_progress", "private_note"],
   ["user_notifications", "title"],
   // These four are written by the cross-tenant WRITE probes rather than by
   // provisioning, and they were missing from this list. That mattered: their
@@ -67,6 +70,16 @@ export const MARKED_COLUMNS = [
   ["course_reviews", "content"],
   ["roadmap_revision_requests", "title"],
   ["faqs", "question"],
+  ["chat_sessions", "title"],
+  ["chat_messages", "content"],
+  ["escalations", "question"],
+  ["comments", "content"],
+  ["reports", "reason"],
+  ["professor_admin_tasks", "title"],
+  ["professor_question_auto_reply_rules", "pattern"],
+  ["syllabi", "source_name"],
+  ["professor_teaching_slots", "period_label"],
+  ["notices", "title"],
 ];
 
 /** [table, column, predicate] for one specific execution. */
