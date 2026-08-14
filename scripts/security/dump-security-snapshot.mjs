@@ -82,6 +82,33 @@ select json_build_object(
     where n.nspname in ('public', 'app_private')
       and p.proname not like 'pgp_%' and p.proname not like 'uuid_%'
   ),
+  -- Codex round 5, F9: the DEFAULT privileges that decide what a function
+  -- created TOMORROW gets. Without this the snapshot could only describe
+  -- objects that already exist, and the whole finding was about the ones that
+  -- do not yet. Also captures the event trigger that enforces the invariant
+  -- regardless of which role creates the function.
+  'default_acls', (
+    select coalesce(json_agg(json_build_object(
+      'owner', pg_get_userbyid(d.defaclrole),
+      'schema', coalesce(n.nspname, '(all)'),
+      'object_type', case d.defaclobjtype
+                       when 'r' then 'table' when 'f' then 'function'
+                       when 'S' then 'sequence' when 'T' then 'type'
+                       else d.defaclobjtype::text end,
+      'acl', d.defaclacl::text,
+      'grants_public', d.defaclacl::text ~ '(^\{|,)='
+    ) order by pg_get_userbyid(d.defaclrole), coalesce(n.nspname,''), d.defaclobjtype), '[]'::json)
+    from pg_default_acl d left join pg_namespace n on n.oid = d.defaclnamespace
+    where coalesce(n.nspname, '') in ('public', 'app_private', '')
+  ),
+  'event_triggers', (
+    select coalesce(json_agg(json_build_object(
+      'name', evtname, 'event', evtevent, 'enabled', evtenabled,
+      'tags', coalesce(array_to_string(evttags, ','), ''),
+      'function', p.proname
+    ) order by evtname), '[]'::json)
+    from pg_event_trigger e join pg_proc p on p.oid = e.evtfoid
+  ),
   'triggers', (
     select coalesce(json_agg(json_build_object(
       'table', c.relname, 'trigger', t.tgname,
@@ -193,5 +220,6 @@ console.log(
   `Wrote supabase/security-snapshot.json — ${live.tables.length} tables, ${live.policies.length} policies, ` +
     `${live.grants.length} grant rows, ${live.effective_privileges.length} effective-privilege rows, ` +
     `${live.public_privileges.length} PUBLIC rows, ${live.column_privileges.length} column-privilege rows, ` +
-    `${live.functions.length} functions (hashed), ${live.triggers.length} triggers (hashed).`,
+    `${live.functions.length} functions (hashed), ${live.triggers.length} triggers (hashed), ` +
+    `${live.default_acls.length} default-ACL rows, ${live.event_triggers.length} event trigger(s).`,
 );

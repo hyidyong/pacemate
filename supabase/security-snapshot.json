@@ -181,6 +181,50 @@
       "table": "user_notifications"
     }
   ],
+  "default_acls": [
+    {
+      "acl": "{postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}",
+      "grants_public": false,
+      "object_type": "sequence",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "grants_public": false,
+      "object_type": "function",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "acl": "{postgres=arwdDxtm/postgres,authenticated=arwdm/postgres,service_role=arwdDxtm/postgres}",
+      "grants_public": false,
+      "object_type": "table",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "acl": "{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}",
+      "grants_public": false,
+      "object_type": "sequence",
+      "owner": "supabase_admin",
+      "schema": "public"
+    },
+    {
+      "acl": "{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}",
+      "grants_public": false,
+      "object_type": "function",
+      "owner": "supabase_admin",
+      "schema": "public"
+    },
+    {
+      "acl": "{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}",
+      "grants_public": false,
+      "object_type": "table",
+      "owner": "supabase_admin",
+      "schema": "public"
+    }
+  ],
   "effective_privileges": [
     {
       "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
@@ -643,6 +687,57 @@
       "table": "user_notifications"
     }
   ],
+  "event_triggers": [
+    {
+      "enabled": "O",
+      "event": "sql_drop",
+      "function": "set_graphql_placeholder",
+      "name": "issue_graphql_placeholder",
+      "tags": "DROP EXTENSION"
+    },
+    {
+      "enabled": "O",
+      "event": "ddl_command_end",
+      "function": "grant_pg_cron_access",
+      "name": "issue_pg_cron_access",
+      "tags": "CREATE EXTENSION"
+    },
+    {
+      "enabled": "O",
+      "event": "ddl_command_end",
+      "function": "grant_pg_graphql_access",
+      "name": "issue_pg_graphql_access",
+      "tags": "CREATE EXTENSION"
+    },
+    {
+      "enabled": "O",
+      "event": "ddl_command_end",
+      "function": "grant_pg_net_access",
+      "name": "issue_pg_net_access",
+      "tags": "CREATE EXTENSION"
+    },
+    {
+      "enabled": "O",
+      "event": "ddl_command_end",
+      "function": "pgrst_ddl_watch",
+      "name": "pgrst_ddl_watch",
+      "tags": ""
+    },
+    {
+      "enabled": "O",
+      "event": "sql_drop",
+      "function": "pgrst_drop_watch",
+      "name": "pgrst_drop_watch",
+      "tags": ""
+    },
+    {
+      "enabled": "O",
+      "event": "ddl_command_end",
+      "function": "revoke_public_function_execute",
+      "name": "revoke_public_function_execute_trg",
+      "tags": "CREATE FUNCTION,ALTER FUNCTION"
+    }
+  ],
   "functions": [
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
@@ -767,6 +862,20 @@
       "execute_public": false,
       "execute_service_role": true,
       "name": "offering_in_current_tenant",
+      "schema": "app_private",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres}",
+      "acl_is_default": false,
+      "args": "",
+      "config": "search_path=\"\"",
+      "definition_md5": "a66a6f15846ddbae0bcd75fdf6725365",
+      "execute_anon": false,
+      "execute_authenticated": false,
+      "execute_public": false,
+      "execute_service_role": false,
+      "name": "revoke_public_function_execute",
       "schema": "app_private",
       "security_definer": true
     },

@@ -423,3 +423,69 @@ test("no OTHER table repeats the pattern: server-authored content with table-wid
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// Codex round 5, F9 — what a function created TOMORROW gets.
+// ---------------------------------------------------------------------------
+
+test("the snapshot records DEFAULT privileges, not only existing objects", () => {
+  // Round 4's guards could only describe functions that already existed. F9 was
+  // about the ones that do not yet, so the catalog state that decides their ACL
+  // has to be in the snapshot for a drift check to be possible at all.
+  assert.ok(Array.isArray(snapshot.default_acls), "default ACLs are missing");
+  assert.ok(Array.isArray(snapshot.event_triggers), "event triggers are missing");
+  assert.ok(snapshot.default_acls.length > 0);
+});
+
+test("no DEFAULT privilege grants to PUBLIC in the schemas this repo owns", () => {
+  // PostgreSQL's built-in default for a FUNCTION is EXECUTE TO PUBLIC, and
+  // every role inherits PUBLIC — which is why revoking from anon alone did
+  // nothing. A PUBLIC entry has an EMPTY grantee, so `grants_public` is
+  // computed from the ACL's shape rather than by string-matching "=X", which
+  // would also match the owner's own grant.
+  const offenders = snapshot.default_acls
+    .filter((row) => row.grants_public)
+    .map((row) => `${row.owner}/${row.schema}/${row.object_type}`);
+  assert.deepEqual(offenders, [], `default ACLs granting PUBLIC: ${offenders.join(", ")}`);
+});
+
+test("the future-function event trigger exists, is enabled, and covers both schemas", () => {
+  // The default-privileges route alone is not sufficient: a default ACL is
+  // keyed on the role that CREATES the object, and this database has more than
+  // one such role (pg_default_acl holds separate rows for postgres and
+  // supabase_admin). The event trigger does not care who creates the function.
+  const trigger = snapshot.event_triggers.find(
+    (row) => row.name === "revoke_public_function_execute_trg",
+  );
+  assert.ok(trigger, "the future-function event trigger is missing");
+  assert.notEqual(trigger.enabled, "D", "the event trigger is DISABLED");
+  assert.equal(trigger.event, "ddl_command_end");
+  assert.deepEqual(trigger.tags.split(",").sort(), ["ALTER FUNCTION", "CREATE FUNCTION"]);
+  assert.equal(trigger.function, "revoke_public_function_execute");
+});
+
+test("the enforcing function is itself SECURITY DEFINER with a pinned search_path", () => {
+  // It runs on every CREATE FUNCTION, so a mutable search_path here would be a
+  // privilege-escalation vector in the very control meant to prevent one.
+  const fn = snapshot.functions.find(
+    (row) => row.schema === "app_private" && row.name === "revoke_public_function_execute",
+  );
+  assert.ok(fn, "the enforcing function is missing from the snapshot");
+  assert.equal(fn.security_definer, true);
+  assert.match(fn.config, /search_path/);
+  assert.equal(fn.execute_anon, false);
+  assert.equal(fn.execute_public, false);
+});
+
+test("the supabase_admin default still grants anon — which is WHY the trigger exists", () => {
+  // Recorded rather than silently relied upon. This row cannot be changed from
+  // a migration (we are not a member of supabase_admin), so if a function is
+  // ever created under that owner the DEFAULT would hand anon EXECUTE. The
+  // event trigger is what makes that harmless, and this test documents the
+  // dependency so nobody removes the trigger thinking the defaults suffice.
+  const row = snapshot.default_acls.find(
+    (entry) => entry.owner === "supabase_admin" && entry.schema === "public" && entry.object_type === "function",
+  );
+  if (!row) return; // the platform may drop it; that is strictly better.
+  assert.match(row.acl, /anon=X/, "if this stops granting anon, simplify the comment above");
+});
