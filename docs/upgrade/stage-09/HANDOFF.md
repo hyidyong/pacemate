@@ -2,22 +2,80 @@
 
 ## Status
 
-On `upgrade/stage-9` after **five** external Codex security review rounds, each
+On `upgrade/stage-9` after **six** external Codex security review rounds, each
 of which returned **NOT SAFE TO MERGE**. Base `main` @ `fd44172` (Stage 8 PR #42
 merged 2026-08-12, verified). Not merged — that is the human's call. Stage 10
-not started. **The next action is another independent Codex security review.**
+not started. **The next action is human review of PR #43; do not merge
+automatically.**
 
-Read the **round-5** section first (immediately below): it corrects claims made
-in rounds 1–4, which are kept as the historical record rather than edited into
-agreement.
+Read the **round-6** section first (immediately below): it corrects the round-5
+replacement evidence. Earlier rounds are kept as historical records rather than
+edited into agreement.
 
-**The `108/0` probe figure cited in the round-4 section is WITHDRAWN.** Round 5
-found that four of those checks could only pass. The corrected figure is
-115 checks, 0 failed.
+**Both the round-4 `108/0` and round-5 `115/0` probe results are WITHDRAWN.**
+Round 6 found that the replacement private-table denies still did not prove a
+protected row existed. A corrected new run also reports 115 checks, 0 failed;
+the equal total is coincidental and is supported by different evidence.
 
 Status markers used in this document mean exactly one of:
 `PASS` (with evidence) · `UNVERIFIED — <exact missing evidence>` ·
 `BLOCKED — <exact external dependency>` · `DEFERRED — <exact stage/reason>`.
+
+---
+
+## Codex review round 6 remediation (2026-08-15)
+
+The sixth review validated five merge blockers in the verification harness.
+Each was reproduced before the fix and closed with a focused regression test:
+
+| # | Finding | RED | GREEN |
+|---|---|---|---|
+| F1 | Private RLS checks passed without a positive sentinel | old runner recorded PASS for a 200/empty private read | exact service-role sentinel lookup is required first; private anon semantics are specifically 401/403 and public `schools` is 200 with the exact row |
+| F2 | A non-cooperative mutation could commit after the sole cleanup pass | reproduced `wrapper timeout → cleanup → late commit` with residue | ambiguous underlying operations are registered; after bounded settlement the runner re-sweeps and verifies the exact run |
+| F3 | Documented family recovery was unsafe/broken | bare family marker could not satisfy strict run ownership | exact-run ownership remains strict; a separate family path read-enumerates only full structured markers and deletes exact ids/Auth identities |
+| F4 | Temporary probe principals shared a repository-known password | the old constants were present in live fixture code | one 256-bit secret is generated in memory per run, shared only within that run, never logged or persisted |
+| F5 | Event-trigger snapshot did not bind the exact handler | same bare function name in another schema could preserve apparent state | snapshot binds schema/name/args/owner/body hash/mode/config/effective ACL plus event/tags/enabled/definition |
+
+### Corrected evidence
+
+The round-5 **115/0 is retracted**, not relabelled. A new live run after the
+sentinel fix also produced **115 checks, 0 failed**, with all exact owned residue
+removed. Every private denial first proved that the exact controlled row existed
+and was readable by the verifier. A missing sentinel, verifier error, malformed
+response, generic 500, or wrong denial status is now a failure.
+
+| Check | Result |
+|---|---|
+| Corrected live direct Data API matrix | **115 checks, 0 failed**, exact residue clean |
+| Live notification RLS after random credentials | **12 checks, 0 failed**, exact residue clean |
+| Focused sentinel/recovery suites | **61/61** |
+| Random-credential and cleanup suites | **58/58** |
+| Snapshot/migration suites | **63/63** |
+| Snapshot determinism | **3 consecutive byte-identical `--check` runs** |
+| Whole repository | **626 total, 620 pass, 3 KI-002 fail, 3 Windows POSIX-delivery skips** |
+| Stage 5 / 6 / 7 / 8 | **48/48 · 10/10 · 62/62 · 36/36** |
+| typecheck / lint / build | **PASS / PASS with the one existing `<img>` warning / PASS** |
+
+### Recovery boundary
+
+AbortSignal is a cancellation request, not proof of remote cancellation. A
+normally settled operation uses ordinary teardown. A timed-out mutation remains
+ambiguous until its underlying attempt settles or the bounded recovery window
+expires. If it settles, exact-run sweep and zero-residue verification run again.
+If it does not, the process exits non-zero and prints the immutable run marker
+and exact recovery command. `--family` is a separate operator-only fallback and
+must be run only when no probe is active.
+
+No claim is made for SIGKILL, OOM, power loss, host crash, or a server commit
+that occurs after the process and bounded recovery window are gone. Those cases
+require the documented exact-run recovery, or explicit structured family
+recovery when the run marker is unavailable.
+
+The previously recorded environmental limits remain unchanged: live Realtime
+socket delivery, rendered roadmap-feedback submission, empirical
+`supabase_admin` creation where unavailable, and POSIX signal delivery on
+Windows are UNVERIFIED; PITR, backup restore, empty-database rebuild, and a
+defensible RPO/RTO remain BLOCKED.
 
 ---
 
@@ -62,9 +120,9 @@ surface to one table and the live grant set has said `schools` only since
 three tables, and nothing failed — because the branch reading that metadata
 could not fail.
 
-**Corrected figure, freshly run: 115 checks, 0 failed** — and all 115 can now
-fail. The allow path requires HTTP 200 *and* a positive sentinel row this run
-created; "200 with zero rows" is not proof for a table that might be empty.
+**Historical round-5 replacement: 115 checks, 0 failed — withdrawn by round
+6.** The public allow path had gained a sentinel, but private denial paths still
+did not prove that an authorized verifier could read the protected row.
 
 ### The two that were wider than reported
 
@@ -112,7 +170,7 @@ UPDATE(is_read) only · `20260814220000` future-function EXECUTE event trigger �
 
 | Check | Result |
 |---|---|
-| Live direct Data API probe | **PASS — 115 checks, 0 failed**, residue clean |
+| Live direct Data API probe | **Historical 115/0; withdrawn by round 6** |
 | Live durable audit probe | **PASS — 12 checks, 0 failed** |
 | Live notification RLS | **PASS — 12 checks, 0 failed** (was 10; two are the new column checks) |
 | Security snapshot vs live DB | **PASS — matches** |
@@ -146,7 +204,8 @@ exercised in a browser.
 
 ### Claims from earlier rounds that round 5 invalidated
 
-1. **`108/0` — withdrawn.** See above. Replaced by 115/0.
+1. **`108/0` — withdrawn.** Its round-5 115/0 replacement is also withdrawn;
+   see the round-6 corrected execution above.
 2. *"anon holds one table privilege and no function EXECUTE"* — true of
    functions that EXISTED. A function created afterwards was anon-executable in
    both schemas until `20260814220000`.

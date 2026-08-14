@@ -423,6 +423,56 @@ the guarantees behind it were conditional, and one whole case was missing.
 
 ---
 
+## Review round 6 — corrected sentinel and recovery evidence
+
+The round-5 `115/0` result below is **WITHDRAWN**. Its private-table denial
+branch could pass when the table was empty, when privileged verification failed,
+or when an unrelated HTTP error occurred. Absence was incorrectly treated as
+proof. The historical section remains below so the error and its replacement
+are auditable.
+
+The corrected read sequence is now invariant for every table in the matrix:
+
+1. provision one controlled, run-owned positive sentinel;
+2. require the service-role verifier to read that exact sentinel;
+3. issue the anonymous lookup for that exact sentinel;
+4. require the table's intended semantics — 401/403 for private tables, or
+   HTTP 200 containing the sentinel for public `schools`;
+5. fail on a missing row, malformed body, transport error, generic 400/500, or
+   any other unverifiable result.
+
+### Round-6 RED/GREEN guards
+
+| Guard | RED evidence | GREEN coverage |
+|---|---|---|
+| private positive evidence | old fake runner recorded PASS on 200/empty | empty private sentinel and failed privileged lookup both fail |
+| reason-specific denial | generic non-success counted as protected | generic 500 fails; only the expected private denial passes |
+| public allow | existence was not proven | 200 must contain the exact controlled `schools` sentinel |
+| late mutation recovery | wrapper timeout → first cleanup → late commit left residue | registry waits boundedly for the underlying attempt, then exact-run re-sweeps and proves zero |
+| permanent non-cooperation | wrapper returned while underlying work remained possible | non-zero exit plus immutable run marker and exact recovery command; no infinite wait |
+| exact/family ownership | broad family marker was incompatible with exact ownership | exact Run A leaves Run B; explicit family recovery validates full run markers and expected fixture suffixes; bystanders survive |
+| credential isolation | live users shared a committed constant | per-run 256-bit in-memory secret; runs differ; sign-in and cleanup still work; no secret output |
+| event-trigger identity | bare handler name admitted a same-name schema substitution | schema/body/owner/mode/config/ACL/event/tags/enabled/definition changes all drift |
+
+### Corrected round-6 results
+
+| Suite | Result |
+|---|---|
+| live `rls-probe.mjs` | **115 checks, 0 failed**, exact owned residue clean |
+| live `verify-notification-rls.mjs` | **12 checks, 0 failed**, exact owned residue clean |
+| sentinel/recovery focused tests | **61/61** |
+| credential/cleanup focused tests | **58/58** |
+| snapshot/migration focused tests | **63/63** |
+| three consecutive snapshot checks | **PASS**, byte-identical |
+| whole repository | **626 total; 620 pass; 3 KI-002 fail; 3 Windows POSIX-delivery skip** |
+| Stage 5 / 6 / 7 / 8 | **48/48 · 10/10 · 62/62 · 36/36** |
+
+The corrected result happens to retain the numeric **115/0**, but it is a new
+execution with positive sentinels and strict semantics. It must not be confused
+with or cited as the withdrawn round-5 run.
+
+---
+
 ## Review round 5 — the retraction, and what replaced it
 
 ### `108/0` IS WITHDRAWN
@@ -443,7 +493,7 @@ grant set has said `schools` only since `20260814010000`. The probe's own
 metadata contradicted the shipped design and nothing failed, because the branch
 that read it could not fail.
 
-**Replacement, freshly run: 115 checks, 0 failed — all of which can fail.** The
+**Historical replacement, withdrawn by round 6: 115 checks, 0 failed.** The
 allow path now requires HTTP 200 AND a positive sentinel row this run created.
 "200 with zero rows" is not proof for a table that might simply be empty.
 
@@ -463,7 +513,7 @@ Three class-level guards were added so this cannot recur anywhere:
 | Cleanup owns what it deletes | One fixed marker, SUBSTRING match — unrelated real data containing the phrase was deletable | A 128-bit per-run token, PREFIX match. Auth enumeration is `startsWith`, and refuses a prefix under 16 characters |
 | A failed sweep fails the run | teardown computed it; the runner discarded it, so `[SWEEP FAILED]` exited 0 | The exit expression includes it, and the summary prints the failures |
 
-### Round-5 live results
+### Round-5 live results (historical; RLS result withdrawn by round 6)
 
 | Suite | Result |
 |---|---|

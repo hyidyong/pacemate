@@ -239,8 +239,9 @@ live metadata before any change, and every one was confirmed. All are closed.
 **RETRACTION — the `108/0` probe figure is WITHDRAWN.** The anon-read ALLOW
 branch passed a literal `true` as its verdict, so four checks could only pass;
 one recorded PASS against an HTTP 401. Any total including them was not
-evidence. Corrected and freshly run: **115 checks, 0 failed**, all of which can
-now fail. Every document that cited `108/0` has been updated.
+evidence. The then-replacement **115 checks, 0 failed** is also withdrawn by
+round 6 because its private denies still lacked positive sentinel proof. See
+the round-6 section below for the corrected execution.
 
 That defect concealed a second: three of the four entries described
 `course_reviews`, `faqs` and `notices` as anon-readable, which Stage 9 closed in
@@ -287,6 +288,38 @@ one. Now enforced by an event trigger instead (D-038).
   belief that defaults suffice.
 - **Course reviews and roadmap feedback have no enrolment requirement.**
   Deliberately not invented in either round; a product decision.
+
+### Codex security review round 6 remediation (2026-08-15)
+
+Five verification/recovery blockers were confirmed and are now closed.
+
+- **The round-5 `115/0` result is WITHDRAWN.** Private-table checks still
+  accepted absence as protection. A fresh corrected live run also reports
+  **115 checks, 0 failed**, but only after exact service-role sentinel proof and
+  reason-specific anon semantics. The equal total is coincidental.
+- **Late mutations remain recoverable.** Underlying mutation attempts are
+  registered separately from wrapper timeouts. A late settlement causes an
+  exact-run second sweep and zero-residue verification. Permanent uncertainty
+  exits non-zero with the immutable marker and recovery command; remote
+  cancellation is not claimed.
+- **Family cleanup is separate from exact ownership.** `--run
+  <pacemate-probe-32hex>` targets one run. `--family` validates complete run
+  identifiers plus per-table fixture structure before exact-id deletion and is
+  only for an operator when no probe is active. Similar bystanders survive.
+- **Temporary credentials are per-run random secrets.** No reusable live-probe
+  password remains in the repository, output, snapshot or documentation.
+- **Event-trigger drift binds the exact handler.** Handler schema/name/args,
+  owner, definition hash, mode, config and effective ACL are recorded along
+  with the event trigger's event, tags, definition and enabled state. Three
+  consecutive live dumps were byte-identical.
+
+Corrected evidence: live RLS **115/0** with exact residue clean; live
+notification RLS **12/0** with exact residue clean; repository suite **626
+total / 620 pass / 3 KI-002 fail / 3 Windows POSIX-delivery skip**. Stage
+5/6/7/8 groups are **48/48 / 10/10 / 62/62 / 36/36**.
+
+The environmental limits below are unchanged. In particular, no SIGKILL/OOM/
+power-loss/host-crash guarantee is claimed.
 
 ### BLOCKED on something outside the repository
 

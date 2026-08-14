@@ -885,7 +885,9 @@ honest: it reports that verification did not happen. A constant that can only
 pass is the bug. The guard flags only `true`, and says why.
 
 Every figure derived from the old loop is withdrawn rather than adjusted. The
-replacement is 115 checks, 0 failed, all of which can fail.
+round-5 replacement was 115 checks, 0 failed, but round 6 later withdrew that
+evidence too because private denials still lacked positive sentinel proof. See
+the D-036 round-6 amendment.
 
 ## D-037 — Cleanup ownership must be provable, not probable
 
@@ -1043,3 +1045,57 @@ the ledger, so a row whose id the client never learned is still found. A run is
 clean only when the ledger, the sweep and residue verification all agree.
 
 Crash safety is still NOT claimed.
+
+## D-036 amendment (round 6) — denial evidence starts with a positive object
+
+Status: Amended (Stage 9, Codex review round 6, 2026-08-15)
+
+Round 5 removed literal-success assertions but still allowed a private read to
+pass when the table was empty, privileged verification failed, or an unrelated
+HTTP error occurred. Absence was being interpreted as isolation.
+
+Decision: every isolation denial first proves the exact controlled sentinel is
+readable by an authorized verifier. The unauthorized lookup then must match the
+specific contract for that table: exact 401/403 for the private anon checks, or
+HTTP 200 containing the exact sentinel for public `schools`. Missing data,
+malformed bodies, transport errors and generic 400/500 responses fail.
+
+Consequences: the round-5 `115/0` evidence is withdrawn. A new corrected run
+also measured 115/0, but it is a separate execution and the equal total is
+coincidental.
+
+## D-027 amendment (round 6) — wrapper settlement is not remote settlement
+
+Status: Amended (Stage 9, Codex review round 6, 2026-08-15)
+
+Round 5 waited for the wrapper promise, but a non-cooperative underlying request
+could still commit after the only cleanup pass. AbortSignal is a cancellation
+request, never proof that a remote write stopped.
+
+Decision: track the underlying mutating attempt in an operation registry. On an
+ambiguous timeout, run ordinary teardown, wait only for a bounded recovery
+window, and re-sweep/re-verify the exact run after late settlement. If the
+attempt remains unresolved, exit non-zero and emit the immutable run marker and
+exact recovery command. Exact-run ownership remains strict; structured family
+recovery is a separate explicit operator path and never a broad substring
+predicate.
+
+Consequences: a late commit within the bounded recovery phase is removed and
+proven absent. A commit after process death remains operator-recoverable by its
+marker, but crash/SIGKILL/OOM/power-loss safety is not claimed.
+
+## D-038 amendment (round 6) — an event trigger is its exact handler
+
+Status: Amended (Stage 9, Codex review round 6, 2026-08-15)
+
+An unqualified handler name did not prove which function an event trigger
+executed. A same-named function in another schema could preserve apparent
+snapshot state while changing the security boundary.
+
+Decision: event-trigger snapshots bind event name/type/tags/enabled state and
+definition to the handler's schema/name/args, owner, body hash, SECURITY
+DEFINER/INVOKER mode, config/search path, raw ACL and effective EXECUTE ACL.
+
+Consequences: handler schema, body, owner, mode, config, ACL, tags, enabled
+state, definition or removal all produce drift. Three unchanged live dumps were
+byte-identical.

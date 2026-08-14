@@ -4,16 +4,17 @@
 
 Stage 9 / 10
 Security / Privacy / Audit / Recovery
-Status: IN PROGRESS on branch `upgrade/stage-9`, revised through **five**
-external Codex security review rounds (2026-08-14), each of which returned
-**NOT SAFE TO MERGE**. Round 5 raised eleven findings; every one was verified
-against the code, the migrations and live metadata before any change, and every
-one was confirmed. All are closed. Awaiting external review.
+Status: IN PROGRESS on branch `upgrade/stage-9`, revised through **six**
+external Codex security review rounds (2026-08-15), each of which returned
+**NOT SAFE TO MERGE** before remediation. Round 6 validated five remaining
+probe-evidence and recovery blockers. All five are closed on the branch; the PR
+is not merged.
 Base: `main` @ `fd44172` (Stage 8 PR #42 merged 2026-08-12, verified).
-See docs/upgrade/stage-09/HANDOFF.md — read its **round-5** section first, as it
-corrects claims made in rounds 1–4.
+See docs/upgrade/stage-09/HANDOFF.md — read its **round-6** section first. It
+withdraws the round-5 `115/0` result and replaces it with a corrected,
+independently executed matrix that happens to have the same numeric total.
 
-**The next action is another independent Codex security review.**
+**The next action is human review of PR #43. Do not merge automatically.**
 
 Next stage: Stage 10 — NOT started. Stage 10 begins only after the Stage 9 PR
 merges, from the HANDOFF "Stage 10 inputs" section.
@@ -30,9 +31,12 @@ the browser holds a Supabase publishable key (so PostgREST is directly
 reachable), and a Next.js server action runs before any page guard.
 
 Measured, not asserted: a direct-Data-API probe against two disposable tenants
-scored **26 failures out of 67 checks before, 0 out of 115 after**.
-(The `108/0` figure previously cited here is WITHDRAWN: round 5 found four of
-those checks passed a literal `true` and could not fail. See HANDOFF round 5.)
+scored **26 failures out of 67 checks before**. The round-4 `108/0` result and
+the round-5 `115/0` result are both **WITHDRAWN**. The latter still allowed an
+empty private table, failed privileged verification, or unrelated HTTP error to
+be counted as a denial. After the round-6 correction, a new live execution
+reported **115 checks, 0 failed**; the equal number is coincidental. Every
+private denial first proves an exact authorized sentinel exists and is readable.
 Unauthenticated, an attacker could read every profile, student record, enrolment
 and syllabus; rewrite any profile; create a profile with `role=admin`; fabricate
 or delete counseling availability; and deliver a notification to any user. Four
@@ -108,14 +112,27 @@ guard immediately caught two demo-era RPCs `anon` could still call, and verifyin
 the notice-DELETE property turned up `authenticated` holding TRUNCATE — which
 RLS cannot restrain — on 31 of 54 tables.
 
-## Verified this stage (round-5 numbers, all freshly run)
+**Round 5 → 6.** Round 6 invalidated the previous replacement evidence:
+private-table checks still inferred protection from absence and could collapse
+verification failures into zero rows. It also reproduced a non-cooperative
+mutation committing after the only cleanup pass, proved the documented family
+sweep could not safely target a family, found the temporary probe password was
+repository-known, and showed the event-trigger snapshot did not bind the exact
+handler. The fixes add positive sentinels with reason-specific HTTP semantics,
+post-settlement exact-run recovery, a separate structured family-recovery path,
+a cryptographically random in-memory secret per run, and exact event-trigger
+handler identity plus body/owner/config/effective-ACL hashes.
 
-- Live direct-Data-API probe **115 checks / 0 failed**, residue clean — and
-  every one of the 115 can now fail, which was not true of the withdrawn 108
-- Live durable-audit probe **12 / 0**; live notification RLS **12 / 0**
-- Whole repository suite **594 tests, 588 pass, 3 fail, 3 skipped**
-- Stage 5 / 6 / 7 / 8 regressions: 19/19 · 15/15 · 32/32 · 15/15
-- Whole repository suite: see the final battery below
+## Verified this stage (round-6 numbers, all freshly run)
+
+- Corrected live direct-Data-API probe **115 checks / 0 failed**, exact owned
+  residue clean. This is a new execution, not the withdrawn round-5 evidence.
+- Live notification RLS **12 / 0**, exact owned residue clean. The round-5
+  durable-audit result remains **12 / 0**; it was not re-run in this patch.
+- Whole repository suite **626 tests, 620 pass, 3 fail, 3 skipped**
+- Stage 5 / 6 / 7 / 8 regressions: **48/48 · 10/10 · 62/62 · 36/36**
+- Corrected sentinel/recovery focused suites **61/61**; random-credential and
+  cleanup suites **58/58**; snapshot/migration suites **63/63**
 - The 3 failures are the **pre-existing KI-002 trio**, confirmed by running the
   same two untouched test files on `origin/main` in a clean worktree — the same
   three names fail there
@@ -124,12 +141,12 @@ RLS cannot restrain — on 31 of 54 tables.
   injected process emitter and by an IPC-cancel test that drives the real runner
   in a real child process. Only the OS signal DELIVERY mechanism is unexercised
   there, and it is recorded as UNVERIFIED rather than passed
-- Security snapshot `--check`: matches the live database
+- Security snapshot `--check`: matches the live database in **three consecutive
+  byte-identical dumps**
 - `tsc --noEmit` exit 0; `next lint` exit 0 (1 pre-existing warning);
   `next build` exit 0, 26 routes, shared JS 102 kB unchanged
-- Credential scan: 202 shipped files across `.next/static` + `.next/server`,
-  0 hits (the one `.next/cache/webpack` match predates the rotation commit and
-  is gitignored and never served)
+- Probe credential scan: the former static live-probe passwords are absent. Each
+  run generates one 256-bit secret in memory; it is not printed or persisted.
 - `git diff --check` clean
 
 ## NOT verified / BLOCKED
@@ -149,9 +166,13 @@ RLS cannot restrain — on 31 of 54 tables.
   backup mechanism in the repo. No RPO/RTO is claimed.
 - **Full-chain schema rebuild — BLOCKED — NON-PRODUCTION DATABASE REQUIRED.**
   The drift repair is reasoned and unit-guarded, not proven by execution.
-- **Probe crash safety is NOT claimed.** SIGINT/SIGTERM run cleanup once and
-  exit 130/143. SIGKILL, power loss or a host crash leave ledgered fixtures
-  behind; the next run's residue verification is what catches that.
+- **Remote cancellation and crash safety are NOT claimed.** AbortSignal requests
+  cancellation; it does not prove a remote write stopped. An ambiguous write is
+  tracked, allowed a bounded settlement window, then exact-run swept and
+  re-verified. If it remains unresolved, the runner exits non-zero and prints
+  the immutable run marker and exact recovery command. SIGKILL, power loss,
+  host crash, or a commit after the bounded process lifetime still requires an
+  operator exact-run or explicit family sweep.
 - **Audit test events are permanent.** The probe cannot delete its own audit
   rows — production append-only behaviour was not weakened for testing
   convenience — so its events remain in `security_events` and are reported

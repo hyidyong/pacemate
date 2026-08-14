@@ -190,25 +190,35 @@ drives the same quiesce-then-cleanup path.
 
 **SIGKILL, a host OOM kill or a power loss are NOT handled and no crash safety
 is claimed** — nothing in-process runs when the process is destroyed. A probe
-killed that way leaves marked fixtures behind. The next run's automatic marker
-sweep will find them, and the independent operator-run recovery is:
+killed that way can leave marked fixtures behind. Recover one known execution
+with its complete marker:
 
 ```bash
-node scripts/security/rls-probe.mjs --sweep --run <marker-from-the-killed-run>
+node scripts/security/rls-probe.mjs --sweep --run <pacemate-probe-32hex>
 ```
 
-Codex round 5, F6: the sweep no longer accepts "just clean up whatever looks
-like a probe". Ownership used to be one fixed marker matched by SUBSTRING, so a
-genuine post, FAQ or review whose text merely CONTAINED that phrase was a
-deletion candidate — and two concurrent runs could delete each other's live
-fixtures. Every run now mints a 128-bit token and matching is by PREFIX.
+Exact-run cleanup accepts only the complete namespace plus a well-formed 128-bit
+run id. It deletes rows/Auth users by exact ids recorded or discovered for that
+run. It never weakens `ownedByRun()` and never treats an arbitrary substring as
+ownership.
 
-`--run <marker>` targets exactly one execution. `--family` accepts the shared
-prefix and is the only path that can touch more than one run's rows; use it only
-when no probe is running. Without one of the two the sweep refuses and exits 1.
+`--family` is a **separate recovery mode**, not a broad run marker. Use it only
+when no probe is running and only when the exact run marker is unavailable:
 
-It removes the matching rows and Auth users, re-verifies, and exits non-zero if
-anything remains. Run it before trusting any subsequent probe result.
+```bash
+node scripts/security/rls-probe.mjs --sweep --family
+```
+
+Family recovery may read-enumerate the fixed namespace prefix, but it validates
+the complete run marker and each table's expected fixture suffix/format before
+deleting by exact id. Auth emails must match the strict probe address format.
+Malformed markers, similar words, unrelated data containing `pacemate-probe`,
+and unrelated Auth emails survive. The command above was executed successfully
+against a stateful fake with two valid runs and bystanders.
+
+Both modes remove only validated rows and Auth users, re-verify, and exit
+non-zero if anything remains. Run the appropriate recovery before trusting any
+subsequent probe result.
 
 **Audit test events are permanent and are not residue.** `service_role` holds
 only `INSERT` and `SELECT` on `security_events`, so `audit-trail-probe.mjs`
@@ -223,27 +233,34 @@ variables, by design — the guard runs before the first write, not after:
 PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref> node scripts/security/rls-probe.mjs
 ```
 
-115 checks across anon, cross-tenant and legitimate-path cases. It provisions
-and removes its own tenants and ends with a THREE-PHASE teardown: ledger
-cleanup, then an automatic marker sweep, then residue verification. The run is
-clean only when all three agree — and since round 5's F7 the runner's EXIT CODE
-includes the sweep result, which teardown had been computing and the runner
-discarding.
+The corrected round-6 matrix is **115 checks, 0 failed** across anon,
+cross-tenant and legitimate-path cases. The same numeric round-5 result is
+withdrawn: it did not prove private sentinels existed. The corrected runner
+provisions an exact positive sentinel for every read check and first requires
+the service-role verifier to observe that exact row. Missing fixtures,
+verification errors, malformed responses, generic 400/500 responses, and wrong
+denial semantics fail.
 
-(An earlier `108/0` figure is withdrawn: four of those checks submitted a
-literal `true` as their verdict and could not fail. All 115 can.)
+(The earlier `108/0` and the round-5 replacement `115/0` are withdrawn. The
+current 115/0 is a separate live execution after the sentinel correction.)
 
 **Every run prints its own marker and its recovery command on startup**, e.g.
 `node scripts/security/rls-probe.mjs --sweep --run pacemate-probe-<token>`.
 Keep that line if a run is interrupted — the sweep now refuses to guess.
 
-**Why the sweep is automatic (Codex round 4, 4C).** A create request that times
-out may still have committed: the row exists and the client never learned its
-id, so the ledger has nothing to delete. The sweep is keyed on the probe marker,
-so it finds exactly that — and anything left by an earlier run that was killed
-outright. Whatever it removes is printed as `[SWEPT]`; a swept item is not a
-failure, but it IS information, and silently deleting rows the ledger never
-recorded would hide the ambiguity.
+**Ambiguous late mutation (round 6).** A wrapper timeout does not prove the
+server stopped. AbortSignal requests cancellation; remote cancellation is not
+guaranteed. Every mutating attempt is registered independently of its wrapper.
+Ordinary settlement uses ordinary teardown. If the wrapper times out while the
+attempt remains unresolved, the runner marks it ambiguous, performs the first
+cleanup, waits only for the bounded recovery window, and, if the attempt then
+settles, performs a second exact-run sweep and zero-residue verification.
+
+If the attempt is still unresolved, the runner does not hang and does not claim
+clean: it exits non-zero and prints the immutable run marker plus the exact
+`--sweep --run` command. A commit after that process lifetime is recoverable by
+the marker, but cannot be automatically proven absent. The same limitation
+applies to SIGKILL, OOM, power loss and host crash.
 
 The host guard will refuse to send the service-role key anywhere that is not
 exactly `https://<ref>.supabase.co` (or `.supabase.in`) — no port, no embedded
@@ -259,10 +276,11 @@ PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref>
 PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref> node scripts/verify-notification-rls.mjs
 ```
 
-12 and 6 checks respectively. `verify-notification-rls.mjs` provisions its own
+12 and 12 checks respectively. `verify-notification-rls.mjs` provisions its own
 two schools, its own disposable auth user and its own notifications — it no
-longer depends on any real demo account, so there is no reusable credential
-involved in running it.
+longer depends on any real demo account. Each run generates a cryptographically
+random 256-bit authentication secret in memory, shares it only among that run's
+temporary principals, and never logs or persists it.
 
 **Detect drift without running anything destructive:**
 
@@ -273,7 +291,10 @@ node scripts/security/dump-security-snapshot.mjs --check
 Compares the committed `supabase/security-snapshot.json` against the live
 database — policies, grants, effective privileges (`has_table_privilege`),
 PUBLIC privileges, column privileges, function definition hashes and trigger
-state. Non-zero exit means the database and the repository disagree. This is the
+state. Event triggers bind the exact handler schema/name/args, owner, body hash,
+SECURITY DEFINER/INVOKER mode, config/search path and effective EXECUTE ACL, as
+well as event, enabled state, tags and reconstructed definition. Non-zero exit
+means the database and the repository disagree. This is the
 cheapest first check after any suspected authorization regression.
 
 **Cheap manual check** — distinguishes "no grant", "policy denies" and "exposed"
