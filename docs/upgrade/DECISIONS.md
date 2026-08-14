@@ -251,7 +251,8 @@ expose. `app_private.current_profile_id()`, `current_school_id()`,
 `set search_path = ''`, EXECUTE granted to `authenticated` only, resolving
 through `profiles.auth_user_id`. Every repaired policy goes through them.
 `is_professor_of_offering` / `is_student_of_offering` moved into the same schema
-(closing KI-011). The `anon` role then keeps exactly one privilege in `public`:
+(closing KI-011). The `anon` role then keeps exactly one TABLE privilege in
+`public` — see the round-4 amendment at the end of this decision —:
 SELECT on `schools`, the tenant registry a caller needs before it has an
 identity. The migration asserts that as a postcondition rather than trusting the
 statements above it.
@@ -815,3 +816,97 @@ flaky CI.
 Consequences: `npm run build && node scripts/check-bundle-budgets.mjs` is the
 bundle gate; budgets must be revised deliberately in the same commit as an
 intentional size change.
+
+## D-033 — A shared row cannot carry per-person state
+
+Status: Accepted (Stage 9, Codex review round 4, 2026-08-14)
+
+Context: a tenant-wide notification was stored ONCE, with
+`recipient_id = NULL`, `recipient_role = <role>` and `school_id = <tenant>`.
+Every holder of that role read the same row — and `is_read` is a column on the
+row. So the first student to open an announcement marked it read for the entire
+cohort. Measured live: 14 shared rows, 12 of them already flipped.
+
+The RLS policy was not bypassed. Its USING and WITH CHECK both matched the role
+branch, so writing a peer's read state was the designed behaviour.
+
+Decision: state that belongs to a person lives on a row that belongs to that
+person. A broadcast is fanned out into one row per recipient at the single
+creation chokepoint, `recipient_id` is NOT NULL, and the RLS predicate is
+`recipient_id = current_profile_id()`.
+
+Reason: the alternative — keeping the shared payload and adding a per-profile
+receipts table — was rejected on evidence, not taste. The platform already fans
+out (`sendAdminBroadcastNotification` has always written one row per profile),
+so the shared row was the exception. Fan-out makes the defect
+UNREPRESENTABLE rather than merely fenced off: with a NOT NULL recipient there
+is no multi-recipient row for a shared flag to live on. And it lets the policy
+collapse to identity, deleting the role/tenant branch — the thing that made a
+peer's row writable — instead of narrowing it. A receipts table would have left
+the shared row in place, added a join to every read, and required the unread
+counts, mark-all-read and the Realtime subscription all to be re-verified.
+
+Consequences: N rows per broadcast instead of 1, bounded by the number of
+profiles holding one role in one tenant (tens, today). A broadcast that resolves
+to no eligible recipient now FAILS rather than silently writing nothing. The
+backfill carried the shared `is_read` forward to every recipient, which is
+knowingly imprecise — the database cannot know who actually read it — and is
+documented in the migration rather than presented as exact.
+
+## D-034 — A privilege is what the database computes, not what the ACL string says
+
+Status: Accepted (Stage 9, Codex review round 4, 2026-08-14)
+
+Context: the security snapshot captured each function's raw `proacl`. When a
+function is created without an explicit revoke, `proacl` is NULL, and the dump
+rendered that as the literal `"DEFAULT"`. PostgreSQL's default for a FUNCTION is
+EXECUTE GRANTED TO PUBLIC, and every role inherits PUBLIC. So the single most
+dangerous regression available — a new SECURITY DEFINER function callable by
+`anon` — would have appeared in the snapshot as `"DEFAULT"`, indistinguishable
+from a function nobody can call.
+
+Decision: security snapshots record COMPUTED effective privileges —
+`has_table_privilege` and `has_function_privilege` per role — alongside the raw
+grants, and the guards assert on the computed values.
+
+Reason: an ACL string is a serialisation of one grant record. The question a
+security guard needs answered is "can this role do this, by any route" —
+explicit grant, PUBLIC, or role inheritance. Only the database can answer that,
+and it will. Recording the string and hoping to interpret it later is how the
+`"DEFAULT"` blind spot existed at all.
+
+Consequences: the guard justified itself on its first run by finding two
+demo-era RPCs `anon` could still execute, which the table-only anon closure
+(`20260814010000`) had never looked at. Two further guards follow the same
+principle: no client role may hold TRUNCATE (which RLS cannot restrain and which
+no ACL-name check would have flagged as different from DELETE), and the identity
+helpers must REMAIN executable by `authenticated` — a least-privilege sweep that
+takes RLS down with it is not a fix, so the snapshot asserts both directions.
+
+## D-027 amendment (round 4) — what "bounded" and "cleaned up" actually mean
+
+Status: Amended (Stage 9, Codex review round 4, 2026-08-14)
+
+Round 3 amended this decision once already, to say that "bounded" must cover the
+body read. Round 4 found two more gaps in the same decision, both of the same
+shape — a guarantee that held only if something else co-operated:
+
+1. **The deadline depended on the transport.** It worked by aborting an
+   `AbortController`, which only helps if the `fetch` implementation honours the
+   signal. A transport that ignores it, or a body stream that never settles,
+   left the await hanging forever with the timer already fired. The timeout is
+   now raced independently of the abort, so it fires regardless.
+2. **Cleanup raced the work it was cleaning up.** The signal handler began
+   deleting the moment a signal arrived, while requests were still in flight, so
+   a create already on the wire could commit after cleanup had looked. Cleanup
+   now QUIESCES first: cancel the shared scope, wait (bounded) for the body to
+   stop, then delete. If the body will not stop, cleanup still runs but the run
+   FAILS — we cannot prove nothing was created afterwards.
+
+And one case neither covered: a mutating request that times out MAY have
+committed. "It failed" and "I do not know" are different answers. The transport
+now marks that case `ambiguous`, and teardown always runs a marker sweep after
+the ledger, so a row whose id the client never learned is still found. A run is
+clean only when the ledger, the sweep and residue verification all agree.
+
+Crash safety is still NOT claimed.

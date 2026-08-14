@@ -4,14 +4,14 @@
 
 Stage 9 / 10
 Security / Privacy / Audit / Recovery
-Status: IN PROGRESS on branch `upgrade/stage-9`, revised through **three**
+Status: IN PROGRESS on branch `upgrade/stage-9`, revised through **four**
 external Codex security review rounds (2026-08-14), each of which returned
-**NOT SAFE TO MERGE**. Round 3 raised twelve findings (F1–F12); all twelve were
-verified against the repository, the migrations and live metadata before any
-change, and all twelve were confirmed. All twelve are closed. Awaiting external
-review. Base: `main` @ `fd44172` (Stage 8 PR #42 merged 2026-08-12, verified).
-See docs/upgrade/stage-09/HANDOFF.md — read its round-3 section first, as it
-corrects claims made in rounds 1 and 2.
+**NOT SAFE TO MERGE**. Round 4 raised nine substantive findings; every one was
+verified against the code, the migrations and live metadata before any change,
+and every one was confirmed. All are closed. Awaiting external review.
+Base: `main` @ `fd44172` (Stage 8 PR #42 merged 2026-08-12, verified).
+See docs/upgrade/stage-09/HANDOFF.md — read its **round-4** section first, as it
+corrects claims made in rounds 1–3.
 
 **The next action is another independent Codex security review.**
 
@@ -30,7 +30,7 @@ the browser holds a Supabase publishable key (so PostgREST is directly
 reachable), and a Next.js server action runs before any page guard.
 
 Measured, not asserted: a direct-Data-API probe against two disposable tenants
-scored **26 failures out of 67 checks before, 0 out of 96 after**.
+scored **26 failures out of 67 checks before, 0 out of 108 after**.
 Unauthenticated, an attacker could read every profile, student record, enrolment
 and syllabus; rewrite any profile; create a profile with `role=admin`; fabricate
 or delete counseling availability; and deliver a notification to any user. Four
@@ -40,13 +40,20 @@ bundle.
 Root cause of the whole family: every authenticated RLS policy compared
 `auth.uid()` to a column holding `profiles.id`, so the authenticated layer had
 never worked and the browser fell through to `anon`. Fixed at the identity layer
-first (D-024), then the anon surface removed — `anon` now holds exactly one
-privilege in `public`: SELECT on `schools`.
+first (D-024), then the anon surface removed — `anon` now holds exactly one TABLE
+privilege in `public` (SELECT on `schools`) and, since round 4, **no function
+EXECUTE anywhere**. The earlier "exactly one privilege" wording was true of
+tables and false overall.
 
 Also delivered: a durable append-only audit trail with an explicit ACL (D-025),
 the schema-drift repair that makes the migration chain rebuildable (D-026),
 tenant suspension enforced at request time, and a live security probe harness
-whose results are trustworthy by construction (D-027).
+with specific, tested guarantees (D-027): a deadline that covers the body read
+and does not depend on the transport honouring an abort, cleanup that quiesces
+in-flight work before deleting, and an automatic marker sweep so a create that
+committed without acknowledging is still found. **Not** "trustworthy by
+construction" — round 4 corrected that wording, because round 3's version of two
+of those guarantees was incomplete.
 
 ## What the review rounds added
 
@@ -80,17 +87,38 @@ transition matrix was exported from a `"use server"` module, where every export
 becomes a remotely invocable endpoint, and **`next build` failed**. A new guard
 now fails that class of defect in the unit suite instead of at build time.
 
-## Verified this stage (round-3 numbers, all freshly run)
+**Round 3 → 4.** Nine substantive findings, all confirmed. A role broadcast was
+stored ONCE with a shared mutable `is_read`, so the first student to open a
+tenant announcement marked it read for the whole cohort — 14 such rows existed
+live and 12 had already been flipped. Any authenticated staff member could
+publish a student-voice course review. The weekly AI advance discarded the
+authorized enrollment's primary key, then compare-and-set on a predicate that
+could move MORE rows than authorization had inspected, and wrote feedback before
+finding out whether it had won. The probe's signal handler began destructive
+cleanup while requests were still in flight, and its deadline only worked if the
+transport co-operated. The security snapshot recorded a function's raw ACL,
+which renders as the reassuring string "DEFAULT" in exactly the case where
+PostgreSQL grants EXECUTE to PUBLIC.
 
-- Whole repository suite: **499 tests, 493 pass, 3 fail, 3 skipped**
+Two round-4 findings were wider than reported, and each was found by building
+the check rather than by taking the report at its word: the new effective-EXECUTE
+guard immediately caught two demo-era RPCs `anon` could still call, and verifying
+the notice-DELETE property turned up `authenticated` holding TRUNCATE — which
+RLS cannot restrain — on 31 of 54 tables.
+
+## Verified this stage (round-4 numbers, all freshly run)
+
+- Live direct-Data-API probe **108 checks / 0 failed**, residue clean
+- Live durable-audit probe **12 / 0**; live notification RLS **10 / 0**
+- Whole repository suite: see the final battery below
 - The 3 failures are the **pre-existing KI-002 trio**, confirmed by running the
   same two untouched test files on `origin/main` in a clean worktree — the same
   three names fail there
-- The 3 skips are the subprocess signal tests on Windows, with an explicit
-  reason (POSIX signals are not deliverable to a child process there) and
-  platform-independent lifecycle coverage alongside — a skip, never a pass
-- Live direct-Data-API probe **96 checks / 0 failed**; residue clean
-- Live durable-audit probe **12 / 0**; live notification RLS **6 / 0**
+- The 3 skips are the subprocess POSIX-signal tests on Windows. Round 4 narrowed
+  what that skip means: the HANDLER is proven on every platform, both by an
+  injected process emitter and by an IPC-cancel test that drives the real runner
+  in a real child process. Only the OS signal DELIVERY mechanism is unexercised
+  there, and it is recorded as UNVERIFIED rather than passed
 - Security snapshot `--check`: matches the live database
 - `tsc --noEmit` exit 0; `next lint` exit 0 (1 pre-existing warning);
   `next build` exit 0, 26 routes, shared JS 102 kB unchanged
@@ -102,11 +130,12 @@ now fails that class of defect in the unit suite instead of at build time.
 ## NOT verified / BLOCKED
 
 - **Rendered browser QA — UNVERIFIED — the browser preview tool was blocked by
-  the session's permission classifier this round, so no page was rendered.** The
-  round-3 UI changes (`/support` sessionless refusal, `/admin` stale banner,
-  `/professor` assistant workspace, the notification bell) have build,
-  typecheck and unit-guard coverage but no rendered evidence. Required before
-  merge.
+  the session's permission classifier, so no page was rendered.** The
+  user-visible changes from rounds 3 and 4 (`/support` sessionless refusal,
+  `/admin` stale banner, `/professor` assistant workspace, the notification
+  bell, `/reviews` refusing a non-student, and per-person notification read
+  state) have build, typecheck and unit-guard coverage but no rendered
+  evidence. Required before merge.
 - **Realtime delivery — UNVERIFIED — requires a real socket and a real INSERT.**
   Both client-side defects are fixed and RLS was not weakened, but the channel
   is off by default and end-to-end delivery was never exercised.
@@ -138,7 +167,10 @@ Everything else deferred is in KI-022, with the reason.
 - UI/UX changes beyond what a confirmed security finding forced. Round 3 changed
   user-visible behaviour in exactly two places, both required by a finding:
   `/support` now requires a session (F8), and `/admin` gained a "이미 처리된
-  요청입니다" message for a decision that loses the CAS (F5).
+  요청입니다" message for a decision that loses the CAS (F5). Round 4 changed two
+  more, also finding-driven: `/reviews` refuses a non-student ("수강 후기는
+  학생만 작성할 수 있습니다"), and marking a tenant announcement read no longer
+  clears it for everyone else.
 
 ## Completion rule
 

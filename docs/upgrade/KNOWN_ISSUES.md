@@ -160,6 +160,77 @@ fails in the unit suite rather than at build time.
   intended trade. Tamper-proofing is still not claimed — no hash chain, no
   signature, and a database owner can still rewrite history.
 
+### Codex security review round 4 (2026-08-14) — status changes
+
+Nine substantive findings. Every one was verified against the code, the
+migrations and live metadata before any change, and every one was confirmed.
+All are closed.
+
+**Closed this round.** Per-recipient notification read state; student-only
+course reviews; the exact-enrollment atomic AI transition; the probe's
+quiesce/deadline/sweep gaps; effective EXECUTE in the security snapshot;
+`course_notice` DELETE (verified at runtime, not deferred); the audit probe's
+transport and cleanup; and this document plus the other seven.
+
+**Two were WIDER than reported, and both were found by building the check
+rather than by trusting the report:**
+
+- Adding effective `has_function_privilege` coverage to the snapshot
+  immediately caught two demo-era RPCs `anon` could still execute
+  (`replace_student_course_schedule_slots`,
+  `replace_student_custom_course_schedule_slots`). `20260814010000` closed the
+  anon surface by revoking TABLE privileges and asserted that as its
+  postcondition — function privileges were never in scope. The postcondition
+  was true and the property was false.
+- Verifying that a student cannot delete an official notice turned up
+  `authenticated` holding TRUNCATE on 31 of 54 public tables. TRUNCATE is not
+  subject to RLS and fires no row triggers.
+
+**Earlier Stage 9 claims this round INVALIDATED, corrected in place:**
+
+- *"The probe's results are trustworthy by construction"* — **overstated.**
+  Round 3's deadline only fired if the transport honoured an abort signal, and
+  its signal handler began destructive cleanup while requests were still in
+  flight. Both fixed; the wording now names the specific guarantees and their
+  limits. Corrected in CURRENT_STAGE, D-027 and SECURITY_TEST_MATRIX.
+- *"`anon` holds exactly one privilege in `public`"* — true of TABLES, false
+  overall until `20260814190000`. Corrected in AUTHORIZATION_RLS_AUDIT §3,
+  D-024 and HANDOFF.
+- *"Reads and writes share one notification predicate, so a user is never shown
+  a notification they cannot mark read"* — still true, but the predicate itself
+  matched a SHARED row whose read state belonged to the whole cohort.
+- The round-3 counts (96 probe checks, 6 notification checks) are superseded.
+
+**Still open, newly recorded this round:**
+
+- **Rendered browser QA remains UNVERIFIED** — the browser preview tool was
+  blocked by the session's permission classifier, so no page was rendered.
+  Round 4 added two more user-visible changes to the list needing QA:
+  `/reviews` refusing a non-student, and per-person notification read state.
+  **Prerequisite for merge.**
+- **POSIX signal DELIVERY on Windows — UNVERIFIED.** Narrowed, not closed. The
+  handler is now proven on every platform (injected emitter, plus an IPC-cancel
+  test driving the real runner in a real child process); what cannot be
+  exercised on Windows is whether the OS routes Ctrl-C to it.
+- **The audit probe leaves permanent rows BY DESIGN.** `service_role` holds only
+  INSERT and SELECT on `security_events`, so the probe cannot delete the events
+  it writes and no DELETE was granted to let it. After each run the trail
+  contains rows whose `event` begins `stage9-audit-probe.`; they carry no
+  personal data and are reported with their count at the end of every run.
+  Removing them needs a privileged out-of-band operation — the same constraint
+  a real retention policy will face.
+- **`student_courses` uniqueness includes `status`.** `UNIQUE (student_id,
+  course_id, status)` means several enrollments per (student, course) are
+  representable and the app writes at least two statuses. Round 4 made the AI
+  transition name an exact row, and authorization picks deterministically
+  (newest `updated_at`, `id` as tiebreak). Whether multiple concurrent
+  enrollments per course are intended at all is a PRODUCT question, unresolved,
+  and every other reader of `student_courses` still uses a broad predicate.
+- **Course reviews have no enrolment requirement.** Deliberately not invented:
+  no repository or product evidence requires a reviewer to have taken the
+  course. A product decision, recorded here rather than smuggled into a
+  security fix.
+
 ### BLOCKED on something outside the repository
 
 - **There is no verified recovery point of any kind.** `supabase backups list`

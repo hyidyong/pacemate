@@ -177,3 +177,35 @@ this round: a profile carrying audit history **can** be deleted, and its
 - **Not crash-safe.** See the probe row above.
 - **Full-chain rebuild — BLOCKED — NON-PRODUCTION DATABASE REQUIRED.**
 - **Restore from backup — BLOCKED — NO BACKUP EXISTS TO RESTORE FROM.**
+
+
+---
+
+## 9. Round 4 — the audit probe joins the harness, without weakening the trail
+
+Codex round 4, finding 7: the product's ACL semantics were correct, but the
+probe VERIFYING them was the last one still on a bare `fetch` with no deadline,
+with teardown that swallowed its own failures (`.catch(() => {})`) and no signal
+handling at all. A verification tool that can hang, or that reports success it
+did not observe, is not evidence.
+
+It now shares the same harness as every other probe: the bounded transport, one
+cancellation scope, a caller-owned ledger for the disposable profile, and
+signal-aware cleanup whose result gates the exit code.
+
+**What was deliberately NOT done.** The probe still cannot delete the audit
+events it writes, and no DELETE was granted to make that possible.
+`service_role` holds `INSERT` and `SELECT` on `security_events` and nothing
+else. Its test events therefore remain in the trail permanently. They are
+reported at the end of every run with their count and marker, so the residue is
+visible rather than discovered later. Two guards keep it that way:
+`probe-cleanup.test.mjs` asserts the probe never ledgers a `security_events`
+row (the ledger deletes) and never attempts a bulk removal of its own events,
+and the snapshot guard asserts no role holds UPDATE, DELETE or TRUNCATE on the
+table.
+
+**Expected residue semantics, stated plainly.** After a successful audit-probe
+run the database contains N rows whose `event` begins `stage9-audit-probe.`.
+That is correct behaviour, not a leak. They carry no personal data. Removing
+them requires a privileged out-of-band operation, which is the same constraint
+a real retention policy will face — and that constraint is the point.

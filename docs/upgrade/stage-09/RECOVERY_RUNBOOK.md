@@ -179,11 +179,19 @@ RLS is already enabled on all 54 tables, so removing the grant is sufficient and
 reversible.
 
 **Clean up after an abnormal probe exit.** Ctrl-C and SIGTERM are handled: the
-probe runs its cleanup ledger exactly once and exits 130/143. **SIGKILL, a host
-OOM kill or a power loss are NOT handled and no crash safety is claimed** — a
-`try/finally` cannot run when the process is destroyed. A probe killed that way
-leaves marked fixtures behind, and the independent recovery mechanism is
-operator-run:
+probe first CANCELS its shared request scope, waits (bounded) for in-flight work
+to stop, then runs its cleanup exactly once and exits 130/143. The ordering
+matters — cleaning up while a create is still on the wire can leave a row that
+commits after cleanup has already looked.
+
+On Windows, Ctrl-C to a CHILD process cannot be delivered at all; a parent
+process can instead send `{ type: "probe:cancel" }` over an IPC channel, which
+drives the same quiesce-then-cleanup path.
+
+**SIGKILL, a host OOM kill or a power loss are NOT handled and no crash safety
+is claimed** — nothing in-process runs when the process is destroyed. A probe
+killed that way leaves marked fixtures behind. The next run's automatic marker
+sweep will find them, and the independent operator-run recovery is:
 
 ```bash
 node scripts/security/rls-probe.mjs --sweep
@@ -205,8 +213,18 @@ variables, by design — the guard runs before the first write, not after:
 PACEMATE_SECURITY_PROBE_ALLOW_WRITES=1 PACEMATE_SECURITY_PROBE_PROJECT_REF=<ref> node scripts/security/rls-probe.mjs
 ```
 
-96 checks across anon, cross-tenant and legitimate-path cases. It provisions and
-removes its own tenants and ends with a fatal residue verification.
+108 checks across anon, cross-tenant and legitimate-path cases. It provisions
+and removes its own tenants and ends with a THREE-PHASE teardown: ledger
+cleanup, then an automatic marker sweep, then residue verification. The run is
+clean only when all three agree.
+
+**Why the sweep is automatic (Codex round 4, 4C).** A create request that times
+out may still have committed: the row exists and the client never learned its
+id, so the ledger has nothing to delete. The sweep is keyed on the probe marker,
+so it finds exactly that — and anything left by an earlier run that was killed
+outright. Whatever it removes is printed as `[SWEPT]`; a swept item is not a
+failure, but it IS information, and silently deleting rows the ledger never
+recorded would hide the ambiguity.
 
 The host guard will refuse to send the service-role key anywhere that is not
 exactly `https://<ref>.supabase.co` (or `.supabase.in`) — no port, no embedded

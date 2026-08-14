@@ -504,3 +504,68 @@ test("4C — an ambiguous mutation is reported as ambiguous, not as a failure", 
     (error) => error.ambiguous === false,
   );
 });
+
+// ---------------------------------------------------------------------------
+// Codex round 4, finding 7 — the audit probe is on the same harness as the rest.
+// ---------------------------------------------------------------------------
+
+test("F7 — the audit probe uses the bounded transport, not a bare fetch", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../audit-trail-probe.mjs", import.meta.url), "utf8");
+  const code = source
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("//"))
+    .join("\n");
+
+  assert.doesNotMatch(code, /\bfetch\(/, "the audit probe must not call fetch directly");
+  assert.match(code, /createRoleClient/, "anon traffic must go through the bounded transport");
+  assert.match(code, /createProbeLifecycle/, "cleanup must run on SIGINT/SIGTERM too");
+  assert.match(code, /abortWork: \(reason\) => scope\.abort\(reason\)/, "it must quiesce before cleanup");
+  assert.match(code, /new ProbeLedger/, "the disposable profile must be ledgered");
+
+  // The swallow-and-continue teardown must not come back.
+  assert.doesNotMatch(code, /\.catch\(\(\) => \{\}\)/, "cleanup failures must not be swallowed");
+});
+
+test("F7 — the audit probe does NOT weaken append-only to tidy up after itself", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../audit-trail-probe.mjs", import.meta.url), "utf8");
+  const code = source
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("//"))
+    .join("\n");
+
+  // Its own events must never be ledgered: the ledger deletes, and DELETE on
+  // security_events does not exist for any role. Granting it so the harness
+  // could clean up is the exact trade this stage refused.
+  assert.doesNotMatch(
+    code,
+    /recordRow\("security_events"/,
+    "audit events must not be ledgered — the ledger deletes, and they are permanent",
+  );
+  assert.doesNotMatch(
+    code,
+    /remove\("security_events"[\s\S]{0,120}created\.events\.map/,
+    "the probe must not attempt a bulk removal of its own audit rows",
+  );
+
+  // The permanent residue must be REPORTED, not silently accepted.
+  assert.match(code, /permanent test event\(s\)/);
+
+  // And the run must still fail if the DISPOSABLE half was not cleaned.
+  assert.match(code, /failed === 0 && cleanup\.ok && !bodyError && ranEverything/);
+});
+
+test("F7 — the snapshot still shows no role can delete the audit trail", async () => {
+  const { readFileSync } = await import("node:fs");
+  const snapshot = JSON.parse(
+    readFileSync(new URL("../../../supabase/security-snapshot.json", import.meta.url), "utf8"),
+  );
+  for (const row of snapshot.effective_privileges.filter((r) => r.table === "security_events")) {
+    assert.doesNotMatch(
+      row.privileges,
+      /DELETE|TRUNCATE|UPDATE/,
+      `${row.role} can mutate the audit trail: ${row.privileges}`,
+    );
+  }
+});

@@ -2,18 +2,131 @@
 
 ## Status
 
-On `upgrade/stage-9` after **three** external Codex security review rounds, each
+On `upgrade/stage-9` after **four** external Codex security review rounds, each
 of which returned **NOT SAFE TO MERGE**. Base `main` @ `fd44172` (Stage 8 PR #42
 merged 2026-08-12, verified). Not merged — that is the human's call. Stage 10
 not started. **The next action is another independent Codex security review.**
 
-Read the round-3 section first: it corrects claims made in the round-1 and
-round-2 sections below, which are kept as the historical record rather than
-edited into agreement.
+Read the **round-4** section first (immediately below): it corrects claims made
+in rounds 1–3, which are kept as the historical record rather than edited into
+agreement.
 
 Status markers used in this document mean exactly one of:
 `PASS` (with evidence) · `UNVERIFIED — <exact missing evidence>` ·
 `BLOCKED — <exact external dependency>` · `DEFERRED — <exact stage/reason>`.
+
+---
+
+## Codex review round 4 (2026-08-14)
+
+Nine substantive findings. Every one was verified against the code, the
+migrations and live metadata **before** any change, and every one was
+confirmed. Two turned out to be wider than reported, and verifying two others
+uncovered defects nobody had reported at all.
+
+| # | Finding | Verdict | Status |
+|---|---|---|---|
+| 1 | Role broadcasts share one mutable `is_read` | **CONFIRMED** — 14 shared rows live, 12 already flipped | CLOSED |
+| 2 | Non-student staff can publish course reviews | **CONFIRMED** — all three roles got 201 | CLOSED |
+| 3 | AI CAS: enrollment id discarded, broad predicate, feedback before winning | **CONFIRMED, all three** | CLOSED |
+| 4 | Probe: signal races cleanup; body outlives deadline; ambiguous creates; skipped Windows signals | **CONFIRMED, and worse** — see below | CLOSED |
+| 5 | Snapshot misses effective EXECUTE semantics | **CONFIRMED, and it found a live gap** | CLOSED |
+| 6 | `course_notice` DELETE unverified at runtime | **CONFIRMED — and verifiable after all** | CLOSED, not deferred |
+| 7 | Audit probe still on unbounded fetch / weak cleanup | **CONFIRMED** | CLOSED |
+| 8 | Recovery documentation overclaims | **CONFIRMED** | CLOSED (this document) |
+| 9 | Realtime live delivery | UNVERIFIED, non-blocking | Re-checked; subscription updated for finding 1 |
+
+### What was wider than reported
+
+**Finding 4 — round 3's own deadline fix was incomplete.** Writing the test for
+it exposed that the timeout only fired if `fetch` honoured the abort signal. A
+transport that ignores it, or a body stream that never settles, left the await
+hanging forever with the timer already fired — the precise failure the deadline
+exists to prevent. The deadline is now raced independently of the abort, so it
+always fires. Proven with an injected fetch that ignores signals entirely.
+
+**Finding 5 — the new guard immediately found a live gap.** Adding effective
+`has_function_privilege` coverage turned up two functions `anon` could still
+execute (`replace_student_course_schedule_slots`,
+`replace_student_custom_course_schedule_slots`), each carrying an explicit
+`anon=X` grant from the demo era. `20260814010000` closed the anon surface by
+revoking TABLE privileges and asserted exactly that as its postcondition —
+FUNCTION privileges were never in scope, so two RPC entry points survived a
+migration whose whole purpose was removing them. Bounded (both are SECURITY
+INVOKER, so RLS still applied with anon's empty privileges), but the property
+rested on a second control rather than on the entry point being shut.
+
+**Finding 6 — and TRUNCATE.** Reading the live privileges to confirm the notice
+DELETE property showed `authenticated` effectively holding TRUNCATE on 31 of 54
+public tables. TRUNCATE is not subject to RLS and fires no row triggers, so a
+role holding it makes every DELETE policy in the schema decorative. Not
+reachable through PostgREST, which has no TRUNCATE verb — recorded as least
+privilege rather than as an exploit — but "the API happens not to expose the
+verb" is a property of PostgREST's feature set, not a security control.
+
+### Round-4 migrations
+
+`20260814150000` notification per-recipient read state (backfill + NOT NULL +
+identity-only policies) · `20260814160000` course reviews are student-only ·
+`20260814170000` `advance_student_week` atomic transition ·
+`20260814180000` revoke TRUNCATE/REFERENCES/TRIGGER from client roles ·
+`20260814190000` revoke anon EXECUTE on every function.
+
+All applied live and reconciled; `dump-security-snapshot.mjs --check` reports
+the committed snapshot matches the database.
+
+### Round-4 verification
+
+| Check | Result |
+|---|---|
+| Live direct Data API probe (`rls-probe.mjs`) | **PASS — 108 checks, 0 failed**, residue clean |
+| Live durable audit probe | **PASS — 12 checks, 0 failed** |
+| Live notification RLS | **PASS — 10 checks, 0 failed** (was 6; four are new peer-isolation checks) |
+| Security snapshot vs live DB | **PASS — matches** |
+| Rendered browser QA | **UNVERIFIED — the browser preview tool is blocked by this session's permission classifier; no page was rendered** |
+
+### Claims from earlier rounds that round 4 invalidated
+
+1. *"Probe results are trustworthy by construction"* — **overstated.** Round 3's
+   deadline depended on the transport honouring an abort signal, and its signal
+   handler began destructive cleanup while requests were still in flight.
+   Both are fixed; the wording is corrected throughout to describe the specific
+   guarantees rather than a general property.
+2. *"`anon` holds exactly one privilege in `public`"* — **true of TABLES, false
+   overall.** anon held EXECUTE on two functions until `20260814190000`. The
+   claim now says "no table privilege outside `schools`, and no function
+   EXECUTE anywhere".
+3. *"The audit trail is append-only and no role reachable through the API can
+   alter or remove a record"* — the CLAIM held, but the audit probe verifying it
+   was itself on an unbounded fetch with swallowed cleanup failures. Fixed.
+4. *"Notifications: reads and writes share one predicate so a user is never
+   shown a notification they cannot mark read"* — still true, but the predicate
+   itself was wrong: it matched a shared row whose read state belonged to the
+   whole cohort.
+5. The round-3 counts (96 probe checks, 6 notification checks, 499 tests) are
+   superseded by the round-4 numbers above.
+
+### Still UNVERIFIED or BLOCKED after round 4
+
+- **Rendered browser QA — UNVERIFIED — the preview tool was blocked by the
+  session's permission classifier.** Round 4 changed user-visible behaviour in
+  two places, both forced by a finding: `/reviews` now refuses a non-student
+  ("수강 후기는 학생만 작성할 수 있습니다"), and notification read state is now
+  per person so a peer's badge no longer clears. Neither has rendered evidence.
+- **Realtime live delivery — UNVERIFIED — needs a real socket and a real
+  INSERT.** Finding 1 changed what the subscription carries (every row is now
+  recipient-addressed, so the client guard is an exact match); the source-level
+  contract was re-checked and regression-tested, but delivery was not exercised.
+- **POSIX signal DELIVERY on Windows — UNVERIFIED.** The handler is proven on
+  every platform (injected emitter, plus an IPC-cancel test against the real
+  runner in a real child process). What cannot be exercised on Windows is
+  whether the OS routes Ctrl-C to it.
+- **Probe crash safety — NOT CLAIMED.** SIGKILL, power loss and host crashes
+  leave ledgered fixtures behind. Recovery is the next run's automatic marker
+  sweep plus the operator-run `--sweep`.
+- **Full-chain rebuild — BLOCKED — NON-PRODUCTION DATABASE REQUIRED.**
+- **Restore from backup — BLOCKED — NO BACKUP EXISTS TO RESTORE FROM.**
+- No RPO, no RTO, no PITR. Unchanged and still the most serious operational gap.
 
 ---
 
@@ -217,7 +330,11 @@ trusted identity → tenant membership → role → server/domain validation
 
 Identity is `profiles.auth_user_id`, resolved by SECURITY DEFINER helpers in
 `app_private` (a schema PostgREST does not expose) with `search_path = ''`
-(D-024). `anon` holds exactly one privilege in `public`: SELECT on `schools`.
+(D-024). `anon` holds exactly one TABLE privilege in `public`: SELECT on
+`schools` — and, since round 4's `20260814190000`, **no function EXECUTE
+anywhere**. The earlier wording said "exactly one privilege", which was true of
+tables and false overall: two demo-era RPCs kept an explicit `anon=X` grant that
+the table-only closure never looked at.
 
 ## RLS changes
 

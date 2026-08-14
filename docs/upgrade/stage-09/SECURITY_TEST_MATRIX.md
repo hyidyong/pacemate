@@ -368,3 +368,54 @@ permanently, and the probe reports them rather than cleaning them up.
 | `src/services/notification-tenant-scope.test.mjs` | 3 | the publication broadcast carries its tenant (F10) |
 | `src/components/notifications/notification-realtime.test.mjs` | 5 | auth-before-subscribe, no role-broadcast exclusion, RLS not weakened (F11) |
 | `src/services/server-action-contract.test.mjs` | 2 | every `"use server"` export is async — the defect that broke `next build` |
+
+
+---
+
+## Review round 4 — what changed about trust
+
+Round 3 added a "what makes a PASS trustworthy" table. Round 4 found that two of
+the guarantees behind it were conditional, and one whole case was missing.
+
+| Guarantee | Round-3 state | Round-4 state |
+|---|---|---|
+| Deadline covers the body | True only if the transport honoured `AbortController`. A fetch that ignores the signal hung forever with the timer already fired | The timeout is raced independently of the abort, so it fires regardless. Proven with an injected fetch that ignores signals entirely |
+| Cleanup runs on a signal | True, but it started while requests were still in flight, so a create on the wire could commit after cleanup had looked | Cleanup QUIESCES first: cancel the shared scope, wait (bounded) for the body to stop, then delete. An unquiesced body still gets cleanup but FAILS the run |
+| Nothing is left behind | The ledger removes what it recorded | Plus an automatic marker sweep, because a create that times out may have committed without the client learning its id. Clean = ledger AND sweep AND residue verification |
+| Windows signal coverage | Skipped, which reads as unproven | The HANDLER is proven on every platform — injected emitter, plus an IPC-cancel test driving the real runner in a real child process. Only the OS DELIVERY mechanism is unexercised, and it is recorded as UNVERIFIED |
+
+**Not claimed, unchanged:** SIGKILL, power loss, host crash.
+
+### Round-4 live results
+
+| Suite | Result |
+|---|---|
+| `rls-probe.mjs` | **PASS — 108 checks, 0 failed**, residue clean |
+| `audit-trail-probe.mjs` | **PASS — 12 checks, 0 failed** |
+| `verify-notification-rls.mjs` | **PASS — 10 checks, 0 failed** |
+| `dump-security-snapshot.mjs --check` | **PASS — matches** |
+
+### New round-4 offline suites
+
+| Suite | Tests | Covers |
+|---|---|---|
+| `scripts/security/lib/probe-http.test.mjs` | 9 | body deadline independent of the transport; ambiguous mutations; the shared cancellation scope |
+| `src/services/notification-per-recipient.test.mjs` | 9 | fan-out, tenant and role scoping, no-recipient failure, identity-only predicate |
+| `src/services/review-role-authorization.test.mjs` | 9 | student allowed; professor/assistant/admin refused; both boundaries; no invented enrolment rule |
+| `src/services/ai-tutor.exact-enrollment.test.mjs` | 7 | two enrollments, only the exact one advances; loser writes nothing; one model call |
+
+### New round-4 live checks
+
+| Check | Property |
+|---|---|
+| `notice:student-can-read` | positive sentinel — the notice is visible before the deny check means anything |
+| `notice:student-cannot-delete` | a student cannot delete an official notice (204 returned; row survived) |
+| `notice:cross-tenant-cannot-delete` | nor can another tenant's user |
+| `deny:professor-review` / `assistant` / `admin` | staff cannot publish a student review |
+| `ai:advance-exact-enrolment` | target 1→2, sibling 1→1 |
+| `ai:advance-writes-feedback` | the winner's feedback is persisted by the same transition |
+| `ai:advance-stale-writes-nothing` | a stale expected week advances nothing and writes nothing |
+| `ai:advance-foreign-enrolment` | another student cannot advance an enrollment that is not theirs |
+| `ai:advance-anon-denied` | anon cannot execute the transition (401) |
+| `broadcast-peer-isolation` | A marking a broadcast read leaves peer B unread |
+| `mark-all-peer-isolation` | mark-all does not touch a peer |

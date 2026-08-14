@@ -393,3 +393,123 @@ all is granted to `PUBLIC` — the role every other role inherits from.
 Write outcomes are confirmed by a service-role read-back of the persisted row,
 with the mutation posted **without** `Prefer: return=representation` — the
 weakest attacker path. A response representation is never treated as evidence.
+
+
+---
+
+## Codex security review round 4 (2026-08-14) — authorization findings
+
+Five of round 4's findings change the authorization model and belong here.
+
+### Finding 1 — notification read state is per recipient
+
+A tenant-wide notification was stored ONCE with `recipient_id = NULL`, and
+`is_read` is a column on that row. Every holder of the role shared it, so the
+first reader marked it read for the whole cohort. **This was not an RLS bypass**
+— the UPDATE policy's USING and WITH CHECK both matched the role branch, so
+writing a peer's read state was the designed behaviour. 14 shared rows existed
+live; 12 had already been flipped.
+
+Fixed by fan-out at the single creation chokepoint (D-033). `recipient_id` is
+NOT NULL as of `20260814150000`, and both policies collapse to:
+
+```sql
+using (recipient_id = app_private.current_profile_id())
+```
+
+The tenant term went with the role branch. It is subsumed: a notification is
+addressed to exactly one profile, and a profile belongs to exactly one tenant.
+This policy is strictly NARROWER than what it replaces.
+
+Proven live with a positive sentinel first — peer B must be shown to be
+genuinely eligible before "A could not affect B" means anything:
+
+| Check | Before | After |
+|---|---|---|
+| `peer-b-sees-broadcast` (sentinel) | 1 row, unread | 1 row, unread |
+| `broadcast-peer-isolation` | **is_read=true** | is_read=false |
+| `mark-all-peer-isolation` | **is_read=true** | is_read=false |
+
+### Finding 2 — course reviews are student experience
+
+`/reviews` was gated by `redirectNonStudent`, and nothing below the route
+agreed: the INSERT policy asked "is it yours" and "is it your tenant", both true
+for a professor reviewing a colleague's course. A route guard is not an
+authorization boundary — a server action runs before any page renders. All three
+staff roles posted a same-tenant, self-authored review and got 201 with the row
+persisted.
+
+`20260814160000` adds `app_private.current_user_role() = 'student'` to the
+INSERT policy, keeping the author and tenant terms, with a postcondition that
+fails the migration if any of the three is missing. The server action refuses
+independently. INSERT only: once no staff member can create one, every row is
+student-authored, and adding a role term to UPDATE would freeze a student's own
+past reviews the moment their role changed. **No enrolment requirement was
+invented** — no repository evidence requires one, and a test asserts the policy
+contains no `student_courses` predicate.
+
+### Finding 3 — the weekly advance is bound to one exact enrollment
+
+`student_courses` is UNIQUE on `(student_id, course_id, STATUS)`, so a student
+legitimately has several rows for one course. Authorization inspected one row
+(arbitrarily — `.limit(1)` with no ORDER BY) and discarded its primary key; the
+compare-and-set then matched `student_id + course_id + current_week` and moved
+every row that matched. Feedback was written before the CAS ran, so a losing
+caller had already persisted.
+
+`20260814170000` adds `public.advance_student_week(uuid, integer, text)`:
+SECURITY DEFINER, `search_path = ''`, bound to `app_private.current_profile_id()`
+so a caller-supplied enrollment id is re-checked for ownership and tenancy. One
+statement establishes the row, the owner, the tenant and the expected week, and
+takes `for update of sc` while that predicate still holds — a second caller
+blocks, re-evaluates after the first commits, matches nothing, and returns
+`stale`. Feedback is written inside the same transaction, only by the winner.
+
+### Finding 6 — TRUNCATE is not subject to RLS
+
+Confirming that a student cannot delete an official `course_notice` (they
+cannot: the DELETE policy binds `author_id`, and round 3's F3 means no student
+can author one) surfaced something no policy can help with. `authenticated`
+effectively held TRUNCATE on 31 of 54 public tables — the platform default,
+never narrowed. TRUNCATE ignores row policies and fires no row triggers, so a
+role holding it makes every DELETE policy in this document decorative.
+
+Not reachable through PostgREST, which has no TRUNCATE verb, so this is recorded
+as least privilege rather than as an exploit. `20260814180000` revokes TRUNCATE,
+REFERENCES and TRIGGER from `anon` and `authenticated` across `public`, sets
+default privileges to match, and asserts the Data API verbs the application
+needs survived.
+
+### Finding 5 — the anon closure was table-only
+
+`20260814010000` revoked anon's TABLE privileges and asserted that as its
+postcondition. FUNCTION privileges were never in scope, so two demo-era RPCs
+kept an explicit `anon=X` grant:
+
+```
+public.replace_student_course_schedule_slots(uuid, jsonb)
+public.replace_student_custom_course_schedule_slots(uuid, jsonb)
+```
+
+Both are SECURITY INVOKER, so RLS still applied with anon's now-empty table
+privileges and a call would have failed — the reach was bounded by a second
+control rather than by the entry point being shut. `20260814190000` revokes it
+and sets default privileges so new functions cannot arrive with it.
+
+**The authorization matrix row for `anon` should now be read as: SELECT on
+`schools`, and nothing else — no other table privilege, and no function EXECUTE
+anywhere in `public` or `app_private`.**
+
+### Round-4 live verification
+
+| Probe | Result |
+|---|---|
+| `rls-probe.mjs` | **PASS — 108 checks, 0 failed**, residue clean |
+| `audit-trail-probe.mjs` | **PASS — 12 checks, 0 failed** |
+| `verify-notification-rls.mjs` | **PASS — 10 checks, 0 failed** |
+| `dump-security-snapshot.mjs --check` | **PASS — matches the live database** |
+
+One detail worth keeping: the notice-delete checks returned **HTTP 204** while
+the row survived. PostgREST reports a zero-row DELETE as success, so the status
+code said "deleted". The verdict comes from a service-role read-back, which is
+the only reason those checks are meaningful.

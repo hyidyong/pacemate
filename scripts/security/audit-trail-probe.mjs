@@ -22,8 +22,11 @@
 //   node scripts/security/audit-trail-probe.mjs
 
 import { loadEnvLocal, requireEnv } from "../loadtest/lib/env.mjs";
-import { assertSafeToProbe } from "./lib/probe-guard.mjs";
+import { PROBE_MARKER, assertSafeToProbe } from "./lib/probe-guard.mjs";
 import { createProbeRest } from "./lib/probe-rest.mjs";
+import { createAbortScope, createRoleClient } from "./lib/probe-http.mjs";
+import { createProbeLifecycle } from "./lib/probe-lifecycle.mjs";
+import { ProbeLedger, verifyNoResidue } from "./lib/probe-ledger.mjs";
 
 const MARKER = "stage9-audit-probe";
 
@@ -35,18 +38,53 @@ async function main() {
 
   assertSafeToProbe({ ...env, ...process.env }, url);
 
+  // Codex round 4, finding 7. This probe was the last one still using a bare
+  // `fetch` with no deadline, ad-hoc teardown that swallowed its own failures
+  // (`.catch(() => {})`), and no signal handling at all. It now shares the same
+  // harness as every other probe: bounded transport, one cancellation scope,
+  // a caller-owned ledger, and signal-aware cleanup that cannot report success
+  // it did not observe.
+  const scope = createAbortScope();
   const rest = createProbeRest({ url, serviceRoleKey: serviceKey });
-  const anonHeaders = { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" };
-  const asAnon = (path, init = {}) =>
-    fetch(`${url}/rest/v1/${path}`, { ...init, headers: { ...anonHeaders, ...(init.headers ?? {}) } });
+  const asAnon = createRoleClient({
+    url,
+    baseHeaders: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
+    scopeSignal: scope.signal,
+  });
 
   const results = [];
   const check = (id, property, pass, detail) => results.push({ id, property, pass, detail });
 
-  const created = { events: [], profiles: [] };
-  // Audit rows are permanent by design; only the profile is disposable.
+  // AUDIT ROWS ARE NEVER LEDGERED. service_role holds only INSERT and SELECT on
+  // security_events (20260814140000), so the ledger could not delete them even
+  // if it tried — and granting DELETE to make the harness tidy is exactly the
+  // trade this stage refused. They stay, and they are reported. Only the
+  // disposable PROFILE is a ledgered resource.
+  const created = { events: [] };
+  const ledger = new ProbeLedger({ rest, auth: null });
 
-  try {
+  const lifecycle = createProbeLifecycle({
+    abortWork: (reason) => scope.abort(reason),
+    cleanup: async () => {
+      const failures = await ledger.cleanup();
+      for (const failure of failures) {
+        console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id}: ${failure.message}`);
+      }
+      // The shared residue check knows nothing about this probe's own marker,
+      // so the disposable profile carries PROBE_MARKER too and is covered by
+      // the same machinery every other probe uses.
+      const residue = await verifyNoResidue({ rest, auth: null });
+      // No auth client here: this probe creates no auth users, so "no auth
+      // client supplied" is expected rather than an unverifiable check.
+      const unverifiable = residue.unverifiable.filter((entry) => !entry.startsWith("auth.users:"));
+      for (const entry of residue.residue) console.error(`[RESIDUE] ${entry}`);
+      for (const entry of unverifiable) console.error(`[UNVERIFIABLE] ${entry}`);
+      const ok = failures.length === 0 && residue.residue.length === 0 && unverifiable.length === 0;
+      return { ok, detail: ok ? "clean" : "residue or cleanup failure" };
+    },
+  });
+
+  const { bodyError } = await lifecycle.run(async () => {
     // ---- F7: required privileges are present -----------------------------
     const [event] = await rest.insert("security_events", [
       { event: `${MARKER}.append`, outcome: "ok", subject_type: "verification", detail: MARKER },
@@ -59,8 +97,13 @@ async function main() {
 
     // ---- F7: forbidden privileges are absent -----------------------------
     let res = await asAnon("security_events?select=id&limit=5");
-    const anonRows = res.ok ? await res.json() : [];
-    check("f7:anon-cannot-read", "anon CANNOT read the audit trail", !res.ok || anonRows.length === 0, `status ${res.status}`);
+    const anonRows = Array.isArray(res.body) ? res.body : [];
+    check(
+      "f7:anon-cannot-read",
+      "anon CANNOT read the audit trail",
+      res.status >= 400 || anonRows.length === 0,
+      `status ${res.status}`,
+    );
 
     res = await asAnon("security_events", {
       method: "POST",
@@ -96,13 +139,13 @@ async function main() {
     const [school] = await rest.select("schools", "select=id&limit=1");
     const [disposable] = await rest.insert("profiles", [
       {
-        identifier: `${MARKER}-actor@probe.invalid`,
-        name: `${MARKER} disposable actor`,
+        identifier: `${PROBE_MARKER}-${MARKER}-actor@probe.invalid`,
+        name: `${PROBE_MARKER} ${MARKER} disposable actor`,
         role: "student",
         school_id: school.id,
       },
     ]);
-    created.profiles.push(disposable.id);
+    ledger.recordRow("profiles", disposable.id, "disposable audit actor");
 
     const [attributed] = await rest.insert("security_events", [
       {
@@ -130,7 +173,9 @@ async function main() {
     let deletionSucceeded = true;
     try {
       await rest.remove("profiles", `id=eq.${disposable.id}`);
-      created.profiles = created.profiles.filter((id) => id !== disposable.id);
+      // Removed as part of the TEST, so drop it from the ledger — otherwise
+      // cleanup would report a failure for a row the probe deliberately deleted.
+      ledger.entries = ledger.entries.filter((entry) => entry.id !== disposable.id);
     } catch {
       deletionSucceeded = false;
     }
@@ -151,13 +196,9 @@ async function main() {
       afterDeletion?.actor_ref === disposable.id && afterDeletion?.actor_role_ref === "student",
       `actor_ref=${afterDeletion?.actor_ref === disposable.id ? "PRESERVED" : "LOST"}, role_ref=${afterDeletion?.actor_role_ref}`,
     );
-  } finally {
-    // Audit events are intentionally NOT deleted — see the header. Only the
-    // disposable profile is removed.
-    for (const id of created.profiles) {
-      await rest.remove("profiles", `id=eq.${id}`).catch(() => {});
-    }
-  }
+  });
+
+  const cleanup = lifecycle.cleanupResult ?? { ok: false, detail: "cleanup did not run" };
 
   // The append-only guarantee itself, proven rather than asserted.
   if (created.events.length) {
@@ -179,16 +220,11 @@ async function main() {
   }
 
   const auditEvents = await rest.select("security_events", `select=id&event=like.${MARKER}*`).catch(() => null);
-  const leftoverProfiles = await rest
-    .select("profiles", `select=id&identifier=like.*${MARKER}*`)
-    .catch(() => null);
   check(
     "cleanup:disposable",
     "every DISPOSABLE resource is removed and the check can be performed",
-    leftoverProfiles !== null && leftoverProfiles.length === 0,
-    leftoverProfiles === null
-      ? "UNVERIFIABLE — residue read failed"
-      : `${leftoverProfiles.length} profile(s) left`,
+    cleanup.ok,
+    cleanup.detail,
   );
   // Not a leak: audit rows are permanent by design. Reported so the count is
   // visible and nobody mistakes them for production events.
@@ -205,7 +241,15 @@ Audit trail: ${auditEvents === null ? "UNKNOWN" : auditEvents.length} permanent 
     console.log(`[${r.pass ? "PASS" : "FAIL"}] ${r.id}\n        ${r.property}\n        ${r.detail}`);
   }
   console.log(`\n${results.length} checks, ${failed} FAILED.`);
-  process.exit(failed === 0 ? 0 : 1);
+  if (bodyError) console.error(`\nAborted: ${bodyError.message}`);
+
+  // A run that aborted part-way through must never read as success, and neither
+  // must one whose cleanup could not be proven.
+  const EXPECTED_CHECKS = 12;
+  const ranEverything = results.length === EXPECTED_CHECKS;
+  if (!ranEverything) console.error(`Only ${results.length} of ${EXPECTED_CHECKS} checks ran.`);
+
+  process.exit(failed === 0 && cleanup.ok && !bodyError && ranEverything ? 0 : 1);
 }
 
 main().catch((error) => {

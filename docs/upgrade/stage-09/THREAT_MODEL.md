@@ -251,3 +251,55 @@ the hole it closed — it is simply one whose victim is a legitimate user. Each
 was fixed by **restoring the property through the correct mechanism** (tenant
 scope, session tenant, RLS-side filtering), never by relaxing the control that
 caused it.
+
+
+---
+
+## Review round 4 (2026-08-14) — three more assumptions that were wrong
+
+### Shared state is shared authority
+
+The model in this document reasons about who may READ and WRITE a row. Finding 1
+showed that is not sufficient when a single row serves many people. A tenant
+broadcast was one row with one `is_read`, so "may this user write this row?"
+was answered yes for every eligible reader — correctly, by the policy as
+written — and the consequence was that one student could clear the whole
+cohort's unread state. No boundary was crossed; the boundary was drawn in the
+wrong place.
+
+**State that belongs to a person must live on a row that belongs to that
+person** (D-033). Where it does not, an access-control question that looks
+answered is not.
+
+### A privilege is what the database computes
+
+Finding 5 turned on a representation detail with real consequences: a function
+whose ACL was never narrowed shows `proacl = NULL`, and PostgreSQL's default for
+a function is EXECUTE to PUBLIC. A snapshot recording the string could not tell
+"nobody may call this" from "everybody may". The guard that fixed it immediately
+found two demo-era RPCs `anon` could still execute — surviving a migration whose
+stated purpose, and asserted postcondition, was removing exactly that. The
+postcondition was true and the property was false, because the postcondition
+only looked at tables.
+
+**Assert on what the database computes, across every route a privilege can
+arrive by** (D-034).
+
+### A control the current API does not expose is not a control
+
+Finding 6's TRUNCATE grant is not reachable through PostgREST, which has no
+TRUNCATE verb. That is why it is recorded as least privilege rather than as an
+exploit — and why it was still removed. What stood between an authenticated
+session and emptying 31 tables across every tenant was a gap in one component's
+feature set, not anything in this threat model. TRUNCATE also bypasses RLS
+entirely and fires no row triggers, so no policy and no audit trigger in this
+document would have seen it happen.
+
+### And one about the instrument, again
+
+Round 3 recorded that the measuring harness is part of the attack surface. Round
+4 showed the same lesson applies to the harness's own fixes: its deadline worked
+only if the transport co-operated, and its cleanup started while the work it was
+cleaning up was still running. Both were written as guarantees and were
+conditional. The corrected wording throughout these documents names the specific
+guarantee and its limits rather than asserting trustworthiness in general.
