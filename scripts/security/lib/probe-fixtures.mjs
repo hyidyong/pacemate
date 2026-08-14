@@ -228,11 +228,15 @@ export async function provisionTenant(ledger, label, runId) {
     `direct notification ${label}`,
   );
 
+  // Codex round 4, finding 1: a role broadcast is now stored as one row PER
+  // RECIPIENT (`recipient_id` is NOT NULL as of 20260814150000). The shared
+  // NULL-recipient row this fixture used to create is no longer insertable, and
+  // modelling it would test a shape the application can no longer produce.
   const broadcast = await createRow(
     ledger,
     "user_notifications",
     {
-      recipient_id: null,
+      recipient_id: profile.id,
       recipient_role: "student",
       school_id: school.id,
       category: "system",

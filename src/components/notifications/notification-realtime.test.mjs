@@ -57,17 +57,46 @@ test("the subscription does not filter out role broadcasts", () => {
   );
 });
 
-test("a role broadcast is accepted and another user's notification is not", () => {
-  // The client-side guard is defence in depth, not the boundary. Its logic is
-  // reproduced here so the intent is pinned.
-  const accept = (recipientId, profileId) => {
-    const value = typeof recipientId === "string" ? recipientId : null;
-    return !(value !== null && value !== profileId);
-  };
+test("the client guard is an EXACT recipient match (Codex round 4, finding 1)", () => {
+  // The guard is defence in depth, not the boundary — RLS already decided what
+  // the socket may see. Since finding 1 fanned broadcasts out into one row per
+  // recipient, `recipient_id` is NOT NULL and every deliverable row is
+  // addressed to exactly one profile, so the guard is an exact match. Accepting
+  // a NULL recipient would mean trusting a row the schema says cannot exist.
+  //
+  // The predicate is extracted from the COMPONENT rather than reimplemented, so
+  // this cannot drift away from the code the way the previous version did.
+  const guard = /if \(recipientId !== profileId\) return;/;
+  assert.match(source, guard, "the guard must require an exact recipient match");
+  assert.doesNotMatch(
+    source,
+    /recipientId !== null && recipientId !== profileId/,
+    "the old 'mine or nobody's' guard accepted a NULL recipient",
+  );
 
-  assert.equal(accept(null, "me"), true, "role broadcasts must be surfaced");
+  // And the behaviour that predicate encodes.
+  const accept = (recipientId, profileId) =>
+    (typeof recipientId === "string" ? recipientId : null) === profileId;
   assert.equal(accept("me", "me"), true, "own notifications must be surfaced");
   assert.equal(accept("someone-else", "me"), false, "another user's row must be ignored");
+  assert.equal(accept(null, "me"), false, "a NULL recipient can no longer exist and is not trusted");
+});
+
+test("broadcasts still reach their recipient — via fan-out, not a NULL recipient", () => {
+  // Finding 1 must not be 'fixed' by dropping role broadcasts on the floor.
+  // Delivery is preserved by the creation chokepoint writing one row per
+  // recipient; each of those rows is an ordinary recipient-addressed row that
+  // this subscription already carries.
+  const service = readFileSync(
+    fileURLToPath(new URL("../../services/notifications.create.service.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.match(service, /expandRoleBroadcasts/, "the fan-out must exist");
+  assert.match(
+    source,
+    /\{ event: "INSERT", schema: "public", table: "user_notifications" \}/,
+    "the subscription must stay unfiltered, with RLS doing the filtering",
+  );
 });
 
 test("RLS is not weakened to make delivery work", () => {

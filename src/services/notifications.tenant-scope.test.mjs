@@ -6,15 +6,24 @@ import test from "node:test";
 const require = createRequire(import.meta.url);
 const { transpileModule, ModuleKind, ScriptTarget } = require("typescript");
 
-// Stage 8 P0-1. The bulk "mark read" actions issue an UPDATE whose predicate is
+// Stage 8 P0-1. The bulk "mark read" actions issued an UPDATE whose predicate was
 // `is_read = false AND (recipient_id = me OR recipient_role = my role)`.
-// Role-addressed notifications carry recipient_id IS NULL (that is how the
-// counseling flow writes them, counseling.actions.ts:142-150), so the OR arm
-// matches role-addressed rows in EVERY tenant — one user's click mutates other
-// universities' notifications.
+// Role-addressed notifications carried recipient_id IS NULL, so the OR arm
+// matched role-addressed rows in EVERY tenant — one user's click mutated other
+// universities' notifications. That arm was then bounded by tenant.
+//
+// CODEX ROUND 4, FINDING 1 removed the arm entirely. A broadcast is no longer a
+// shared row: it is fanned out into one row per recipient, `recipient_id` is
+// NOT NULL, and the predicate is identity alone. The fixtures below therefore
+// model the CURRENT shape — every row is addressed to exactly one profile.
+//
+// Every cross-tenant property this file has always protected is still asserted.
+// One is now STRONGER: a same-tenant, same-role PEER's copy of a broadcast must
+// also be untouchable, which the old shared-row model could not even express —
+// there was one row for the whole cohort to share.
 //
 // These are behavior tests: the fake client really evaluates eq/or/in filters
-// against fixture rows, so a missing tenant predicate shows up as a foreign row
+// against fixture rows, so a missing predicate shows up as the wrong row
 // flipping to is_read = true, not as a source-string mismatch.
 
 function toDataUrl(code) {
@@ -79,21 +88,27 @@ const TENANT_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const TENANT_B = "bbbbbbbb-0000-4000-8000-000000000002";
 const STUDENT_A = "11111111-0000-4000-8000-000000000001";
 const STUDENT_B = "22222222-0000-4000-8000-000000000002";
+const PEER_A = "33333333-0000-4000-8000-000000000003"; // same tenant AND same role as STUDENT_A
 
 // Real UUIDs: the targeted actions run the id through normalizeUuid(), so
 // placeholder ids like "n1" would be rejected before any query and a
 // cross-tenant test would pass for the wrong reason.
-const N1 = "10000000-0000-4000-8000-000000000001"; // mine, tenant A
-const N2 = "20000000-0000-4000-8000-000000000002"; // role broadcast, tenant A
-const N3 = "30000000-0000-4000-8000-000000000003"; // role broadcast, tenant B
-const N4 = "40000000-0000-4000-8000-000000000004"; // another student, tenant B
+const N1 = "10000000-0000-4000-8000-000000000001"; // mine, direct, tenant A
+const N2 = "20000000-0000-4000-8000-000000000002"; // MY copy of a tenant-A broadcast
+const N3 = "30000000-0000-4000-8000-000000000003"; // a tenant-B broadcast copy
+const N4 = "40000000-0000-4000-8000-000000000004"; // another student, direct, tenant B
+const N5 = "50000000-0000-4000-8000-000000000005"; // PEER's copy of the same tenant-A broadcast
 
 function freshRows() {
   return [
     { id: N1, recipient_id: STUDENT_A, recipient_role: "student", school_id: TENANT_A, is_read: false, category: "counseling", target_href: "/dashboard" },
-    { id: N2, recipient_id: null, recipient_role: "student", school_id: TENANT_A, is_read: false, category: "counseling", target_href: "/notices" },
-    { id: N3, recipient_id: null, recipient_role: "student", school_id: TENANT_B, is_read: false, category: "counseling", target_href: "/secret-other-tenant" },
+    { id: N2, recipient_id: STUDENT_A, recipient_role: "student", school_id: TENANT_A, is_read: false, category: "counseling", target_href: "/notices" },
+    { id: N3, recipient_id: STUDENT_B, recipient_role: "student", school_id: TENANT_B, is_read: false, category: "counseling", target_href: "/secret-other-tenant" },
     { id: N4, recipient_id: STUDENT_B, recipient_role: "student", school_id: TENANT_B, is_read: false, category: "counseling", target_href: "/secret-other-tenant" },
+    // Same tenant, same role, different person. Before finding 1 this row could
+    // not exist: PEER_A and STUDENT_A shared N2, and therefore shared its
+    // is_read. This is the row the redesign exists to create.
+    { id: N5, recipient_id: PEER_A, recipient_role: "student", school_id: TENANT_A, is_read: false, category: "counseling", target_href: "/notices" },
   ];
 }
 
@@ -207,27 +222,29 @@ async function runAsTenantA(actionName) {
   return rows;
 }
 
-test("markAllNotificationsRead never marks another tenant's notifications read", async () => {
+test("markAllNotificationsRead marks only the caller's own rows", async () => {
   const rows = await runAsTenantA("markAllNotificationsRead");
   const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
 
   assert.equal(byId[N1].is_read, true, "the caller's own notification should be marked read");
-  assert.equal(byId[N2].is_read, true, "a role broadcast in the caller's tenant should be marked read");
+  assert.equal(byId[N2].is_read, true, "the caller's OWN COPY of the broadcast should be marked read");
   assert.equal(
-    byId[N3].is_read,
+    byId[N5].is_read,
     false,
-    "a role broadcast in ANOTHER tenant must never be touched (cross-tenant write)",
+    "a same-tenant PEER's copy must never be touched — Codex round 4, finding 1",
   );
+  assert.equal(byId[N3].is_read, false, "another tenant's broadcast copy must never be touched");
   assert.equal(byId[N4].is_read, false, "another tenant's direct notification must never be touched");
 });
 
-test("markNotificationsReadByCategory never marks another tenant's notifications read", async () => {
+test("markNotificationsReadByCategory marks only the caller's own rows", async () => {
   const rows = await runAsTenantA("markNotificationsReadByCategory");
   const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
 
   assert.equal(byId[N1].is_read, true, "the caller's own notification should be marked read");
-  assert.equal(byId[N2].is_read, true, "a role broadcast in the caller's tenant should be marked read");
-  assert.equal(byId[N3].is_read, false, "a role broadcast in ANOTHER tenant must never be touched");
+  assert.equal(byId[N2].is_read, true, "the caller's own copy of the broadcast should be marked read");
+  assert.equal(byId[N5].is_read, false, "a same-tenant peer's copy must never be touched");
+  assert.equal(byId[N3].is_read, false, "another tenant's broadcast copy must never be touched");
   assert.equal(byId[N4].is_read, false, "another tenant's direct notification must never be touched");
 });
 
@@ -296,11 +313,25 @@ test("markNotificationAsRead still marks the caller's own notification", async (
   assert.equal(byId[N1].is_read, true, "the legitimate path must still work");
 });
 
-test("markNotificationAsRead still marks an in-tenant role broadcast", async () => {
+test("markNotificationAsRead still marks the caller's own copy of a broadcast", async () => {
   const { rows } = await runTargetedAsTenantA("markNotificationAsRead", N2);
   const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
 
-  assert.equal(byId[N2].is_read, true, "an in-tenant role broadcast must still be markable");
+  assert.equal(byId[N2].is_read, true, "the legitimate broadcast path must still work");
+  assert.equal(byId[N5].is_read, false, "and it must not reach the peer's copy of the same broadcast");
+});
+
+test("markNotificationAsRead cannot mark a SAME-TENANT peer's broadcast copy by id", async () => {
+  // Codex round 4, finding 1. The old model had no way to express this: one
+  // shared row meant marking it read for yourself marked it for the cohort.
+  const { rows } = await runTargetedAsTenantA("markNotificationAsRead", N5);
+  const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
+
+  assert.equal(
+    byId[N5].is_read,
+    false,
+    "knowing a same-tenant peer's notification UUID must not permit marking it read",
+  );
 });
 
 test("markNotificationReadAndGo does not disclose or mark another tenant's notification", async () => {

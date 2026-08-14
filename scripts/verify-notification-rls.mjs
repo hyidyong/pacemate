@@ -37,7 +37,7 @@ import { createProbeLifecycle } from "./security/lib/probe-lifecycle.mjs";
 
 const PROBE_PASSWORD = "Stage9-notif-probe-!aA9";
 const TIMEOUT_MS = Number(process.env.PACEMATE_SECURITY_PROBE_TIMEOUT_MS ?? 15000);
-const EXPECTED_CHECKS = 6;
+const EXPECTED_CHECKS = 10;
 
 async function main() {
   const env = loadEnvLocal();
@@ -96,17 +96,26 @@ async function main() {
       status: "active",
     });
 
-    const email = `${PROBE_MARKER}-notif-${runId}@probe.invalid`;
-    const authUser = await auth.createUser(email, PROBE_PASSWORD);
-    ledger.recordAuthUser(authUser.id, "notif student");
+    // TWO students in the SAME tenant, both eligible for the same role
+    // broadcast. Codex round 4, finding 1: with a single shared broadcast row
+    // the two of them share one mutable `is_read`, so peer B is the control
+    // that makes the defect visible. One student alone cannot show it.
+    const makeStudent = async (suffix, label) => {
+      const email = `${PROBE_MARKER}-notif-${suffix}-${runId}@probe.invalid`;
+      const authUser = await auth.createUser(email, PROBE_PASSWORD);
+      ledger.recordAuthUser(authUser.id, `notif ${label}`);
+      const profile = await record("profiles", {
+        identifier: email,
+        name: `${PROBE_MARKER} notif ${label}`,
+        role: "student",
+        school_id: home.id,
+        auth_user_id: authUser.id,
+      });
+      return { email, profile };
+    };
 
-    const profile = await record("profiles", {
-      identifier: email,
-      name: `${PROBE_MARKER} notif student`,
-      role: "student",
-      school_id: home.id,
-      auth_user_id: authUser.id,
-    });
+    const { email, profile } = await makeStudent("a", "student A");
+    const { email: emailB, profile: profileB } = await makeStudent("b", "student B");
 
     const own = await record("user_notifications", {
       recipient_id: profile.id,
@@ -117,17 +126,35 @@ async function main() {
       body: `${PROBE_MARKER} own direct body`,
       target_href: "/notifications",
     });
-    const sameTenant = await record("user_notifications", {
-      recipient_id: null,
+    // A role broadcast is now stored the way the application writes it since
+    // finding 1: ONE ROW PER RECIPIENT, never a single shared row. The probe
+    // must model the real shape, so it writes A's copy and B's copy.
+    // `recipient_id` is NOT NULL as of 20260814150000, so the old shared shape
+    // is not even insertable any more.
+    const broadcastTitle = `${PROBE_MARKER} same tenant broadcast ${runId}`;
+    const broadcastFor = (recipientId) => ({
+      recipient_id: recipientId,
       recipient_role: "student",
       school_id: home.id,
       category: "system",
-      title: `${PROBE_MARKER} same tenant broadcast ${runId}`,
+      title: broadcastTitle,
       body: `${PROBE_MARKER} same tenant body`,
       target_href: "/notifications",
     });
+    const sameTenant = await record("user_notifications", broadcastFor(profile.id));
+    await record("user_notifications", broadcastFor(profileB.id));
+
+    // The cross-tenant fixture is addressed to a REAL profile in the other
+    // tenant. Addressing it to nobody would prove nothing: an unreadable row is
+    // unreadable for everyone, so the deny check would pass vacuously.
+    const foreignProfile = await record("profiles", {
+      identifier: `${PROBE_MARKER}-notif-foreign-${runId}@probe.invalid`,
+      name: `${PROBE_MARKER} notif foreign student`,
+      role: "student",
+      school_id: foreign.id,
+    });
     const foreignBroadcast = await record("user_notifications", {
-      recipient_id: null,
+      recipient_id: foreignProfile.id,
       recipient_role: "student",
       school_id: foreign.id,
       category: "system",
@@ -136,16 +163,32 @@ async function main() {
       target_href: "/notifications",
     });
 
-    const token = await signIn(email, PROBE_PASSWORD);
-    const asStudent = createRoleClient({
-      url,
-      baseHeaders: {
-        apikey: anonKey,
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      timeoutMs: TIMEOUT_MS,
-    });
+    const asUser = async (userEmail) => {
+      const token = await signIn(userEmail, PROBE_PASSWORD);
+      return createRoleClient({
+        url,
+        baseHeaders: {
+          apikey: anonKey,
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeoutMs: TIMEOUT_MS,
+      });
+    };
+
+    const asStudent = await asUser(email);
+    const asStudentB = await asUser(emailB);
+
+    // The broadcast is addressed by TITLE, not by row id, because the row id is
+    // exactly what the per-recipient redesign changes. Asking "what does this
+    // student see with this title?" is the one question that means the same
+    // thing before and after the fix.
+    const seenBy = async (client, title) => {
+      const { status, body } = await client(
+        `user_notifications?select=id,is_read&title=eq.${encodeURIComponent(title)}`,
+      );
+      return { status, rows: Array.isArray(body) ? body : [] };
+    };
 
     {
       const { status, body } = await asAnon("user_notifications?select=id&limit=5");
@@ -214,6 +257,63 @@ async function main() {
         "the student CAN mark their own notification read (legitimate path)",
         after?.is_read === true,
         `PATCH ${status}; is_read is now ${after?.is_read}`,
+      );
+    }
+
+    // ---------------------------------------------------------------------
+    // Codex round 4, finding 1 — read state must be PER RECIPIENT.
+    // ---------------------------------------------------------------------
+
+    {
+      // POSITIVE SENTINEL. Without this, the peer-isolation check below could
+      // "pass" simply because B can see nothing at all, which would prove
+      // isolation by proving the feature broken.
+      const b = await seenBy(asStudentB, broadcastTitle);
+      check(
+        "peer-b-sees-broadcast",
+        "peer B is genuinely eligible for the same-tenant broadcast (positive sentinel)",
+        b.status === 200 && b.rows.length === 1 && b.rows[0].is_read === false,
+        `status ${b.status}, ${b.rows.length} row(s), is_read=${b.rows[0]?.is_read}`,
+      );
+    }
+    {
+      // A marks the broadcast read, addressing it the way A sees it.
+      const a = await seenBy(asStudent, broadcastTitle);
+      for (const row of a.rows) {
+        await asStudent(`user_notifications?id=eq.${row.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ is_read: true }),
+        });
+      }
+      const aAfter = await seenBy(asStudent, broadcastTitle);
+      check(
+        "broadcast-a-reads-own",
+        "A CAN mark the broadcast read for THEMSELVES (legitimate path)",
+        aAfter.rows.length === 1 && aAfter.rows[0].is_read === true,
+        `A now sees ${aAfter.rows.length} row(s), is_read=${aAfter.rows[0]?.is_read}`,
+      );
+
+      const bAfter = await seenBy(asStudentB, broadcastTitle);
+      check(
+        "broadcast-peer-isolation",
+        "A marking the broadcast read must NOT mark it read for peer B",
+        bAfter.rows.length === 1 && bAfter.rows[0].is_read === false,
+        `B now sees ${bAfter.rows.length} row(s), is_read=${bAfter.rows[0]?.is_read}`,
+      );
+    }
+    {
+      // mark-all-read is the bulk path and has its own predicate; a fix that
+      // only corrects the single-row path would leave this one wrong.
+      await asStudent(`user_notifications?is_read=eq.false`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_read: true }),
+      });
+      const bAfter = await seenBy(asStudentB, broadcastTitle);
+      check(
+        "mark-all-peer-isolation",
+        "A marking ALL read must not touch peer B's unread state",
+        bAfter.rows.length === 1 && bAfter.rows[0].is_read === false,
+        `B now sees ${bAfter.rows.length} row(s), is_read=${bAfter.rows[0]?.is_read}`,
       );
     }
   });
