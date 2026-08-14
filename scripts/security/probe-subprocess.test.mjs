@@ -104,12 +104,25 @@ test("a response that stalls MID-BODY is bounded — the hole the old transport 
 });
 
 // Node on Windows cannot deliver a POSIX signal to a child process — `kill()`
-// terminates it outright — so these would be false negatives there. The same
-// logic is covered deterministically on every platform by
-// lib/probe-lifecycle.test.mjs, which injects a fake process emitter.
+// maps to TerminateProcess, which runs no in-process handler — so these would
+// be false negatives there.
+//
+// Codex round 4, 4E: a skip must not be mistaken for a proven control. What is
+// skipped on Windows is now ONLY the POSIX signal DELIVERY MECHANISM. The
+// behaviour it triggers is proven on every platform, twice over:
+//
+//   * lib/probe-lifecycle.test.mjs drives the handler directly with an injected
+//     process emitter (ordering, once-only, quiesce-before-cleanup);
+//   * the "IPC cancel" test below runs the REAL runner in a REAL child process
+//     and drives the SAME quiesce -> cleanup -> exit path through an IPC
+//     message, which Windows can deliver.
+//
+// So the remaining Windows-specific gap is "does the OS route Ctrl-C to this
+// handler", not "does the handler work". That gap stays UNVERIFIED on Windows
+// and is recorded as such rather than papered over.
 const SIGNAL_SKIP =
   process.platform === "win32"
-    ? "POSIX signals are not deliverable to a child process on Windows; see lib/probe-lifecycle.test.mjs"
+    ? "POSIX signal DELIVERY is not possible to a child process on Windows; the handler itself is proven by the IPC-cancel test below and by lib/probe-lifecycle.test.mjs"
     : false;
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -216,4 +229,107 @@ test("the runner refuses a non-Supabase host even with every opt-in set", async 
   });
   assert.notEqual(run.code, 0);
   assert.match(run.output, /refusing to send privileged credentials|Refusing to run/i);
+});
+
+// ---------------------------------------------------------------------------
+// Codex round 4, 4C + 4E — the two gaps the round-3 subprocess tests left.
+// ---------------------------------------------------------------------------
+
+test("4C — a create that COMMITS but never answers is swept, not left behind", async () => {
+  // The worst case the ledger structurally cannot cover: the row exists on the
+  // server and the client never learned its id, so there is nothing to record
+  // and nothing to delete. Only the marker sweep can find it. Before 4C the
+  // sweep was operator-only, so this row survived a "clean" run.
+  const fake = await startFakeSupabase({ scenario: SCENARIOS.ambiguousCreate });
+  try {
+    const run = await runProbe({ url: fake.url });
+
+    // The run must NOT claim success: the probe aborted mid-provision.
+    assert.notEqual(run.code, 0, "an ambiguous create must not read as a clean run");
+
+    // The committed row must be gone by the end, whichever path removed it.
+    const survivors = fake.rowsOf("counseling_requests");
+    assert.deepEqual(
+      survivors,
+      [],
+      `a committed-but-unacknowledged row survived: ${JSON.stringify(survivors)}`,
+    );
+  } finally {
+    await fake.close();
+  }
+});
+
+test("4C — the sweep runs on EVERY teardown, and reports what it removed", async () => {
+  // A row carrying the probe marker that the ledger never recorded — e.g. left
+  // by an earlier run that was killed. A normal run must remove it and say so,
+  // rather than deleting it silently or ignoring it.
+  const fake = await startFakeSupabase();
+  try {
+    fake.rowsOf("faqs").push({ id: "orphan-1", question: `${PROBE_MARKER} orphan from a previous run` });
+
+    const run = await runProbe({ url: fake.url });
+
+    assert.deepEqual(fake.rowsOf("faqs"), [], "the unledgered orphan must be removed");
+    assert.match(run.output, /\[SWEPT\]/, "the sweep must report what it removed, not hide it");
+  } finally {
+    await fake.close();
+  }
+});
+
+// 4E — a cancellation path that is exercised on EVERY platform, including
+// Windows, where a POSIX signal cannot reach a child process at all. The IPC
+// message drives the same quiesce -> cleanup -> exit path a signal drives, so
+// the control itself is proven here and only the signal DELIVERY mechanism
+// stays platform-specific.
+test("4E — an IPC cancel quiesces, cleans up, and exits non-zero-free of residue", async () => {
+  const fake = await startFakeSupabase();
+  try {
+    const child = spawn(process.execPath, [RUNNER], {
+      cwd: REPO_ROOT,
+      // 'ipc' is what makes process.send exist in the child.
+      stdio: ["ignore", "pipe", "pipe", "ipc"],
+      env: {
+        ...process.env,
+        NEXT_PUBLIC_SUPABASE_URL: fake.url,
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "fake-anon-key",
+        SUPABASE_SERVICE_ROLE_KEY: "fake-service-key",
+        PACEMATE_SECURITY_PROBE_ALLOW_WRITES: "1",
+        PACEMATE_SECURITY_PROBE_PROJECT_REF: "fakeproject",
+        PACEMATE_SECURITY_PROBE_ALLOW_LOOPBACK: "1",
+        PACEMATE_SECURITY_PROBE_TIMEOUT_MS: "1500",
+        PACEMATE_SECURITY_PROBE_CLEANUP_TIMEOUT_MS: "8000",
+      },
+    });
+
+    let output = "";
+    child.stdout.on("data", (d) => (output += d));
+    child.stderr.on("data", (d) => (output += d));
+
+    // Cancel mid-provision, while resources exist and requests are in flight.
+    await new Promise((r) => setTimeout(r, 700));
+    child.send({ type: "probe:cancel" });
+
+    const code = await new Promise((resolve) => {
+      const hardKill = setTimeout(() => child.kill("SIGKILL"), 45_000);
+      child.on("close", (c) => {
+        clearTimeout(hardKill);
+        resolve(c);
+      });
+    });
+
+    assert.match(output, /probe:cancel/, "the cancellation must be acknowledged");
+    assert.match(output, /quiescing, then cleaning up/, "the work must be stopped BEFORE cleanup");
+    assert.ok(code !== null, `the process must exit; got ${code}`);
+
+    // The point of quiescing: nothing may be left behind.
+    for (const table of ["schools", "profiles", "courses", "counseling_requests"]) {
+      assert.deepEqual(
+        fake.rowsOf(table),
+        [],
+        `${table} still holds probe rows after a cancelled run`,
+      );
+    }
+  } finally {
+    await fake.close();
+  }
 });

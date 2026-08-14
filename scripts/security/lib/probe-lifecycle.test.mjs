@@ -14,12 +14,14 @@ import { EXIT, createProbeLifecycle } from "./probe-lifecycle.mjs";
 
 const quietLogger = { error() {}, log() {} };
 
-function harness({ cleanup, timeoutMs = 5_000 }) {
+function harness({ cleanup, timeoutMs = 5_000, abortWork, quiesceTimeoutMs }) {
   const processRef = new EventEmitter();
   const exits = [];
   const lifecycle = createProbeLifecycle({
     cleanup,
+    abortWork,
     timeoutMs,
+    quiesceTimeoutMs,
     logger: quietLogger,
     onExit: (code) => exits.push(code),
     processRef,
@@ -164,4 +166,123 @@ test("signal listeners are removed when the run finishes", async () => {
 
   assert.equal(processRef.listenerCount("SIGINT"), 0, "SIGINT listener leaked");
   assert.equal(processRef.listenerCount("SIGTERM"), 0, "SIGTERM listener leaked");
+});
+
+// ---------------------------------------------------------------------------
+// Codex round 4, 4A — QUIESCE BEFORE DESTROYING.
+//
+// The previous handler began destructive cleanup the moment a signal arrived,
+// while the probe body was still running. A create request already on the wire
+// could commit AFTER cleanup had enumerated and deleted, leaving a resource
+// alive that nothing would look at again. Ordering must now be:
+// abort the scope -> wait for the body to stop -> then delete.
+// ---------------------------------------------------------------------------
+
+test("4A — a signal aborts the work scope BEFORE cleanup runs", async () => {
+  const order = [];
+  const { lifecycle, processRef } = harness({
+    abortWork: () => order.push("abort"),
+    cleanup: async () => (order.push("cleanup"), { ok: true }),
+  });
+
+  const run = lifecycle.run(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    order.push("body-finished");
+  });
+  await tick();
+  processRef.emit("SIGINT");
+  await run;
+
+  assert.deepEqual(
+    order,
+    ["abort", "body-finished", "cleanup"],
+    `cleanup must run last; got ${order.join(" -> ")}`,
+  );
+});
+
+test("4A — cleanup WAITS for an in-flight body rather than racing it", async () => {
+  // The body models a create that is still on the wire when the signal lands.
+  let bodyDone = false;
+  let cleanupSawBodyDone = null;
+  const { lifecycle, processRef } = harness({
+    abortWork: () => {},
+    cleanup: async () => {
+      cleanupSawBodyDone = bodyDone;
+      return { ok: true };
+    },
+  });
+
+  const run = lifecycle.run(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    bodyDone = true;
+  });
+  await tick();
+  processRef.emit("SIGTERM");
+  await run;
+
+  assert.equal(
+    cleanupSawBodyDone,
+    true,
+    "cleanup started while the body could still be creating resources",
+  );
+});
+
+test("4A — a body that refuses to stop still gets cleanup, but the run FAILS", async () => {
+  // A late cleanup beats none. What must not happen is reporting success when
+  // we could not prove the body had stopped creating things.
+  let cleaned = false;
+  const { lifecycle, processRef, exits } = harness({
+    quiesceTimeoutMs: 50,
+    abortWork: () => {},
+    cleanup: async () => ((cleaned = true), { ok: true }),
+  });
+
+  let release;
+  const stuck = new Promise((resolve) => {
+    release = resolve;
+  });
+  const run = lifecycle.run(() => stuck);
+  await tick();
+  processRef.emit("SIGINT");
+
+  // Give quiesce time to give up and cleanup time to run.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(cleaned, true, "cleanup must still happen");
+  assert.deepEqual(exits, [EXIT.failure], "an unquiesced body must not exit 130 as if it were clean");
+
+  release();
+  await run;
+});
+
+test("4A — abortWork is called even when cleanup itself fails", async () => {
+  let aborted = false;
+  const { lifecycle, processRef, exits } = harness({
+    abortWork: () => (aborted = true),
+    cleanup: async () => ({ ok: false, detail: "residue" }),
+  });
+
+  const run = lifecycle.run(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  await tick();
+  processRef.emit("SIGINT");
+  await run;
+  // The handler's exit happens on its own async continuation, after the run
+  // promise settles; give it a turn rather than asserting into a race.
+  await tick();
+
+  assert.equal(aborted, true);
+  assert.deepEqual(exits, [EXIT.failure]);
+});
+
+test("4A — a normal run does not abort the scope", async () => {
+  let aborted = false;
+  const { lifecycle } = harness({
+    abortWork: () => (aborted = true),
+    cleanup: async () => ({ ok: true }),
+  });
+
+  await lifecycle.run(async () => "done");
+
+  assert.equal(aborted, false, "an uninterrupted run must not cancel its own requests");
 });

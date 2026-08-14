@@ -117,7 +117,7 @@ export function createProbeAuthAdmin({ url, serviceRoleKey, timeoutMs = DEFAULT_
   };
 }
 
-export function signInFactory({ url, anonKey, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl }) {
+export function signInFactory({ url, anonKey, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl, scopeSignal }) {
   return async function signIn(email, password) {
     const { text } = await boundedRequest(
       `${url.replace(/\/$/, "")}/auth/v1/token?grant_type=password`,
@@ -126,7 +126,7 @@ export function signInFactory({ url, anonKey, timeoutMs = DEFAULT_TIMEOUT_MS, fe
         headers: { apikey: anonKey, "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       },
-      { timeoutMs, fetchImpl },
+      { timeoutMs, fetchImpl, scopeSignal },
     );
     const body = parseBody(text) ?? {};
     if (!body.access_token) {

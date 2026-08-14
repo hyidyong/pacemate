@@ -22,9 +22,9 @@ import { writeFileSync } from "node:fs";
 import { loadEnvLocal, requireEnv } from "../loadtest/lib/env.mjs";
 import { assertSafeToProbe } from "./lib/probe-guard.mjs";
 import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./lib/probe-rest.mjs";
-import { createRoleClient } from "./lib/probe-http.mjs";
+import { createAbortScope, createRoleClient } from "./lib/probe-http.mjs";
 import { createProbeLifecycle, EXIT } from "./lib/probe-lifecycle.mjs";
-import { ProbeLedger, sweepOrphans, verifyNoResidue } from "./lib/probe-ledger.mjs";
+import { ProbeLedger, sweepOrphans, teardown, verifyNoResidue } from "./lib/probe-ledger.mjs";
 import { PROBE_MARKER, PROBE_PASSWORD, provisionProbeTenants } from "./lib/probe-fixtures.mjs";
 
 // Every table the app can reach. `expectAnonRead` records the DESIGN intent, so
@@ -82,8 +82,10 @@ function makeReporter() {
 // Codex round 3, F1: the role probes used bare `fetch` with NO timeout at all.
 // They now share the one bounded transport, whose deadline covers body
 // consumption as well as headers.
-function makeRawFetch(url, timeoutMs) {
-  return (baseHeaders) => createRoleClient({ url, baseHeaders, timeoutMs });
+// Codex round 4, 4A: every role client shares ONE cancellation scope, so a
+// signal can abort all of them before cleanup deletes anything.
+function makeRawFetch(url, timeoutMs, scopeSignal) {
+  return (baseHeaders) => createRoleClient({ url, baseHeaders, timeoutMs, scopeSignal });
 }
 
 function rowCount(body) {
@@ -100,9 +102,13 @@ async function main() {
 
   // Bounded timeouts everywhere: a hung request during CLEANUP is the one hang
   // that must never be indefinite, because it leaves fixtures alive.
+  // The work scope. Cleanup deliberately runs OUTSIDE it: `rest` and `auth`
+  // must still work at the exact moment the scope has been cancelled.
+  const scope = createAbortScope();
+
   const rest = createProbeRest({ url, serviceRoleKey: serviceKey });
   const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey });
-  const signIn = signInFactory({ url, anonKey });
+  const signIn = signInFactory({ url, anonKey, scopeSignal: scope.signal });
 
   // Operator-run recovery for the case `finally` cannot cover (SIGKILL, crash).
   if (process.argv.includes("--sweep")) {
@@ -120,7 +126,7 @@ async function main() {
   const { check, results } = makeReporter();
 
   const anonHeaders = { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" };
-  const roleClient = makeRawFetch(url, PROBE_TIMEOUT_MS);
+  const roleClient = makeRawFetch(url, PROBE_TIMEOUT_MS, scope.signal);
   const asAnon = roleClient(anonHeaders);
 
   // Codex finding 1: the ledger belongs to the CALLER and provisioning happens
@@ -134,19 +140,18 @@ async function main() {
   // once, and the process must not exit before it finishes.
   const lifecycle = createProbeLifecycle({
     timeoutMs: Number(process.env.PACEMATE_SECURITY_PROBE_CLEANUP_TIMEOUT_MS ?? 30000),
+    // 4A: cancel every in-flight request BEFORE the destructive pass, so a
+    // create still on the wire cannot commit after cleanup has looked.
+    abortWork: (reason) => scope.abort(reason),
+    // 4C: ledger -> marker sweep -> residue verification, all three must agree.
     cleanup: async () => {
-      cleanupFailures = await ledger.cleanup();
-      residue = await verifyNoResidue({ rest, auth });
-      const ok = cleanupFailures.length === 0 && residue.clean;
-      if (!ok) {
-        for (const failure of cleanupFailures) {
-          console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id} (${failure.label}): ${failure.message}`);
-        }
-        for (const entry of residue.residue) console.error(`[RESIDUE] ${entry}`);
-        for (const entry of residue.unverifiable) console.error(`[UNVERIFIABLE] ${entry}`);
+      const result = await teardown({ ledger, rest, auth });
+      cleanupFailures = result.failures;
+      residue = result.residue;
+      if (!result.ok) {
         console.error("Run `node scripts/security/rls-probe.mjs --sweep` to remove marked residue.");
       }
-      return { ok, detail: ok ? "clean" : "residue or cleanup failure" };
+      return { ok: result.ok, detail: result.detail };
     },
   });
 

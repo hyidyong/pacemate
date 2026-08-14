@@ -442,9 +442,14 @@ test("the runner's lifecycle covers provisioning, signals and residue", async ()
   assert.ok(bodyStart > -1, "the runner must use the signal-aware lifecycle");
   assert.ok(bodyStart < provision, "provisioning must happen inside lifecycle.run");
 
-  // Cleanup and residue verification are the lifecycle's cleanup callback, so
-  // they also run on SIGINT/SIGTERM — not only in a `finally`.
-  assert.match(source, /cleanup: async \(\) => \{[\s\S]*?ledger\.cleanup\(\)[\s\S]*?verifyNoResidue/);
+  // Cleanup is the lifecycle's cleanup callback, so it also runs on
+  // SIGINT/SIGTERM — not only in a `finally`.
+  assert.match(source, /cleanup: async \(\) => \{[\s\S]*?teardown\(\{ ledger, rest, auth \}\)/);
+
+  // Codex round 4, 4A: the work scope must be cancelled BEFORE cleanup, or a
+  // create still on the wire can commit after cleanup has already looked.
+  assert.match(source, /abortWork: \(reason\) => scope\.abort\(reason\)/);
+  assert.match(source, /createAbortScope\(\)/);
 
   // The exit code accounts for cleanup and residue, not only security checks.
   assert.match(source, /failed === 0 &&\s*cleanupFailures\.length === 0 &&\s*residue\.clean/);
@@ -456,4 +461,46 @@ test("the runner's lifecycle covers provisioning, signals and residue", async ()
   // The swallow-and-log behaviour must not return.
   assert.doesNotMatch(source, /teardownProbeTenants/);
   assert.doesNotMatch(source, /verifyTornDown/);
+});
+
+test("4C — teardown is ledger, THEN marker sweep, THEN residue verification", async () => {
+  // The order matters and so does the conjunction. The sweep exists because a
+  // create that times out can commit without the ledger ever learning its id,
+  // so a run is clean only when all three agree.
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./probe-ledger.mjs", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("export async function teardown"));
+  const code = body
+    .split(/\r?\n/)
+    .filter((line) => !line.trimStart().startsWith("//") && !line.trimStart().startsWith("*"))
+    .join("\n");
+
+  const ledgerAt = code.indexOf("ledger.cleanup()");
+  const sweepAt = code.indexOf("sweepOrphans(");
+  const residueAt = code.indexOf("verifyNoResidue(");
+  assert.ok(ledgerAt > -1 && sweepAt > -1 && residueAt > -1, "all three phases must run");
+  assert.ok(ledgerAt < sweepAt, "the ledger runs before the sweep");
+  assert.ok(sweepAt < residueAt, "residue verification runs last, over the final state");
+
+  assert.match(
+    code,
+    /failures\.length === 0 && swept\.failures\.length === 0 && residue\.clean/,
+    "a run is clean only when the ledger, the sweep AND residue verification all agree",
+  );
+});
+
+test("4C — an ambiguous mutation is reported as ambiguous, not as a failure", async () => {
+  // The transport must distinguish "the server refused" from "I never found
+  // out", because only the second one may have left a committed row.
+  const { boundedRequest } = await import("./probe-http.mjs");
+  const never = () => new Promise(() => {});
+
+  await assert.rejects(
+    () => boundedRequest("https://probe.test/x", { method: "POST" }, { timeoutMs: 50, fetchImpl: never }),
+    (error) => error.ambiguous === true,
+  );
+  await assert.rejects(
+    () => boundedRequest("https://probe.test/x", { method: "GET" }, { timeoutMs: 50, fetchImpl: never }),
+    (error) => error.ambiguous === false,
+  );
 });

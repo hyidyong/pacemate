@@ -20,6 +20,10 @@ export const SCENARIOS = {
   refuseDelete: "refuse-delete",
   hideResidue: "hide-residue",
   manyAuthUsers: "many-auth-users",
+  // Codex round 4, 4C. The create COMMITS but the response never arrives, so
+  // the client times out and the ledger never learns the row's id. Only the
+  // marker sweep can find it.
+  ambiguousCreate: "ambiguous-create",
 };
 
 function matchRow(row, query) {
@@ -106,6 +110,16 @@ export async function startFakeSupabase({ scenario = SCENARIOS.normal, authUserC
       return send(200, { access_token: `token-${Math.random().toString(36).slice(2)}` });
     }
 
+    // ---- PostgREST RPC ----
+    // An RPC is a function call, not a table. Without this the stand-in
+    // happily created rows in a pseudo-table called "rpc/<name>" and the
+    // teardown assertion then reported residue that does not exist in reality.
+    // The stand-in is not a database, so it answers the safest thing a real
+    // transition can answer: nothing happened.
+    if (url.pathname.startsWith("/rest/v1/rpc/")) {
+      return send(200, { outcome: "stale" });
+    }
+
     // ---- PostgREST ----
     if (url.pathname.startsWith("/rest/v1/")) {
       const table = url.pathname.replace("/rest/v1/", "");
@@ -115,6 +129,11 @@ export async function startFakeSupabase({ scenario = SCENARIOS.normal, authUserC
         const incoming = Array.isArray(payload) ? payload : [payload];
         const created = incoming.map((row) => ({ ...row, id: row.id ?? `${table}-${++seq}` }));
         rows.push(...created);
+        if (scenario === SCENARIOS.ambiguousCreate && table === "counseling_requests") {
+          // Committed server-side, but the caller never finds out. This is the
+          // case the ledger structurally cannot cover: it has no id to record.
+          return; // never respond
+        }
         return send(201, created);
       }
       if (req.method === "GET") {
@@ -148,6 +167,8 @@ export async function startFakeSupabase({ scenario = SCENARIOS.normal, authUserC
     url: `http://127.0.0.1:${port}`,
     tables,
     authUsers,
+    // Tests inspect and seed individual tables (Codex round 4, 4C).
+    rowsOf,
     totalRows() {
       let n = 0;
       for (const rows of tables.values()) n += rows.length;

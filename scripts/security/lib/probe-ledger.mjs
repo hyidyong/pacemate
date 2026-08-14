@@ -184,9 +184,66 @@ export async function verifyNoResidue({ rest, auth }) {
 }
 
 /**
+ * Codex round 4, 4C — the standard three-phase teardown every probe uses.
+ *
+ * The ledger alone is not sufficient, because it can only remove what it KNOWS
+ * about. A create request that times out may still have committed on the
+ * server: the row exists, the probe never learned its id, and the ledger has
+ * nothing to delete. `ProbeRequestError.ambiguous` marks exactly that case.
+ *
+ * So the sweep is no longer operator-only. It runs automatically after the
+ * ledger, keyed on PROBE_MARKER, and finds anything the ledger could not name —
+ * including residue left by an earlier run that was killed outright.
+ *
+ * A run is clean only when ALL THREE agree:
+ *
+ *   1. ledger cleanup removed everything it recorded,
+ *   2. the marker sweep completed without failures,
+ *   3. residue verification finds nothing and could actually be PERFORMED.
+ *
+ * Anything the sweep removes is reported. Silently deleting rows the ledger
+ * never recorded would hide the very ambiguity this exists to surface.
+ */
+export async function teardown({ ledger, rest, auth, logger = console }) {
+  const failures = await ledger.cleanup();
+  for (const failure of failures) {
+    logger.error(`[CLEANUP FAILED] ${failure.table} ${failure.id}: ${failure.message}`);
+  }
+
+  const swept = await sweepOrphans({ rest, auth });
+  for (const entry of swept.removed) {
+    logger.error(`[SWEPT] ${entry} — not in the ledger; an ambiguous create or an earlier crash`);
+  }
+  for (const entry of swept.failures) {
+    logger.error(`[SWEEP FAILED] ${entry}`);
+  }
+
+  const residue = await verifyNoResidue({ rest, auth });
+  for (const entry of residue.residue) logger.error(`[RESIDUE] ${entry}`);
+  for (const entry of residue.unverifiable) logger.error(`[UNVERIFIABLE] ${entry}`);
+
+  const ok = failures.length === 0 && swept.failures.length === 0 && residue.clean;
+  const detail = ok
+    ? swept.removed.length
+      ? `clean, after sweeping ${swept.removed.length} unledgered item(s)`
+      : "clean"
+    : [
+        failures.length ? `${failures.length} cleanup failure(s)` : null,
+        swept.failures.length ? `${swept.failures.length} sweep failure(s)` : null,
+        residue.residue.length ? `${residue.residue.length} residue item(s)` : null,
+        residue.unverifiable.length ? `${residue.unverifiable.length} unverifiable check(s)` : null,
+      ]
+        .filter(Boolean)
+        .join("; ");
+
+  return { ok, detail, failures, swept, residue };
+}
+
+/**
  * Independent recovery for the case `finally` cannot cover (SIGKILL, crash,
- * power loss). Operator-run, not automatic. Deletes marked rows in reverse
- * dependency order and removes marked auth users.
+ * power loss). Also called automatically by `teardown` above, because a
+ * timed-out create can commit without the ledger ever learning its id. Deletes
+ * marked rows in reverse dependency order and removes marked auth users.
  */
 export async function sweepOrphans({ rest, auth }) {
   const removed = [];

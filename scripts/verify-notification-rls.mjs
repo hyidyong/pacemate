@@ -31,8 +31,8 @@ import {
   assertSafeToProbe,
 } from "./security/lib/probe-guard.mjs";
 import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./security/lib/probe-rest.mjs";
-import { createRoleClient } from "./security/lib/probe-http.mjs";
-import { ProbeLedger, verifyNoResidue } from "./security/lib/probe-ledger.mjs";
+import { createAbortScope, createRoleClient } from "./security/lib/probe-http.mjs";
+import { ProbeLedger, teardown } from "./security/lib/probe-ledger.mjs";
 import { createProbeLifecycle } from "./security/lib/probe-lifecycle.mjs";
 
 const PROBE_PASSWORD = "Stage9-notif-probe-!aA9";
@@ -47,13 +47,19 @@ async function main() {
 
   assertSafeToProbe({ ...env, ...process.env }, url);
 
+  // Codex round 4, 4A: one cancellation scope for all probe traffic. Cleanup
+  // runs outside it, because it needs a working transport precisely when the
+  // scope has been cancelled.
+  const scope = createAbortScope();
+
   const rest = createProbeRest({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS });
   const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS });
-  const signIn = signInFactory({ url, anonKey, timeoutMs: TIMEOUT_MS });
+  const signIn = signInFactory({ url, anonKey, timeoutMs: TIMEOUT_MS, scopeSignal: scope.signal });
   const asAnon = createRoleClient({
     url,
     baseHeaders: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
     timeoutMs: TIMEOUT_MS,
+    scopeSignal: scope.signal,
   });
 
   const results = [];
@@ -61,19 +67,9 @@ async function main() {
 
   const ledger = new ProbeLedger({ rest, auth });
   const lifecycle = createProbeLifecycle({
-    cleanup: async () => {
-      const failures = await ledger.cleanup();
-      const residue = await verifyNoResidue({ rest, auth });
-      const ok = failures.length === 0 && residue.clean;
-      if (!ok) {
-        for (const failure of failures) {
-          console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id}: ${failure.message}`);
-        }
-        for (const entry of residue.residue) console.error(`[RESIDUE] ${entry}`);
-        for (const entry of residue.unverifiable) console.error(`[UNVERIFIABLE] ${entry}`);
-      }
-      return { ok, detail: ok ? "clean" : "residue or cleanup failure" };
-    },
+    abortWork: (reason) => scope.abort(reason),
+    // 4C: ledger -> marker sweep -> residue verification.
+    cleanup: () => teardown({ ledger, rest, auth }),
   });
 
   const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -173,6 +169,7 @@ async function main() {
           "Content-Type": "application/json",
         },
         timeoutMs: TIMEOUT_MS,
+        scopeSignal: scope.signal,
       });
     };
 
