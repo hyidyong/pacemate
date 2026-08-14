@@ -228,7 +228,7 @@ test("M-2/M-3: a student's slot feed contains only their own tenant's professors
 
 test("M-4: a student books their own tenant's professor (allow)", async () => {
   const { service, actions, domain } = await loadModules();
-  const { session } = setupTwoTenants();
+  const { session, admin } = setupTwoTenants();
   try {
     const slots = await service.getAvailableCounselingSlots(SCHOOL_A);
     const slotId = domain.getCounselingSlotId(slots[0]);
@@ -237,9 +237,15 @@ test("M-4: a student books their own tenant's professor (allow)", async () => {
     form.set("topic", "상담");
     const result = await actions.createCounselingRequest(form);
     assert.equal(result.ok, true, result.message);
-    // The booking insert runs on the session client (RLS-scoped in prod).
-    assert.equal(session.state.inserts.length, 1, "the booking must insert exactly one row");
-    assert.equal(session.state.inserts[0].values.professor_id, PROF_A.id);
+    // Codex round 5, F1: the booking INSERT moved to the service role, because
+    // `authenticated` no longer holds INSERT on counseling_requests — the RLS
+    // policy could not express Stage 5's slot invariants, so a direct POST
+    // bypassed all of them. The TENANT property this test protects is
+    // unchanged: the professor written is still tenant A's, and the slot was
+    // still resolved from tenant A's availability.
+    assert.equal(admin.state.inserts.length, 1, "the booking must insert exactly one row");
+    assert.equal(admin.state.inserts[0].values.professor_id, PROF_A.id);
+    assert.equal(session.state.inserts.length, 0, "the session client must no longer be the writer");
   } finally {
     teardown();
   }
@@ -247,7 +253,7 @@ test("M-4: a student books their own tenant's professor (allow)", async () => {
 
 test("M-5/M-6: a student cannot book a foreign-tenant professor via a crafted slotId (deny, no insert)", async () => {
   const { actions, domain } = await loadModules();
-  const { session } = setupTwoTenants();
+  const { session, admin } = setupTwoTenants();
   try {
     // Craft a slotId naming PROF_B (tenant B) at a legitimate wall time — the
     // exact IDOR a malicious student would attempt.
@@ -262,6 +268,8 @@ test("M-5/M-6: a student cannot book a foreign-tenant professor via a crafted sl
     const result = await actions.createCounselingRequest(form);
     assert.equal(result.ok, false, "booking a foreign-tenant professor must be denied");
     assert.equal(session.state.inserts.length, 0, "no counseling row may be inserted for a cross-tenant booking");
+    // And the privileged writer must not have been reached either.
+    assert.equal(admin.state.inserts.filter((i) => i.table === "counseling_requests").length, 0);
   } finally {
     teardown();
   }

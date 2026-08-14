@@ -27,6 +27,16 @@ export async function submitRoadmapFeedback(formData: FormData) {
   if (!profile) {
     return { ok: false, message: "로그인 후 이용해 주세요." };
   }
+
+  // Codex round 5, F3. A session was required and the tenant was checked, but
+  // never the ROLE — so a professor, assistant or admin could file a report
+  // that is stored and displayed as "학생 익명 제보" (an anonymous STUDENT
+  // report) and pages every admin. The route is student-facing, but a server
+  // action runs before any page renders, so the route guard protected nothing
+  // here. Same shape as the course-review finding in round 4.
+  if (profile.role !== "student") {
+    return { ok: false, message: "학생만 로드맵 오류를 제보할 수 있습니다." };
+  }
   const courseId = text(formData.get("courseId"));
   const courseCode = text(formData.get("courseCode"));
   const courseName = text(formData.get("courseName"), "과목");

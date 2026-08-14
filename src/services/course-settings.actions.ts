@@ -43,6 +43,68 @@ export async function getCourseRoadmap(courseId: string) {
   return { success: true, parsedText: data.parsed_text };
 }
 
+/**
+ * Codex round 5, F2 — a caller-supplied course id is not authorization.
+ *
+ * `removeCourseAssignment` checked only `role === "professor"` and then handed
+ * the caller's own `courseId` to a service-role write. A Tenant A professor
+ * could name a Tenant B course, or any course in their own tenant they do not
+ * teach, and raise a curriculum revision request against it.
+ *
+ * Two things must BOTH hold before a privileged write, and neither can be
+ * inferred from the other:
+ *
+ *   1. the course is in the caller's tenant     (course.school_id = profile.school_id)
+ *   2. the caller is actually assigned to it    (course_professors OR course_offerings)
+ *
+ * (2) alone is not enough either: `course_professors` has no composite foreign
+ * key, so a cross-tenant assignment row is structurally creatable (KI-022).
+ * Checking both means neither a forged course id nor a stray assignment row is
+ * sufficient on its own.
+ *
+ * Returns the verified course id, or null — and the caller must write nothing
+ * on null.
+ */
+async function authorizeProfessorCourse(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  profile: { id: string; school_id: string | null },
+  courseId: string,
+): Promise<string | null> {
+  if (!courseId || !profile.school_id) return null;
+
+  const { data: course } = await admin
+    .from("courses")
+    .select("id, school_id")
+    .eq("id", courseId)
+    .maybeSingle();
+  if (!course || course.school_id !== profile.school_id) return null;
+
+  const { data: professor } = await admin
+    .from("professors")
+    .select("id")
+    .eq("profile_id", profile.id)
+    .maybeSingle();
+  if (!professor) return null;
+
+  const [{ data: mapping }, { data: offering }] = await Promise.all([
+    admin
+      .from("course_professors")
+      .select("course_id")
+      .eq("course_id", courseId)
+      .eq("professor_id", professor.id)
+      .limit(1),
+    admin
+      .from("course_offerings")
+      .select("course_id")
+      .eq("course_id", courseId)
+      .eq("professor_id", professor.id)
+      .limit(1),
+  ]);
+  if (!mapping?.length && !offering?.length) return null;
+
+  return course.id as string;
+}
+
 export async function removeCourseAssignment(formData: FormData) {
   const profile = await getDemoProfile();
   if (!profile || profile.role !== "professor") {
@@ -52,13 +114,23 @@ export async function removeCourseAssignment(formData: FormData) {
   const courseId = formData.get("courseId") as string;
   if (!courseId) return { message: "과목을 선택해주세요." };
 
-  // Stage 9: session roles no longer hold INSERT on this table; the role
-  // gate above is the authorization and the service role performs the write.
-  const { error } = await createSupabaseAdminClient().from("roadmap_revision_requests").insert({
+  const admin = createSupabaseAdminClient();
+  // The role gate above says WHAT the caller is. It says nothing about whether
+  // this course is theirs, and the write below runs with privileges that
+  // bypass RLS — so the relationship is established here, before anything is
+  // written.
+  const authorizedCourseId = await authorizeProfessorCourse(admin, profile, courseId);
+  if (!authorizedCourseId) {
+    return { message: "담당하고 있는 과목만 요청할 수 있습니다." };
+  }
+
+  // Stage 9: session roles no longer hold INSERT on this table; the checks
+  // above are the authorization and the service role performs the write.
+  const { error } = await admin.from("roadmap_revision_requests").insert({
     scope: "course",
       school_id: profile.school_id,
     status: "pending",
-    course_id: courseId,
+    course_id: authorizedCourseId,
     title: "담당 과목 삭제 요청",
     summary: "해당 과목 담당 교수에서 제외해 주십시오.",
     proposed_by: profile.id,
@@ -99,30 +171,12 @@ export async function addCourseNotice(formData: FormData) {
     return { message: "모든 필드를 입력해주세요." };
   }
 
-  const { data: professor } = await admin
-    .from("professors")
-    .select("id")
-    .eq("profile_id", profile.id)
-    .maybeSingle();
-  if (!professor) {
-    return { message: "교수 정보를 확인할 수 없습니다." };
-  }
-
-  const [{ data: courseMapping }, { data: courseOffering }] = await Promise.all([
-    admin
-      .from("course_professors")
-      .select("course_id")
-      .eq("course_id", courseId)
-      .eq("professor_id", professor.id)
-      .limit(1),
-    admin
-      .from("course_offerings")
-      .select("course_id")
-      .eq("course_id", courseId)
-      .eq("professor_id", professor.id)
-      .limit(1),
-  ]);
-  if (!courseMapping?.length && !courseOffering?.length) {
+  // This action already checked the ASSIGNMENT, which is why F2 did not name
+  // it. It did not check the TENANT, and course_professors has no composite
+  // foreign key, so a cross-tenant assignment row is structurally creatable
+  // (KI-022). Both actions now answer the question through one helper.
+  const authorizedCourseId = await authorizeProfessorCourse(admin, profile, courseId);
+  if (!authorizedCourseId) {
     return { message: "해당 과목에 공지를 등록할 권한이 없습니다." };
   }
 
@@ -130,7 +184,7 @@ export async function addCourseNotice(formData: FormData) {
   const { error: noticeError } = await admin.from("posts").insert({
     author_id: profile.id,
     school_id: profile.school_id,
-    course_id: courseId,
+    course_id: authorizedCourseId,
     community_type: "student",
     board_key: "course_notice",
     category: "notice",
@@ -203,30 +257,10 @@ export async function addCourseTextbook(formData: FormData) {
     return { message: "교재 이름을 입력해주세요." };
   }
 
-  const { data: professor } = await admin
-    .from("professors")
-    .select("id")
-    .eq("profile_id", profile.id)
-    .maybeSingle();
-  if (!professor) {
-    return { message: "교수 정보를 확인할 수 없습니다." };
-  }
-
-  const [{ data: courseMapping }, { data: courseOffering }] = await Promise.all([
-    admin
-      .from("course_professors")
-      .select("course_id")
-      .eq("course_id", courseId)
-      .eq("professor_id", professor.id)
-      .limit(1),
-    admin
-      .from("course_offerings")
-      .select("course_id")
-      .eq("course_id", courseId)
-      .eq("professor_id", professor.id)
-      .limit(1),
-  ]);
-  if (!courseMapping?.length && !courseOffering?.length) {
+  // Same shape as addCourseNotice: the assignment was checked, the TENANT was
+  // not. One helper answers it for all three privileged course actions.
+  const authorizedCourseId = await authorizeProfessorCourse(admin, profile, courseId);
+  if (!authorizedCourseId) {
     return { message: "해당 과목에 교과서를 등록할 권한이 없습니다." };
   }
 
@@ -234,7 +268,7 @@ export async function addCourseTextbook(formData: FormData) {
   const { error: textbookError } = await admin.from("posts").insert({
     author_id: profile.id,
     school_id: profile.school_id,
-    course_id: courseId,
+    course_id: authorizedCourseId,
     community_type: "student",
     board_key: "course_notice",
     category: "textbook",
