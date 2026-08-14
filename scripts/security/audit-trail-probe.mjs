@@ -22,7 +22,7 @@
 //   node scripts/security/audit-trail-probe.mjs
 
 import { loadEnvLocal, requireEnv } from "../loadtest/lib/env.mjs";
-import { PROBE_MARKER, assertSafeToProbe } from "./lib/probe-guard.mjs";
+import { assertSafeToProbe, createRunMarker } from "./lib/probe-guard.mjs";
 import { createProbeRest } from "./lib/probe-rest.mjs";
 import { createAbortScope, createRoleClient } from "./lib/probe-http.mjs";
 import { createProbeLifecycle } from "./lib/probe-lifecycle.mjs";
@@ -45,11 +45,14 @@ async function main() {
   // a caller-owned ledger, and signal-aware cleanup that cannot report success
   // it did not observe.
   const scope = createAbortScope();
-  const rest = createProbeRest({ url, serviceRoleKey: serviceKey });
+  // Codex round 5, F6: ownership is execution-specific.
+  const runMarker = createRunMarker();
+  const rest = createProbeRest({ url, serviceRoleKey: serviceKey, scope });
   const asAnon = createRoleClient({
     url,
     baseHeaders: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
     scopeSignal: scope.signal,
+    scope,
   });
 
   const results = [];
@@ -65,6 +68,7 @@ async function main() {
 
   const lifecycle = createProbeLifecycle({
     abortWork: (reason) => scope.abort(reason),
+    awaitMutations: (ms) => scope.settled(ms),
     cleanup: async () => {
       const failures = await ledger.cleanup();
       for (const failure of failures) {
@@ -73,7 +77,7 @@ async function main() {
       // The shared residue check knows nothing about this probe's own marker,
       // so the disposable profile carries PROBE_MARKER too and is covered by
       // the same machinery every other probe uses.
-      const residue = await verifyNoResidue({ rest, auth: null });
+      const residue = await verifyNoResidue({ rest, auth: null, runMarker });
       // No auth client here: this probe creates no auth users, so "no auth
       // client supplied" is expected rather than an unverifiable check.
       const unverifiable = residue.unverifiable.filter((entry) => !entry.startsWith("auth.users:"));
@@ -139,8 +143,8 @@ async function main() {
     const [school] = await rest.select("schools", "select=id&limit=1");
     const [disposable] = await rest.insert("profiles", [
       {
-        identifier: `${PROBE_MARKER}-${MARKER}-actor@probe.invalid`,
-        name: `${PROBE_MARKER} ${MARKER} disposable actor`,
+        identifier: `${runMarker}-${MARKER}-actor@probe.invalid`,
+        name: `${runMarker} ${MARKER} disposable actor`,
         role: "student",
         school_id: school.id,
       },

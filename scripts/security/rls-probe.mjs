@@ -20,12 +20,12 @@
 
 import { writeFileSync } from "node:fs";
 import { loadEnvLocal, requireEnv } from "../loadtest/lib/env.mjs";
-import { assertSafeToProbe } from "./lib/probe-guard.mjs";
+import { PROBE_MARKER_FAMILY, assertSafeToProbe, createRunMarker } from "./lib/probe-guard.mjs";
 import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./lib/probe-rest.mjs";
 import { createAbortScope, createRoleClient } from "./lib/probe-http.mjs";
 import { createProbeLifecycle, EXIT } from "./lib/probe-lifecycle.mjs";
 import { ProbeLedger, sweepOrphans, teardown, verifyNoResidue } from "./lib/probe-ledger.mjs";
-import { PROBE_MARKER, PROBE_PASSWORD, provisionProbeTenants } from "./lib/probe-fixtures.mjs";
+import { PROBE_PASSWORD, provisionProbeTenants } from "./lib/probe-fixtures.mjs";
 
 // Every table the app can reach. `expectAnonRead` records the DESIGN intent, so
 // the probe reports "anon can read a table it should not" rather than merely
@@ -89,8 +89,8 @@ function makeReporter() {
 // consumption as well as headers.
 // Codex round 4, 4A: every role client shares ONE cancellation scope, so a
 // signal can abort all of them before cleanup deletes anything.
-function makeRawFetch(url, timeoutMs, scopeSignal) {
-  return (baseHeaders) => createRoleClient({ url, baseHeaders, timeoutMs, scopeSignal });
+function makeRawFetch(url, timeoutMs, scopeSignal, scope) {
+  return (baseHeaders) => createRoleClient({ url, baseHeaders, timeoutMs, scopeSignal, scope });
 }
 
 function rowCount(body) {
@@ -111,15 +111,37 @@ async function main() {
   // must still work at the exact moment the scope has been cancelled.
   const scope = createAbortScope();
 
-  const rest = createProbeRest({ url, serviceRoleKey: serviceKey });
-  const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey });
+  // Codex round 5, F6: ownership belongs to THIS execution.
+  const runMarker = createRunMarker();
+
+  // F5: the service-role clients register their mutations in the same registry.
+  // They deliberately do NOT take scopeSignal — cleanup runs through them at
+  // exactly the moment the scope is cancelled.
+  const rest = createProbeRest({ url, serviceRoleKey: serviceKey, scope });
+  const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey, scope });
   const signIn = signInFactory({ url, anonKey, scopeSignal: scope.signal });
 
   // Operator-run recovery for the case `finally` cannot cover (SIGKILL, crash).
   if (process.argv.includes("--sweep")) {
-    const { removed, failures } = await sweepOrphans({ rest, auth });
+    // Codex round 5, F6. Recovery after a crash needs a marker the crashed run
+    // chose, which this process does not know — so the operator must say which.
+    // `--run <marker>` targets one execution; `--family` accepts the shared
+    // prefix and is the only path that can touch more than one run's rows.
+    const runArg = process.argv[process.argv.indexOf("--run") + 1];
+    const sweepMarker = process.argv.includes("--run") ? runArg : null;
+    if (!sweepMarker && !process.argv.includes("--family")) {
+      console.error(
+        "Refusing to sweep without an explicit target.\n" +
+          "  --run <marker>   remove exactly one execution's rows (printed at the start of every run)\n" +
+          "  --family         remove every probe-family row (use only when no probe is running)",
+      );
+      process.exit(1);
+    }
+    const target = sweepMarker ?? PROBE_MARKER_FAMILY;
+    console.log(`Sweeping rows owned by "${target}"…`);
+    const { removed, failures } = await sweepOrphans({ rest, auth, runMarker: target });
     console.log(removed.length ? `Swept: ${removed.join(", ")}` : "Nothing to sweep.");
-    const residue = await verifyNoResidue({ rest, auth });
+    const residue = await verifyNoResidue({ rest, auth, runMarker: target });
     if (failures.length || !residue.clean) {
       console.error(`Sweep incomplete. failures=${JSON.stringify(failures)} residue=${JSON.stringify(residue)}`);
       process.exit(1);
@@ -131,7 +153,7 @@ async function main() {
   const { check, results } = makeReporter();
 
   const anonHeaders = { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" };
-  const roleClient = makeRawFetch(url, PROBE_TIMEOUT_MS, scope.signal);
+  const roleClient = makeRawFetch(url, PROBE_TIMEOUT_MS, scope.signal, scope);
   const asAnon = roleClient(anonHeaders);
 
   // Codex finding 1: the ledger belongs to the CALLER and provisioning happens
@@ -139,6 +161,7 @@ async function main() {
   // returns — is still fully cleaned up by the finally below.
   const ledger = new ProbeLedger({ rest, auth });
   let cleanupFailures = [];
+  let sweepFailures = [];
   let residue = { residue: [], unverifiable: ["cleanup did not run"], clean: false };
 
   // Codex round 3, F1: cleanup must also run on Ctrl-C and on `kill`, exactly
@@ -148,10 +171,13 @@ async function main() {
     // 4A: cancel every in-flight request BEFORE the destructive pass, so a
     // create still on the wire cannot commit after cleanup has looked.
     abortWork: (reason) => scope.abort(reason),
+    // F5: wait for the UNDERLYING mutations, not just for the body.
+    awaitMutations: (ms) => scope.settled(ms),
     // 4C: ledger -> marker sweep -> residue verification, all three must agree.
     cleanup: async () => {
-      const result = await teardown({ ledger, rest, auth });
+      const result = await teardown({ ledger, rest, auth, runMarker });
       cleanupFailures = result.failures;
+      sweepFailures = result.swept?.failures ?? [];
       residue = result.residue;
       if (!result.ok) {
         console.error("Run `node scripts/security/rls-probe.mjs --sweep` to remove marked residue.");
@@ -161,8 +187,9 @@ async function main() {
   });
 
   const { bodyError: provisionOrProbeError } = await lifecycle.run(async () => {
-    console.log(`Provisioning two disposable probe tenants (marker "${PROBE_MARKER}")…`);
-    const fixtures = await provisionProbeTenants(ledger);
+    console.log(`Provisioning two disposable probe tenants (run marker "${runMarker}")…`);
+    console.log("If this run is killed, recover with: node scripts/security/rls-probe.mjs --sweep --run " + runMarker);
+    const fixtures = await provisionProbeTenants(ledger, runMarker);
     const A = fixtures.tenants.A;
     const B = fixtures.tenants.B;
 
@@ -246,11 +273,11 @@ async function main() {
           const res = await asAnon(`profiles?id=eq.${A.profile.id}`, {
             method: "PATCH",
             headers: { ...anonHeaders, Prefer: "return=representation" },
-            body: JSON.stringify({ name: `${PROBE_MARKER} OVERWRITTEN` }),
+            body: JSON.stringify({ name: `${runMarker} OVERWRITTEN` }),
           });
           const [after] = await rest.select("profiles", `select=name&id=eq.${A.profile.id}`);
           return {
-            pass: after?.name !== `${PROBE_MARKER} OVERWRITTEN`,
+            pass: after?.name !== `${runMarker} OVERWRITTEN`,
             detail: `PATCH ${res.status}; name is now "${after?.name}"`,
           };
         },
@@ -259,13 +286,13 @@ async function main() {
         id: "anon-write:profiles.insert",
         property: "anon must NOT be able to create a profile",
         run: async () => {
-          const identifier = `${PROBE_MARKER}-anon-insert-${fixtures.runId}@probe.invalid`;
+          const identifier = `${runMarker}-anon-insert-${fixtures.runId}@probe.invalid`;
           const res = await asAnon(`profiles`, {
             method: "POST",
             headers: { ...anonHeaders, Prefer: "return=representation" },
             body: JSON.stringify({
               identifier,
-              name: `${PROBE_MARKER} anon inserted`,
+              name: `${runMarker} anon inserted`,
               role: "admin",
               school_id: A.school.id,
             }),
@@ -321,7 +348,7 @@ async function main() {
         id: "anon-write:user_notifications.insert",
         property: "anon must NOT be able to address a notification to an arbitrary user",
         run: async () => {
-          const title = `${PROBE_MARKER} anon spoofed`;
+          const title = `${runMarker} anon spoofed`;
           const res = await asAnon(`user_notifications`, {
             method: "POST",
             headers: { ...anonHeaders, Prefer: "return=representation" },
@@ -331,7 +358,7 @@ async function main() {
               school_id: A.school.id,
               category: "system",
               title,
-              body: `${PROBE_MARKER} spoofed body`,
+              body: `${runMarker} spoofed body`,
               target_href: "/admin",
             }),
           });
@@ -486,14 +513,14 @@ async function main() {
           const res = await asB(`profiles?id=eq.${A.profile.id}`, {
             method: "PATCH",
             headers: { ...headersFor(tokenB), Prefer: "return=representation" },
-            body: JSON.stringify({ name: `${PROBE_MARKER} B-OVERWROTE-A` }),
+            body: JSON.stringify({ name: `${runMarker} B-OVERWROTE-A` }),
           });
           const [after] = await rest.select("profiles", `select=name&id=eq.${A.profile.id}`);
-          if (after?.name === `${PROBE_MARKER} B-OVERWROTE-A`) {
-            await rest.update("profiles", `id=eq.${A.profile.id}`, { name: `${PROBE_MARKER} student a` });
+          if (after?.name === `${runMarker} B-OVERWROTE-A`) {
+            await rest.update("profiles", `id=eq.${A.profile.id}`, { name: `${runMarker} student a` });
           }
           return {
-            pass: after?.name !== `${PROBE_MARKER} B-OVERWROTE-A`,
+            pass: after?.name !== `${runMarker} B-OVERWROTE-A`,
             detail: `PATCH ${res.status}; name is now "${after?.name}"`,
           };
         },
@@ -512,7 +539,7 @@ async function main() {
     //
     // Any row that unexpectedly succeeds is recorded in the ledger immediately,
     // so a security failure still cleans up.
-    const tag = (suffix) => `${PROBE_MARKER}-${suffix}`;
+    const tag = (suffix) => `${runMarker}-${suffix}`;
 
     // Outcome is read back with the SERVICE ROLE, never inferred from the
     // response body. PostgREST answers 201 with an empty body when the client
@@ -769,8 +796,8 @@ async function main() {
         board_key: "course_notice",
         category: "notice",
         course_id: A.course.id,
-        title: `${PROBE_MARKER} official notice`,
-        content: `${PROBE_MARKER} official notice body`,
+        title: `${runMarker} official notice`,
+        content: `${runMarker} official notice body`,
         status: "active",
       },
     ]);
@@ -840,7 +867,7 @@ async function main() {
         course_id: A.course.id,
         status: "completed",
         semester_label: "2026-1",
-        source_text: PROBE_MARKER,
+        source_text: runMarker,
       },
     ]);
     ledger.recordRow("student_courses", secondEnrolment.id, "second enrolment (status=completed)");
@@ -862,7 +889,7 @@ async function main() {
       const { status, body } = await callAdvance(asA, tokenA, {
         p_enrollment_id: A.enrolment.id,
         p_expected_week: before,
-        p_feedback: `${PROBE_MARKER} advance feedback`,
+        p_feedback: `${runMarker} advance feedback`,
       });
       const after = await weekOf(A.enrolment.id);
       const otherAfter = await weekOf(secondEnrolment.id);
@@ -877,7 +904,7 @@ async function main() {
       // The feedback is written INSIDE the transition, by the winner only.
       const progress = await rest.select(
         "student_mission_progress",
-        `select=id&student_id=eq.${A.profile.id}&week_number=eq.${before}&actual_progress_feedback=eq.${encodeURIComponent(`${PROBE_MARKER} advance feedback`)}`,
+        `select=id&student_id=eq.${A.profile.id}&week_number=eq.${before}&actual_progress_feedback=eq.${encodeURIComponent(`${runMarker} advance feedback`)}`,
       );
       for (const row of progress) ledger.recordRow("student_mission_progress", row.id, "advance feedback");
       check(
@@ -890,7 +917,7 @@ async function main() {
     {
       // A stale expected week is a LOSER: no advance, and no feedback written.
       const before = await weekOf(A.enrolment.id);
-      const staleFeedback = `${PROBE_MARKER} stale feedback`;
+      const staleFeedback = `${runMarker} stale feedback`;
       const { status, body } = await callAdvance(asA, tokenA, {
         p_enrollment_id: A.enrolment.id,
         p_expected_week: before - 1,
@@ -915,7 +942,7 @@ async function main() {
       const { status, body } = await callAdvance(asB, tokenB, {
         p_enrollment_id: A.enrolment.id,
         p_expected_week: before,
-        p_feedback: `${PROBE_MARKER} foreign advance`,
+        p_feedback: `${runMarker} foreign advance`,
       });
       const after = await weekOf(A.enrolment.id);
       check(
@@ -930,7 +957,7 @@ async function main() {
       const { status } = await callAdvance(asAnon, null, {
         p_enrollment_id: A.enrolment.id,
         p_expected_week: before,
-        p_feedback: `${PROBE_MARKER} anon advance`,
+        p_feedback: `${runMarker} anon advance`,
       });
       const after = await weekOf(A.enrolment.id);
       check(
@@ -1443,6 +1470,10 @@ async function main() {
   console.log(`\n${results.length} checks, ${failed} FAILED (each failure is a security finding).`);
 
   console.log("\n=== Fixture cleanup ===");
+  if (sweepFailures.length) {
+    console.error(`\nSWEEP FAILED (${sweepFailures.length}) — cleanup is UNPROVEN:`);
+    for (const entry of sweepFailures) console.error(`  ${entry}`);
+  }
   if (cleanupFailures.length) {
     for (const failure of cleanupFailures) {
       console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id} (${failure.label}): ${failure.message}`);
@@ -1479,7 +1510,15 @@ async function main() {
   // A run that cannot PROVE it cleaned up is not a passing run, whatever the
   // security checks said.
   const ok =
-    failed === 0 && cleanupFailures.length === 0 && residue.clean && !provisionOrProbeError;
+    failed === 0 &&
+    cleanupFailures.length === 0 &&
+    // Codex round 5, F7: teardown already computed this and the runner threw it
+    // away, so a "[SWEEP FAILED]" run could exit 0. The fallback sweep is the
+    // only thing that can find a row the ledger never learned the id of, so its
+    // failure means cleanup is UNPROVEN — which is failure, not silence.
+    sweepFailures.length === 0 &&
+    residue.clean &&
+    !provisionOrProbeError;
   process.exit(ok ? 0 : 1);
 }
 

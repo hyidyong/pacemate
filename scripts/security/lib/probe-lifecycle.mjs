@@ -42,6 +42,10 @@ export const EXIT = {
 export function createProbeLifecycle({
   cleanup,
   abortWork = () => {},
+  // Codex round 5, F5: resolves when every in-flight MUTATION has genuinely
+  // settled. Supplied by the scope; without it the lifecycle can only wait for
+  // the body, which is not the same thing.
+  awaitMutations = null,
   timeoutMs = DEFAULT_CLEANUP_TIMEOUT_MS,
   quiesceTimeoutMs = DEFAULT_QUIESCE_TIMEOUT_MS,
   logger = console,
@@ -70,32 +74,97 @@ export function createProbeLifecycle({
    * cleanup entirely — a late cleanup beats none. If the wait times out that is
    * reported, not swallowed.
    */
-  async function quiesce(reason) {
-    if (quiesced) return { ok: true, detail: "already quiesced" };
-    quiesced = true;
-    try {
-      abortWork(`${reason}: probe interrupted`);
-    } catch (error) {
-      logger.error(`[quiesce] abort failed: ${error?.message ?? error}`);
+  /**
+   * Codex round 5, F5 amends this again. Round 4 waited for the BODY to stop,
+   * which is the caller's async function. But the body stops the moment its
+   * awaited wrapper rejects — and round 4's own deadline fix made the wrapper
+   * reject independently of the underlying fetch. So:
+   *
+   *   abort -> wrapper rejects -> body returns -> quiesce says "stopped"
+   *   -> cleanup deletes -> exit -> the server commits the create
+   *
+   * Waiting for the body is necessary and NOT sufficient. Quiesce now also
+   * waits for the scope's registry of in-flight MUTATIONS to drain, which
+   * tracks the underlying attempts rather than the wrappers.
+   *
+   * When either wait times out the run is AMBIGUOUS, and that is reported as a
+   * distinct state — not as "clean anyway". The caller reacts by forcing the
+   * marker sweep and failing the run: a late commit is then still found, and
+   * nothing claims success it cannot support.
+   */
+  /**
+   * The happy path: do NOT cancel anything, just wait for outstanding mutations
+   * to settle. Cancelling here would abort work that is completing normally.
+   */
+  async function quiesceNormally() {
+    if (typeof awaitMutations !== "function") {
+      return { ok: true, detail: "no mutation registry", ambiguous: false };
     }
-    if (!bodySettled) return { ok: true, detail: "no body in flight" };
+    const drained = await awaitMutations(quiesceTimeoutMs);
+    if (drained?.ok) return { ok: true, detail: "all mutations settled", ambiguous: false };
+    logger.error(
+      `[quiesce] ${drained?.outstanding ?? "?"} mutation(s) still in flight at the end of the run;` +
+        " a late commit is possible, so this run cannot be reported clean",
+    );
+    return {
+      ok: false,
+      detail: `${drained?.outstanding ?? "?"} mutation(s) unsettled`,
+      ambiguous: true,
+    };
+  }
 
-    let timer;
-    const deadline = new Promise((resolve) => {
-      timer = setTimeout(() => resolve("timeout"), quiesceTimeoutMs);
-    });
-    try {
-      const outcome = await Promise.race([bodySettled.then(() => "settled"), deadline]);
-      if (outcome === "timeout") {
-        logger.error(
-          `[quiesce] the probe body did not stop within ${quiesceTimeoutMs}ms; cleaning up anyway`,
-        );
-        return { ok: false, detail: "body did not quiesce" };
+  let quiescePromise = null;
+  async function quiesce(reason) {
+    // One shared promise, not a boolean race: two signals arriving together
+    // must await the SAME quiesce rather than one of them skipping it.
+    if (quiescePromise) return quiescePromise;
+    quiescePromise = (async () => {
+      quiesced = true;
+      try {
+        abortWork(`${reason}: probe interrupted`);
+      } catch (error) {
+        logger.error(`[quiesce] abort failed: ${error?.message ?? error}`);
       }
-      return { ok: true, detail: "body stopped" };
-    } finally {
-      clearTimeout(timer);
-    }
+
+      const problems = [];
+
+      // 1. The body: the caller's own async function.
+      if (bodySettled) {
+        let timer;
+        const deadline = new Promise((resolve) => {
+          timer = setTimeout(() => resolve("timeout"), quiesceTimeoutMs);
+        });
+        try {
+          const outcome = await Promise.race([bodySettled.then(() => "settled"), deadline]);
+          if (outcome === "timeout") {
+            logger.error(
+              `[quiesce] the probe body did not stop within ${quiesceTimeoutMs}ms; cleaning up anyway`,
+            );
+            problems.push("body did not quiesce");
+          }
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      // 2. The network: mutations whose underlying attempt has not settled.
+      //    This is the one the wrapper cannot answer.
+      if (typeof awaitMutations === "function") {
+        const drained = await awaitMutations(quiesceTimeoutMs);
+        if (!drained?.ok) {
+          logger.error(
+            `[quiesce] ${drained?.outstanding ?? "?"} mutation(s) still in flight after ` +
+              `${quiesceTimeoutMs}ms — a late commit is possible; forcing marker recovery`,
+          );
+          problems.push(`${drained?.outstanding ?? "?"} mutation(s) unsettled`);
+        }
+      }
+
+      return problems.length === 0
+        ? { ok: true, detail: "body stopped and all mutations settled", ambiguous: false }
+        : { ok: false, detail: problems.join("; "), ambiguous: true };
+    })();
+    return quiescePromise;
   }
 
   async function runCleanupOnce(reason) {
@@ -225,13 +294,22 @@ export function createProbeLifecycle({
           bodyError = error;
         }
       })();
+      let stopped = { ok: true, detail: "not interrupted", ambiguous: false };
       try {
         await bodySettled;
+        // Even on the happy path, a mutation whose wrapper timed out may still
+        // be open. Quiescing here is what stops cleanup racing it.
+        stopped = await quiesceNormally();
       } finally {
         await runCleanupOnce(bodyError ? "error" : "normal");
         uninstall();
       }
-      return { value, bodyError, cleanup: cleanupResult ?? { ok: false, detail: "cleanup did not run" } };
+      const result = cleanupResult ?? { ok: false, detail: "cleanup did not run" };
+      if (!stopped.ok && result.ok) {
+        result.ok = false;
+        result.detail = `${result.detail}; but ${stopped.detail}`;
+      }
+      return { value, bodyError, quiesce: stopped, cleanup: result };
     },
   };
 }

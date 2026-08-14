@@ -17,7 +17,7 @@ import { DEFAULT_TIMEOUT_MS, ProbeRequestError, boundedRequest, parseBody } from
 export { DEFAULT_TIMEOUT_MS, ProbeRequestError };
 
 /** PostgREST with the service-role key. Used for provisioning, verification and cleanup. */
-export function createProbeRest({ url, serviceRoleKey, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl }) {
+export function createProbeRest({ url, serviceRoleKey, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl, scope }) {
   const base = `${url.replace(/\/$/, "")}/rest/v1`;
   const headers = {
     apikey: serviceRoleKey,
@@ -28,7 +28,11 @@ export function createProbeRest({ url, serviceRoleKey, timeoutMs = DEFAULT_TIMEO
     const { status, text } = await boundedRequest(
       `${base}${path}`,
       { ...init, headers: { ...headers, ...(init.headers ?? {}) } },
-      { timeoutMs, fetchImpl },
+      // Codex round 5, F5: provisioning writes are mutations too, and they run
+      // under the service role — the most privileged client in the harness. It
+      // shares the same registry so cleanup waits for them as well. It does NOT
+      // take scopeSignal: cleanup must still work after the scope is cancelled.
+      { timeoutMs, fetchImpl, scope },
     );
     if (status < 200 || status >= 300) {
       throw new ProbeRequestError(`PostgREST ${init.method ?? "GET"} ${path} → ${status}: ${text}`, {
@@ -62,14 +66,14 @@ export function createProbeRest({ url, serviceRoleKey, timeoutMs = DEFAULT_TIMEO
 }
 
 /** GoTrue admin API — creating and deleting probe auth users. */
-export function createProbeAuthAdmin({ url, serviceRoleKey, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl }) {
+export function createProbeAuthAdmin({ url, serviceRoleKey, timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl, scope }) {
   const base = `${url.replace(/\/$/, "")}/auth/v1/admin`;
   const headers = {
     apikey: serviceRoleKey,
     Authorization: `Bearer ${serviceRoleKey}`,
     "Content-Type": "application/json",
   };
-  const call = (path, init) => boundedRequest(`${base}${path}`, { ...init, headers }, { timeoutMs, fetchImpl });
+  const call = (path, init) => boundedRequest(`${base}${path}`, { ...init, headers }, { timeoutMs, fetchImpl, scope });
 
   return {
     async createUser(email, password) {
@@ -96,7 +100,18 @@ export function createProbeAuthAdmin({ url, serviceRoleKey, timeoutMs = DEFAULT_
      * to exhaustion, and a page that cannot be read is an error rather than an
      * empty result.
      */
+    /**
+     * Codex round 5, F6: matching was `user.email.includes(prefix)`, so a real
+     * account whose address merely CONTAINED the probe's fixed marker would be
+     * enumerated — and deleted by the sweep. Ownership is now an exact prefix
+     * against a per-run random token.
+     */
     async listUsersByEmailPrefix(prefix, { perPage = 200, maxPages = 500 } = {}) {
+      if (typeof prefix !== "string" || prefix.length < 16) {
+        throw new ProbeRequestError(
+          `refusing to enumerate auth users by the weak prefix "${prefix}"; ownership must be execution-specific`,
+        );
+      }
       const matches = [];
       for (let page = 1; page <= maxPages; page += 1) {
         const { status, text } = await call(`/users?page=${page}&per_page=${perPage}`, { method: "GET" });
@@ -106,7 +121,7 @@ export function createProbeAuthAdmin({ url, serviceRoleKey, timeoutMs = DEFAULT_
         const body = parseBody(text);
         const users = Array.isArray(body?.users) ? body.users : [];
         for (const user of users) {
-          if (typeof user?.email === "string" && user.email.includes(prefix)) matches.push(user);
+          if (typeof user?.email === "string" && user.email.startsWith(prefix)) matches.push(user);
         }
         if (users.length < perPage) return matches;
       }

@@ -19,7 +19,14 @@ import { spawn } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { PROBE_MARKER } from "./lib/probe-guard.mjs";
+import { PROBE_MARKER, PROBE_MARKER_FAMILY } from "./lib/probe-guard.mjs";
+
+// Codex round 5, F6: the child picks its own random run marker, which the
+// parent cannot predict. Assertions about "did this run leave anything behind"
+// therefore match the probe FAMILY prefix, which covers whatever token the
+// child chose, while assertions about OWNERSHIP use an explicitly foreign
+// marker to prove the sweep does not reach beyond its own execution.
+const runMarkerFrom = (output) => (output.match(/run marker "([^"]+)"/) ?? [])[1] ?? null;
 import { SCENARIOS, startFakeSupabase } from "./lib/fake-supabase.mjs";
 
 const RUNNER = fileURLToPath(new URL("./rls-probe.mjs", import.meta.url));
@@ -69,7 +76,7 @@ test("a normal run against the stand-in exits after cleaning up, and says so", a
     // Security checks against a non-RLS stand-in are meaningless; what matters
     // is that nothing was left behind.
     assert.equal(fake.totalRows(), 0, `rows left: ${JSON.stringify([...fake.tables].map(([t, r]) => [t, r.length]))}`);
-    assert.equal(fake.probeAuthUsers(PROBE_MARKER).length, 0, "probe auth users left behind");
+    assert.equal(fake.probeAuthUsers(PROBE_MARKER_FAMILY).length, 0, "probe auth users left behind");
   } finally {
     await fake.close();
   }
@@ -82,7 +89,7 @@ test("a request that never sends headers is bounded, and cleanup still runs", as
     assert.match(run.output, /exceeded 600ms|Probe aborted/, "the stalled request was not bounded");
     assert.notEqual(run.code, 0, "a run that aborted must not exit 0");
     assert.equal(fake.totalRows(), 0, "a partially provisioned run left rows behind");
-    assert.equal(fake.probeAuthUsers(PROBE_MARKER).length, 0);
+    assert.equal(fake.probeAuthUsers(PROBE_MARKER_FAMILY).length, 0);
   } finally {
     await fake.close();
   }
@@ -97,7 +104,7 @@ test("a response that stalls MID-BODY is bounded — the hole the old transport 
     assert.match(run.output, /exceeded 600ms|Probe aborted/, "a stalled body was not bounded");
     assert.notEqual(run.code, 0);
     assert.equal(fake.totalRows(), 0, "rows left behind after a mid-body stall");
-    assert.equal(fake.probeAuthUsers(PROBE_MARKER).length, 0);
+    assert.equal(fake.probeAuthUsers(PROBE_MARKER_FAMILY).length, 0);
   } finally {
     await fake.close();
   }
@@ -137,7 +144,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
         0,
         `${signal} left rows behind: ${JSON.stringify([...fake.tables].map(([t, r]) => [t, r.length]))}`,
       );
-      assert.equal(fake.probeAuthUsers(PROBE_MARKER).length, 0, `${signal} left auth users behind`);
+      assert.equal(fake.probeAuthUsers(PROBE_MARKER_FAMILY).length, 0, `${signal} left auth users behind`);
       // Cleanup must not run twice.
       const passes = run.output.split("All ledgered resources removed").length - 1;
       assert.ok(passes <= 1, `cleanup ran ${passes} times`);
@@ -187,7 +194,7 @@ test("probe Auth users beyond the first page are still found and removed", async
   try {
     await runProbe({ url: fake.url });
     assert.equal(
-      fake.probeAuthUsers(PROBE_MARKER).length,
+      fake.probeAuthUsers(PROBE_MARKER_FAMILY).length,
       0,
       "probe auth users past the first page survived cleanup",
     );
@@ -201,7 +208,11 @@ test("a cleanup deletion failure makes the process exit non-zero", async () => {
   const fake = await startFakeSupabase({ scenario: SCENARIOS.refuseDelete });
   try {
     const run = await runProbe({ url: fake.url });
-    assert.match(run.output, /CLEANUP FAILED|RESIDUE/, "a refused delete was not surfaced");
+    assert.match(
+      run.output,
+      /CLEANUP FAILED|RESIDUE|SWEEP FAILED/,
+      "a refused delete was not surfaced",
+    );
     assert.notEqual(run.code, 0, "a run that could not clean up must exit non-zero");
   } finally {
     await fake.close();
@@ -259,18 +270,33 @@ test("4C — a create that COMMITS but never answers is swept, not left behind",
   }
 });
 
-test("4C — the sweep runs on EVERY teardown, and reports what it removed", async () => {
-  // A row carrying the probe marker that the ledger never recorded — e.g. left
-  // by an earlier run that was killed. A normal run must remove it and say so,
-  // rather than deleting it silently or ignoring it.
+test("F6 — a sweep does NOT touch data belonging to another run, or to nobody", async () => {
+  // The exact scenario Codex round 5 described: unrelated real rows whose text
+  // contains the probe wording. Under the old fixed marker plus substring
+  // matching, every one of these was a deletion candidate for any run.
   const fake = await startFakeSupabase();
   try {
-    fake.rowsOf("faqs").push({ id: "orphan-1", question: `${PROBE_MARKER} orphan from a previous run` });
+    const bystanders = [
+      { id: "innocent-1", question: `${PROBE_MARKER} mentioned in a real FAQ answer` },
+      { id: "innocent-2", question: `${PROBE_MARKER_FAMILY} came up in a support thread` },
+      {
+        id: "innocent-3",
+        question: `${PROBE_MARKER_FAMILY}-00000000000000000000000000000000 belongs to a DIFFERENT run`,
+      },
+    ];
+    for (const row of bystanders) fake.rowsOf("faqs").push({ ...row });
 
     const run = await runProbe({ url: fake.url });
+    const marker = runMarkerFrom(run.output);
+    assert.ok(marker, `the run must announce its marker for recovery; output: ${run.output.slice(0, 200)}`);
+    assert.ok(marker.startsWith(`${PROBE_MARKER_FAMILY}-`), `unexpected marker ${marker}`);
 
-    assert.deepEqual(fake.rowsOf("faqs"), [], "the unledgered orphan must be removed");
-    assert.match(run.output, /\[SWEPT\]/, "the sweep must report what it removed, not hide it");
+    const survivors = fake.rowsOf("faqs").map((row) => row.id).sort();
+    assert.deepEqual(
+      survivors,
+      ["innocent-1", "innocent-2", "innocent-3"],
+      "the sweep deleted rows it does not own",
+    );
   } finally {
     await fake.close();
   }

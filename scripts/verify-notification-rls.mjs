@@ -26,9 +26,9 @@
 
 import { loadEnvLocal, requireEnv } from "./loadtest/lib/env.mjs";
 import {
-  PROBE_MARKER,
-  PROBE_TENANT_SLUG_PREFIX,
   assertSafeToProbe,
+  createRunMarker,
+  tenantSlugPrefix,
 } from "./security/lib/probe-guard.mjs";
 import { createProbeAuthAdmin, createProbeRest, signInFactory } from "./security/lib/probe-rest.mjs";
 import { createAbortScope, createRoleClient } from "./security/lib/probe-http.mjs";
@@ -51,15 +51,18 @@ async function main() {
   // runs outside it, because it needs a working transport precisely when the
   // scope has been cancelled.
   const scope = createAbortScope();
+  // Codex round 5, F6: ownership is execution-specific.
+  const runMarker = createRunMarker();
 
-  const rest = createProbeRest({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS });
-  const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS });
+  const rest = createProbeRest({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS, scope });
+  const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey, timeoutMs: TIMEOUT_MS, scope });
   const signIn = signInFactory({ url, anonKey, timeoutMs: TIMEOUT_MS, scopeSignal: scope.signal });
   const asAnon = createRoleClient({
     url,
     baseHeaders: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json" },
     timeoutMs: TIMEOUT_MS,
     scopeSignal: scope.signal,
+    scope,
   });
 
   const results = [];
@@ -68,8 +71,10 @@ async function main() {
   const ledger = new ProbeLedger({ rest, auth });
   const lifecycle = createProbeLifecycle({
     abortWork: (reason) => scope.abort(reason),
+    // F5: wait for the underlying mutations, not just the body.
+    awaitMutations: (ms) => scope.settled(ms),
     // 4C: ledger -> marker sweep -> residue verification.
-    cleanup: () => teardown({ ledger, rest, auth }),
+    cleanup: () => teardown({ ledger, rest, auth, runMarker }),
   });
 
   const runId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -82,13 +87,13 @@ async function main() {
     };
 
     const home = await record("schools", {
-      name: `${PROBE_MARKER} notif home`,
-      slug: `${PROBE_TENANT_SLUG_PREFIX}notif-home-${runId}`,
+      name: `${runMarker} notif home`,
+      slug: `${tenantSlugPrefix(runMarker)}notif-home-${runId}`,
       status: "active",
     });
     const foreign = await record("schools", {
-      name: `${PROBE_MARKER} notif foreign`,
-      slug: `${PROBE_TENANT_SLUG_PREFIX}notif-foreign-${runId}`,
+      name: `${runMarker} notif foreign`,
+      slug: `${tenantSlugPrefix(runMarker)}notif-foreign-${runId}`,
       status: "active",
     });
 
@@ -97,12 +102,12 @@ async function main() {
     // the two of them share one mutable `is_read`, so peer B is the control
     // that makes the defect visible. One student alone cannot show it.
     const makeStudent = async (suffix, label) => {
-      const email = `${PROBE_MARKER}-notif-${suffix}-${runId}@probe.invalid`;
+      const email = `${runMarker}-notif-${suffix}-${runId}@probe.invalid`;
       const authUser = await auth.createUser(email, PROBE_PASSWORD);
       ledger.recordAuthUser(authUser.id, `notif ${label}`);
       const profile = await record("profiles", {
         identifier: email,
-        name: `${PROBE_MARKER} notif ${label}`,
+        name: `${runMarker} notif ${label}`,
         role: "student",
         school_id: home.id,
         auth_user_id: authUser.id,
@@ -118,8 +123,8 @@ async function main() {
       recipient_role: null,
       school_id: home.id,
       category: "system",
-      title: `${PROBE_MARKER} own direct ${runId}`,
-      body: `${PROBE_MARKER} own direct body`,
+      title: `${runMarker} own direct ${runId}`,
+      body: `${runMarker} own direct body`,
       target_href: "/notifications",
     });
     // A role broadcast is now stored the way the application writes it since
@@ -127,14 +132,14 @@ async function main() {
     // must model the real shape, so it writes A's copy and B's copy.
     // `recipient_id` is NOT NULL as of 20260814150000, so the old shared shape
     // is not even insertable any more.
-    const broadcastTitle = `${PROBE_MARKER} same tenant broadcast ${runId}`;
+    const broadcastTitle = `${runMarker} same tenant broadcast ${runId}`;
     const broadcastFor = (recipientId) => ({
       recipient_id: recipientId,
       recipient_role: "student",
       school_id: home.id,
       category: "system",
       title: broadcastTitle,
-      body: `${PROBE_MARKER} same tenant body`,
+      body: `${runMarker} same tenant body`,
       target_href: "/notifications",
     });
     const sameTenant = await record("user_notifications", broadcastFor(profile.id));
@@ -144,8 +149,8 @@ async function main() {
     // tenant. Addressing it to nobody would prove nothing: an unreadable row is
     // unreadable for everyone, so the deny check would pass vacuously.
     const foreignProfile = await record("profiles", {
-      identifier: `${PROBE_MARKER}-notif-foreign-${runId}@probe.invalid`,
-      name: `${PROBE_MARKER} notif foreign student`,
+      identifier: `${runMarker}-notif-foreign-${runId}@probe.invalid`,
+      name: `${runMarker} notif foreign student`,
       role: "student",
       school_id: foreign.id,
     });
@@ -154,8 +159,8 @@ async function main() {
       recipient_role: "student",
       school_id: foreign.id,
       category: "system",
-      title: `${PROBE_MARKER} foreign broadcast ${runId}`,
-      body: `${PROBE_MARKER} foreign body`,
+      title: `${runMarker} foreign broadcast ${runId}`,
+      body: `${runMarker} foreign body`,
       target_href: "/notifications",
     });
 
@@ -170,6 +175,7 @@ async function main() {
         },
         timeoutMs: TIMEOUT_MS,
         scopeSignal: scope.signal,
+        scope,
       });
     };
 
@@ -305,8 +311,8 @@ async function main() {
       // all eleven, so a recipient could rewrite the title, the body, the link
       // they are about to be sent to, the tenant stamp, even the recipient.
       const provenance = {
-        title: `${PROBE_MARKER} REWRITTEN title`,
-        body: `${PROBE_MARKER} REWRITTEN body`,
+        title: `${runMarker} REWRITTEN title`,
+        body: `${runMarker} REWRITTEN body`,
         target_href: "/admin",
         recipient_role: "admin",
         school_id: foreign.id,

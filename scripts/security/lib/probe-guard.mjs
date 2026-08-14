@@ -22,6 +22,66 @@
 // Everything here is a pure function over an env bag plus small helpers, so the
 // decision logic is unit-testable with no network.
 
+/**
+ * Codex round 5, F6 — OWNERSHIP MUST BE EXECUTION-SPECIFIC.
+ *
+ * `PROBE_MARKER` used to be one fixed string shared by every run, and the sweep
+ * matched it with `like.*marker*` — a substring search. Two consequences, both
+ * of them a data-loss risk against a live project:
+ *
+ *   * a genuine post, FAQ or course review whose text merely CONTAINED the
+ *     phrase would be deleted by a sweep that had never created it;
+ *   * two runs (a developer and CI, say) could not be told apart, so one run's
+ *     recovery sweep would delete the other run's live fixtures mid-flight.
+ *
+ * The family prefix below is now only for DISCOVERY by an operator who is
+ * explicitly cleaning up after a crash. Every automatic path is keyed on a
+ * per-execution random token, and matching is by PREFIX rather than substring,
+ * so ownership is provable rather than probable.
+ */
+export const PROBE_MARKER_FAMILY = "pacemate-probe";
+
+/**
+ * A marker that belongs to exactly one execution.
+ *
+ * 128 bits of randomness: the point is not secrecy, it is that no real row can
+ * plausibly carry it and no other run can collide with it.
+ */
+export function createRunMarker(randomHex) {
+  const token =
+    randomHex ??
+    // Node 18+ everywhere this runs; the import is local so the module stays
+    // dependency-free for the pure-function tests.
+    // eslint-disable-next-line no-undef
+    globalThis.crypto.randomUUID().replace(/-/g, "");
+  if (!/^[0-9a-f]{16,}$/.test(token)) {
+    throw new Error(`probe run marker must be at least 16 hex characters, got "${token}"`);
+  }
+  return `${PROBE_MARKER_FAMILY}-${token}`;
+}
+
+/**
+ * Ownership predicate for a PostgREST filter. Prefix, never substring: a row
+ * whose text merely contains the marker somewhere is not this run's row.
+ */
+export function ownedByRun(runMarker) {
+  if (typeof runMarker !== "string" || !runMarker.startsWith(`${PROBE_MARKER_FAMILY}-`)) {
+    throw new Error(`refusing to build an ownership filter from "${runMarker}"`);
+  }
+  // The predicate is interpolated into a query STRING, where a bare `%` begins
+  // a percent-escape — PostgREST answered 500 on the unencoded form. `%25` is
+  // the LIKE wildcard once decoded.
+  return `like.${runMarker}%25`;
+}
+
+// Retained so the SLUG shape stays derivable from whichever marker is in play.
+export const tenantSlugPrefix = (runMarker) => `${runMarker}-`;
+
+/**
+ * DEPRECATED for ownership. Still exported because the operator-run recovery
+ * sweep needs to find rows from runs whose token it does not know, and because
+ * older fixtures in a crashed project may still carry it.
+ */
 export const PROBE_MARKER = "pacemate-stage9-probe";
 export const PROBE_TENANT_SLUG_PREFIX = `${PROBE_MARKER}-`;
 
@@ -154,12 +214,14 @@ export function evaluateProbeGuard(env, supabaseUrl) {
  * A tenant is disposable only if the DATABASE says so. Used both before writing
  * into a probe tenant and before deleting one.
  */
-export function isProbeTenant(school) {
-  return (
-    Boolean(school) &&
-    typeof school.slug === "string" &&
-    school.slug.startsWith(PROBE_TENANT_SLUG_PREFIX)
-  );
+export function isProbeTenant(school, runMarker) {
+  if (!school || typeof school.slug !== "string") return false;
+  // Codex round 5, F6: when a run marker is supplied the tenant must belong to
+  // THIS execution, not merely to the probe family. Passing no marker keeps the
+  // family check, which is what the operator recovery sweep needs when it is
+  // cleaning up after a run whose token nobody recorded.
+  const prefix = runMarker ? `${runMarker}-` : `${PROBE_MARKER_FAMILY}-`;
+  return school.slug.startsWith(prefix) || school.slug.startsWith(PROBE_TENANT_SLUG_PREFIX);
 }
 
 /**
@@ -168,9 +230,14 @@ export function isProbeTenant(school) {
  * not a cleanup.
  */
 export function assertScopedFilter(filter) {
+  // Codex round 5, F6: a filter is scoped if it names an id, or if it carries
+  // an execution-specific marker from the probe family. The old check looked
+  // for one hard-coded legacy string, which a per-run marker does not contain.
   const scoped =
     typeof filter === "string" &&
-    (filter.includes(PROBE_MARKER) || /(^|&)id=(eq|in)\./.test(filter));
+    (filter.includes(PROBE_MARKER_FAMILY) ||
+      filter.includes(PROBE_MARKER) ||
+      /(^|&)id=(eq|in)\./.test(filter));
   if (!scoped) {
     throw new Error(
       `Refusing an unscoped delete: filter ${JSON.stringify(filter)} is neither marker-scoped nor id-scoped`,

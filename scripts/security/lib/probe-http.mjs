@@ -56,12 +56,69 @@ const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  */
 export function createAbortScope() {
   const controller = new AbortController();
+
+  /**
+   * Codex round 5, F5 — THE WRAPPER SETTLING IS NOT THE OPERATION ENDING.
+   *
+   * Round 4 made the deadline independent of the transport, which fixed hangs
+   * but introduced a subtler problem for CLEANUP: `Promise.race` rejects the
+   * caller's promise while the underlying fetch is still open. So:
+   *
+   *   abort -> wrapper rejects -> quiesce sees "nothing in flight" ->
+   *   cleanup deletes -> process exits -> the server commits the create
+   *
+   * and the row outlives a run that reported clean. Aborting an AbortController
+   * asks the transport to stop; it does not prove the server did not already
+   * process the request.
+   *
+   * So every MUTATING request registers its underlying attempt here and stays
+   * registered until that attempt actually settles — not until the wrapper
+   * gives up. Cleanup waits on this registry. If an attempt will not settle,
+   * the run enters ambiguity recovery: it cannot claim clean, and the marker
+   * sweep runs regardless so a late commit is still found.
+   *
+   * Reads are not tracked: a GET that never returned created nothing.
+   */
+  const inFlight = new Set();
+
   return {
     get signal() {
       return controller.signal;
     },
     get aborted() {
       return controller.signal.aborted;
+    },
+    get pendingMutations() {
+      return inFlight.size;
+    },
+    /** Register an underlying attempt; returns a function to deregister it. */
+    trackMutation(attempt) {
+      const entry = { attempt };
+      inFlight.add(entry);
+      const done = () => inFlight.delete(entry);
+      attempt.then(done, done);
+      return done;
+    },
+    /**
+     * Resolves when every tracked mutation has genuinely settled, or rejects
+     * once `timeoutMs` passes with work still outstanding. The rejection is the
+     * signal to enter ambiguity recovery — never to assume the work is over.
+     */
+    async settled(timeoutMs) {
+      if (inFlight.size === 0) return { ok: true, outstanding: 0 };
+      let timer;
+      const deadline = new Promise((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), timeoutMs);
+      });
+      try {
+        const all = Promise.allSettled([...inFlight].map((entry) => entry.attempt));
+        const outcome = await Promise.race([all.then(() => "settled"), deadline]);
+        return outcome === "settled"
+          ? { ok: true, outstanding: 0 }
+          : { ok: false, outstanding: inFlight.size };
+      } finally {
+        clearTimeout(timer);
+      }
     },
     abort(reason = "probe scope cancelled") {
       if (!controller.signal.aborted) {
@@ -77,7 +134,7 @@ export function createAbortScope() {
 export async function boundedRequest(
   url,
   init = {},
-  { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl, scopeSignal } = {},
+  { timeoutMs = DEFAULT_TIMEOUT_MS, fetchImpl, scopeSignal, scope } = {},
 ) {
   const doFetch = fetchImpl ?? globalThis.fetch;
   const controller = new AbortController();
@@ -132,6 +189,11 @@ export async function boundedRequest(
     })();
     // A transport that never settles cannot outlive the deadline.
     attempt.catch(() => {});
+    // Codex round 5, F5: the wrapper below may reject on the deadline while
+    // THIS attempt is still open and can still commit. Registering it means
+    // cleanup waits for the real thing, not for our own giving up. Reads are
+    // not registered — a GET that never returned created nothing.
+    if (scope && MUTATING.has(method)) scope.trackMutation(attempt);
     return await Promise.race([attempt, deadline]);
   } catch (error) {
     // A mutating verb that never returned may still have committed.
@@ -178,13 +240,14 @@ export function createRoleClient({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   fetchImpl,
   scopeSignal,
+  scope,
 }) {
   const root = `${url.replace(/\/$/, "")}/rest/v1`;
   return async function request(path, init = {}) {
     const { status, text } = await boundedRequest(
       `${root}/${path}`,
       { ...init, headers: { ...baseHeaders, ...(init.headers ?? {}) } },
-      { timeoutMs, fetchImpl, scopeSignal },
+      { timeoutMs, fetchImpl, scopeSignal, scope },
     );
     return { status, body: parseBody(text) };
   };

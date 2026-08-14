@@ -26,6 +26,27 @@ export const SCENARIOS = {
   ambiguousCreate: "ambiguous-create",
 };
 
+// Codex round 5, F6: predicates are now `like.<runMarker>%25` — a PREFIX match
+// with a URL-encoded wildcard. The stand-in must model that, or it would keep
+// answering the old substring semantics and the tests would pass against
+// behaviour the real database no longer has.
+function likeMatches(value, raw) {
+  if (typeof value !== "string") return false;
+  // The caller may hand us either the raw query text or an already-decoded
+  // value, depending on whether a URL parser has been through it. Decoding a
+  // decoded string throws URIError on a bare `%`, so fall back rather than
+  // crash the stand-in.
+  let pattern;
+  try {
+    pattern = decodeURIComponent(raw);
+  } catch {
+    pattern = raw;
+  }
+  pattern = pattern.replaceAll("*", "%");
+  if (pattern.endsWith("%")) return value.startsWith(pattern.slice(0, -1));
+  return value === pattern;
+}
+
 function matchRow(row, query) {
   for (const [key, raw] of query.entries()) {
     if (["select", "limit", "offset", "order", "page", "per_page"].includes(key)) continue;
@@ -35,8 +56,7 @@ function matchRow(row, query) {
     if (op === "eq") {
       if (String(actual ?? "") !== decodeURIComponent(value)) return false;
     } else if (op === "like") {
-      const needle = decodeURIComponent(value).replaceAll("*", "");
-      if (typeof actual !== "string" || !actual.includes(needle)) return false;
+      if (!likeMatches(actual, value)) return false;
     } else if (op === "in") {
       const list = value.replace(/^\(|\)$/g, "").split(",");
       if (!list.includes(String(actual ?? ""))) return false;

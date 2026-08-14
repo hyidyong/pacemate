@@ -17,7 +17,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { PROBE_MARKER, PROBE_TENANT_SLUG_PREFIX } from "./probe-guard.mjs";
+import { PROBE_TENANT_SLUG_PREFIX, createRunMarker } from "./probe-guard.mjs";
+
+// Codex round 5, F6: ownership is per execution now, so these fault-injection
+// tests each mint their own marker rather than sharing a module constant. That
+// is also what the real runners do.
+const RUN_MARKER = createRunMarker();
 import { ProbeLedger, sweepOrphans, verifyNoResidue } from "./probe-ledger.mjs";
 import { provisionProbeTenants, provisionTenant } from "./probe-fixtures.mjs";
 
@@ -29,6 +34,27 @@ import { provisionProbeTenants, provisionTenant } from "./probe-fixtures.mjs";
  * An in-memory PostgREST stand-in that records every row and honours id-scoped
  * and marker-scoped deletes, so "did cleanup actually remove it" is observable.
  */
+// Codex round 5, F6: predicates are now `like.<runMarker>%25` — a PREFIX match
+// with a URL-encoded wildcard. The stand-in must model that, or it would keep
+// answering the old substring semantics and the tests would pass against
+// behaviour the real database no longer has.
+function likeMatches(value, raw) {
+  if (typeof value !== "string") return false;
+  // The caller may hand us either the raw query text or an already-decoded
+  // value, depending on whether a URL parser has been through it. Decoding a
+  // decoded string throws URIError on a bare `%`, so fall back rather than
+  // crash the stand-in.
+  let pattern;
+  try {
+    pattern = decodeURIComponent(raw);
+  } catch {
+    pattern = raw;
+  }
+  pattern = pattern.replaceAll("*", "%");
+  if (pattern.endsWith("%")) return value.startsWith(pattern.slice(0, -1));
+  return value === pattern;
+}
+
 function createFakeRest({ failOn = () => false, failDeleteFor = () => false } = {}) {
   const tables = new Map();
   let seq = 0;
@@ -69,8 +95,7 @@ function createFakeRest({ failOn = () => false, failDeleteFor = () => false } = 
       const likeMatch = /(\w+)=like\.([^&]+)/.exec(query ?? "");
       if (likeMatch) {
         const [, column, raw] = likeMatch;
-        const needle = raw.replaceAll("*", "");
-        return rows.filter((row) => typeof row[column] === "string" && row[column].includes(needle));
+        return rows.filter((row) => likeMatches(row[column], raw));
       }
       return rows;
     },
@@ -93,8 +118,7 @@ function createFakeRest({ failOn = () => false, failDeleteFor = () => false } = 
         const likeMatch = /(\w+)=like\.([^&]+)/.exec(query ?? "");
         if (likeMatch) {
           const [, column, raw] = likeMatch;
-          const needle = raw.replaceAll("*", "");
-          removed = rows.filter((row) => typeof row[column] === "string" && row[column].includes(needle));
+          removed = rows.filter((row) => likeMatches(row[column], raw));
           tables.set(table, rows.filter((row) => !removed.includes(row)));
         }
       }
@@ -120,7 +144,8 @@ function createFakeAuth({ failOnCreate = false, failOnDelete = false, failOnList
     },
     async listUsersByEmailPrefix(prefix) {
       if (failOnList) throw new Error("injected GoTrue list failure");
-      return [...users.values()].filter((user) => user.email.includes(prefix));
+      // Exact prefix, matching the real client since F6.
+      return [...users.values()].filter((user) => user.email.startsWith(prefix));
     },
   };
 }
@@ -132,13 +157,13 @@ async function runLifecycle({ rest, auth, probe = async () => {} }) {
   let cleanupFailures = [];
   let residue = null;
   try {
-    const fixtures = await provisionProbeTenants(ledger);
+    const fixtures = await provisionProbeTenants(ledger, RUN_MARKER);
     await probe(fixtures);
   } catch (error) {
     provisionError = error;
   } finally {
     cleanupFailures = await ledger.cleanup();
-    residue = await verifyNoResidue({ rest, auth });
+    residue = await verifyNoResidue({ rest, auth, runMarker: RUN_MARKER });
   }
   return { ledger, provisionError, cleanupFailures, residue };
 }
@@ -231,7 +256,7 @@ test("cleanup runs even when provisionTenant never returns", async () => {
     return original(table, rows);
   };
 
-  const provisioning = provisionTenant(ledger, "a", "hang");
+  const provisioning = provisionTenant(ledger, "a", "hang", RUN_MARKER);
   // Give the provisioner enough turns to reach the stall.
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
@@ -240,7 +265,7 @@ test("cleanup runs even when provisionTenant never returns", async () => {
   assert.ok(rest.totalRows() >= 4, "expected rows to exist before the hang");
 
   const failures = await ledger.cleanup();
-  const residue = await verifyNoResidue({ rest, auth });
+  const residue = await verifyNoResidue({ rest, auth, runMarker: RUN_MARKER });
 
   assert.deepEqual(failures, []);
   assert.equal(rest.totalRows(), 0, `rows left behind: ${JSON.stringify(rest.remaining())}`);
@@ -286,7 +311,7 @@ test("failed entries stay in the ledger so a retry can finish the job", async ()
   const rest = createFakeRest({ failDeleteFor: (table) => blocked && table === "courses" });
   const auth = createFakeAuth();
   const ledger = new ProbeLedger({ rest, auth });
-  await provisionProbeTenants(ledger);
+  await provisionProbeTenants(ledger, RUN_MARKER);
 
   const first = await ledger.cleanup();
   assert.ok(first.length > 0);
@@ -307,7 +332,7 @@ test("a residue check that cannot be performed is a failure, not a warning", asy
   const rest = createFakeRest({ failOn: (table, op) => table === "courses" && op === "select" });
   const auth = createFakeAuth();
 
-  const residue = await verifyNoResidue({ rest, auth });
+  const residue = await verifyNoResidue({ rest, auth, runMarker: RUN_MARKER });
 
   assert.equal(residue.clean, false, "an unverifiable check must not read as clean");
   assert.ok(residue.unverifiable.some((entry) => entry.startsWith("courses")));
@@ -317,7 +342,7 @@ test("an unlistable Auth API is a failure, not a warning", async () => {
   const rest = createFakeRest();
   const auth = createFakeAuth({ failOnList: true });
 
-  const residue = await verifyNoResidue({ rest, auth });
+  const residue = await verifyNoResidue({ rest, auth, runMarker: RUN_MARKER });
 
   assert.equal(residue.clean, false);
   assert.ok(residue.unverifiable.some((entry) => entry.startsWith("auth.users")));
@@ -326,10 +351,12 @@ test("an unlistable Auth API is a failure, not a warning", async () => {
 test("leftover marked rows are detected even when the ledger is empty", async () => {
   const rest = createFakeRest();
   const auth = createFakeAuth();
-  await rest.insert("schools", [{ name: "x", slug: `${PROBE_TENANT_SLUG_PREFIX}orphan` }]);
-  await rest.insert("courses", [{ name: `${PROBE_MARKER} course orphan` }]);
+  // Owned by THIS run: residue verification is run-scoped since F6, so a row
+  // carrying only the legacy family prefix is deliberately NOT this run's.
+  await rest.insert("schools", [{ name: "x", slug: `${RUN_MARKER}-orphan` }]);
+  await rest.insert("courses", [{ name: `${RUN_MARKER} course orphan` }]);
 
-  const residue = await verifyNoResidue({ rest, auth });
+  const residue = await verifyNoResidue({ rest, auth, runMarker: RUN_MARKER });
 
   assert.equal(residue.clean, false);
   assert.ok(residue.residue.some((entry) => entry.startsWith("schools")));
@@ -356,7 +383,7 @@ test("cleanup is strict reverse creation order, so children go before parents", 
   const rest = createFakeRest();
   const auth = createFakeAuth();
   const ledger = new ProbeLedger({ rest, auth });
-  await provisionProbeTenants(ledger);
+  await provisionProbeTenants(ledger, RUN_MARKER);
 
   const creationOrder = ledger.entries.map((entry) => entry.table ?? "auth.users");
   await ledger.cleanup();
@@ -378,7 +405,7 @@ test("every ledger delete is id-scoped, so cleanup can never become a truncate",
   const rest = createFakeRest();
   const auth = createFakeAuth();
   const ledger = new ProbeLedger({ rest, auth });
-  await provisionProbeTenants(ledger);
+  await provisionProbeTenants(ledger, RUN_MARKER);
   await ledger.cleanup();
 
   for (const call of rest.calls.filter((entry) => entry.op === "remove")) {
@@ -402,14 +429,14 @@ test("the orphan sweep removes residue left by a killed run", async () => {
   const rest = createFakeRest();
   const auth = createFakeAuth();
   const ledger = new ProbeLedger({ rest, auth });
-  await provisionProbeTenants(ledger);
+  await provisionProbeTenants(ledger, RUN_MARKER);
   ledger.entries = []; // the process died; the ledger is gone
 
   assert.ok(rest.totalRows() > 0);
   assert.ok(auth.users.size > 0);
 
-  const { failures } = await sweepOrphans({ rest, auth });
-  const residue = await verifyNoResidue({ rest, auth });
+  const { failures } = await sweepOrphans({ rest, auth, runMarker: RUN_MARKER });
+  const residue = await verifyNoResidue({ rest, auth, runMarker: RUN_MARKER });
 
   assert.deepEqual(failures, []);
   assert.equal(residue.clean, true, `residue after sweep: ${JSON.stringify(residue)}`);
@@ -420,10 +447,10 @@ test("the sweep reports failures rather than claiming success", async () => {
   const rest = createFakeRest({ failDeleteFor: (table) => table === "schools" });
   const auth = createFakeAuth();
   const ledger = new ProbeLedger({ rest, auth });
-  await provisionProbeTenants(ledger);
+  await provisionProbeTenants(ledger, RUN_MARKER);
   ledger.entries = [];
 
-  const { failures } = await sweepOrphans({ rest, auth });
+  const { failures } = await sweepOrphans({ rest, auth, runMarker: RUN_MARKER });
   assert.ok(failures.some((entry) => entry.startsWith("schools")));
 });
 
@@ -438,21 +465,28 @@ test("the runner's lifecycle covers provisioning, signals and residue", async ()
   // Provisioning must sit INSIDE the guarded body, or a partial provision
   // escapes cleanup.
   const bodyStart = source.indexOf("await lifecycle.run(async () => {");
-  const provision = source.indexOf("await provisionProbeTenants(ledger)");
+  const provision = source.indexOf("await provisionProbeTenants(ledger, runMarker)");
   assert.ok(bodyStart > -1, "the runner must use the signal-aware lifecycle");
   assert.ok(bodyStart < provision, "provisioning must happen inside lifecycle.run");
 
   // Cleanup is the lifecycle's cleanup callback, so it also runs on
   // SIGINT/SIGTERM — not only in a `finally`.
-  assert.match(source, /cleanup: async \(\) => \{[\s\S]*?teardown\(\{ ledger, rest, auth \}\)/);
+  assert.match(source, /cleanup: async \(\) => \{[\s\S]*?teardown\(\{ ledger, rest, auth, runMarker \}\)/);
 
   // Codex round 4, 4A: the work scope must be cancelled BEFORE cleanup, or a
   // create still on the wire can commit after cleanup has already looked.
   assert.match(source, /abortWork: \(reason\) => scope\.abort\(reason\)/);
   assert.match(source, /createAbortScope\(\)/);
 
-  // The exit code accounts for cleanup and residue, not only security checks.
-  assert.match(source, /failed === 0 &&\s*cleanupFailures\.length === 0 &&\s*residue\.clean/);
+  // The exit code accounts for cleanup, the SWEEP and residue, not only
+  // security checks. Codex round 5, F7: the sweep term was the missing one —
+  // teardown computed it and the runner threw it away, so a `[SWEEP FAILED]`
+  // run could exit 0.
+  assert.match(source, /failed === 0 &&/);
+  assert.match(source, /cleanupFailures\.length === 0 &&/);
+  assert.match(source, /sweepFailures\.length === 0 &&/);
+  assert.match(source, /residue\.clean &&/);
+  assert.match(source, /!provisionOrProbeError;/);
 
   // Every probe request goes through the bounded transport; no bare fetch.
   assert.doesNotMatch(source, /await fetch\(/, "the runner must not call fetch directly");

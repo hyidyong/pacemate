@@ -16,10 +16,11 @@
 // cleanup responsibility and no longer has a rescue `catch`: the caller's
 // top-level `finally` covers provisioning itself.
 //
-// Both tenants carry PROBE_MARKER in `schools.slug`, and every row carries the
-// marker in a text column wherever the schema has one.
+// Both tenants carry THIS RUN's marker in `schools.slug`, and every row carries
+// it in a text column wherever the schema has one (Codex round 5, F6: the
+// marker is a per-execution random token, not a shared constant).
 
-import { PROBE_MARKER, PROBE_TENANT_SLUG_PREFIX, isProbeTenant } from "./probe-guard.mjs";
+import { createRunMarker, isProbeTenant, tenantSlugPrefix } from "./probe-guard.mjs";
 
 export const PROBE_PASSWORD = "Stage9-probe-!aA9";
 
@@ -57,13 +58,13 @@ async function createAuthUser(ledger, email, label) {
 /**
  * @param {import('./probe-ledger.mjs').ProbeLedger} ledger
  */
-export async function provisionTenant(ledger, label, runId) {
-  const slug = `${PROBE_TENANT_SLUG_PREFIX}${label}-${runId}`;
+export async function provisionTenant(ledger, label, runId, runMarker) {
+  const slug = `${tenantSlugPrefix(runMarker)}${label}-${runId}`;
 
   const school = await createRow(
     ledger,
     "schools",
-    { name: `${PROBE_MARKER} university ${label}`, slug, status: "active" },
+    { name: `${runMarker} university ${label}`, slug, status: "active" },
     `school ${label}`,
   );
 
@@ -78,14 +79,14 @@ export async function provisionTenant(ledger, label, runId) {
   const department = await createRow(
     ledger,
     "departments",
-    { school_id: school.id, name: `${PROBE_MARKER} department ${label}` },
+    { school_id: school.id, name: `${runMarker} department ${label}` },
     `department ${label}`,
   );
 
   // The professor gets a real identity (auth user + profile + linked professors
   // row) so `app_private.current_professor_id()` resolves for them. Without it
   // no probe can exercise a professor-scoped policy at all.
-  const professorEmail = `${PROBE_MARKER}-prof-${label}-${runId}@probe.invalid`;
+  const professorEmail = `${runMarker}-prof-${label}-${runId}@probe.invalid`;
   const professorAuthUser = await createAuthUser(ledger, professorEmail, `professor auth user ${label}`);
 
   const professorProfile = await createRow(
@@ -93,7 +94,7 @@ export async function provisionTenant(ledger, label, runId) {
     "profiles",
     {
       identifier: professorEmail,
-      name: `${PROBE_MARKER} professor profile ${label}`,
+      name: `${runMarker} professor profile ${label}`,
       role: "professor",
       school_id: school.id,
       department_id: department.id,
@@ -109,7 +110,7 @@ export async function provisionTenant(ledger, label, runId) {
       school_id: school.id,
       department_id: department.id,
       profile_id: professorProfile.id,
-      name: `${PROBE_MARKER} professor ${label}`,
+      name: `${runMarker} professor ${label}`,
       email: professorEmail,
     },
     `professor ${label}`,
@@ -122,7 +123,7 @@ export async function provisionTenant(ledger, label, runId) {
       school_id: school.id,
       department_id: department.id,
       code: `PB-${label}-${runId}`.slice(0, 20),
-      name: `${PROBE_MARKER} course ${label}`,
+      name: `${runMarker} course ${label}`,
       credit: 3,
     },
     `course ${label}`,
@@ -139,7 +140,7 @@ export async function provisionTenant(ledger, label, runId) {
       school_id: school.id,
       department_id: department.id,
       code: `PBALT-${label}-${runId}`.slice(0, 20),
-      name: `${PROBE_MARKER} alt course ${label}`,
+      name: `${runMarker} alt course ${label}`,
       credit: 3,
     },
     `alt course ${label}`,
@@ -159,7 +160,7 @@ export async function provisionTenant(ledger, label, runId) {
     `availability ${label}`,
   );
 
-  const email = `${PROBE_MARKER}-${label}-${runId}@probe.invalid`;
+  const email = `${runMarker}-${label}-${runId}@probe.invalid`;
   const authUser = await createAuthUser(ledger, email, `auth user ${label}`);
 
   const profile = await createRow(
@@ -167,7 +168,7 @@ export async function provisionTenant(ledger, label, runId) {
     "profiles",
     {
       identifier: email,
-      name: `${PROBE_MARKER} student ${label}`,
+      name: `${runMarker} student ${label}`,
       role: "student",
       school_id: school.id,
       department_id: department.id,
@@ -191,7 +192,7 @@ export async function provisionTenant(ledger, label, runId) {
       course_id: course.id,
       status: "interested",
       semester_label: "2026-2",
-      source_text: PROBE_MARKER,
+      source_text: runMarker,
     },
     `enrolment ${label}`,
   );
@@ -207,7 +208,7 @@ export async function provisionTenant(ledger, label, runId) {
       professor_id: professor.id,
       requested_start: start.toISOString(),
       requested_end: end.toISOString(),
-      topic: `${PROBE_MARKER} confidential counseling topic ${label}`,
+      topic: `${runMarker} confidential counseling topic ${label}`,
       status: "pending",
     },
     `counseling ${label}`,
@@ -221,8 +222,8 @@ export async function provisionTenant(ledger, label, runId) {
       recipient_role: null,
       school_id: school.id,
       category: "system",
-      title: `${PROBE_MARKER} direct ${label}`,
-      body: `${PROBE_MARKER} direct body ${label}`,
+      title: `${runMarker} direct ${label}`,
+      body: `${runMarker} direct body ${label}`,
       target_href: "/notifications",
     },
     `direct notification ${label}`,
@@ -240,8 +241,8 @@ export async function provisionTenant(ledger, label, runId) {
       recipient_role: "student",
       school_id: school.id,
       category: "system",
-      title: `${PROBE_MARKER} broadcast ${label}`,
-      body: `${PROBE_MARKER} broadcast body ${label}`,
+      title: `${runMarker} broadcast ${label}`,
+      body: `${runMarker} broadcast body ${label}`,
       target_href: "/notifications",
     },
     `broadcast ${label}`,
@@ -258,12 +259,12 @@ export async function provisionTenant(ledger, label, runId) {
       school_id: school.id,
       // roadmap_revision_scope_target requires a target for the chosen scope.
       course_code: `PB-${label}-${runId}`.slice(0, 20),
-      department_name: `${PROBE_MARKER} dept ${label}`,
-      title: `${PROBE_MARKER} revision ${label}`,
-      summary: `${PROBE_MARKER} revision summary ${label}`,
+      department_name: `${runMarker} dept ${label}`,
+      title: `${runMarker} revision ${label}`,
+      summary: `${runMarker} revision summary ${label}`,
       proposed_by: professorProfile.id,
-      proposed_by_name: `${PROBE_MARKER} professor ${label}`,
-      proposed_patch: { shortReason: `${PROBE_MARKER} patch ${label}` },
+      proposed_by_name: `${runMarker} professor ${label}`,
+      proposed_patch: { shortReason: `${runMarker} patch ${label}` },
     },
     `roadmap revision ${label}`,
   );
@@ -279,9 +280,9 @@ export async function provisionTenant(ledger, label, runId) {
       author_id: profile.id,
       difficulty: 3,
       workload: 3,
-      grading_style: `${PROBE_MARKER} grading ${label}`,
+      grading_style: `${runMarker} grading ${label}`,
       team_project: false,
-      content: `${PROBE_MARKER} review ${label}`,
+      content: `${runMarker} review ${label}`,
     },
     `review ${label}`,
   );
@@ -296,8 +297,8 @@ export async function provisionTenant(ledger, label, runId) {
       community_type: "student",
       board_key: "question",
       category: "free",
-      title: `${PROBE_MARKER} post ${label}`,
-      content: `${PROBE_MARKER} post body ${label}`,
+      title: `${runMarker} post ${label}`,
+      content: `${runMarker} post body ${label}`,
       status: "active",
     },
     `post ${label}`,
@@ -307,9 +308,9 @@ export async function provisionTenant(ledger, label, runId) {
     ledger,
     "faqs",
     {
-      question: `${PROBE_MARKER} courseless faq ${label}`,
-      answer: `${PROBE_MARKER} courseless answer ${label}`,
-      category: `${PROBE_MARKER}`,
+      question: `${runMarker} courseless faq ${label}`,
+      answer: `${runMarker} courseless answer ${label}`,
+      category: `${runMarker}`,
       course_id: null,
       professor_id: professor.id,
       approved_at: new Date().toISOString(),
@@ -325,7 +326,7 @@ export async function provisionTenant(ledger, label, runId) {
       course_id: course.id,
       week_number: 1,
       is_completed: false,
-      actual_progress_feedback: `${PROBE_MARKER} private feedback ${label}`,
+      actual_progress_feedback: `${runMarker} private feedback ${label}`,
     },
     `mission ${label}`,
   );
@@ -375,15 +376,15 @@ export async function provisionTenant(ledger, label, runId) {
  * These live only in tenant A; tenant B's probes are about cross-tenant reach
  * and do not need them.
  */
-async function provisionStaff(ledger, school, label, runId, role) {
-  const email = `${PROBE_MARKER}-${role}-${label}-${runId}@probe.invalid`;
+async function provisionStaff(ledger, school, label, runId, role, runMarker) {
+  const email = `${runMarker}-${role}-${label}-${runId}@probe.invalid`;
   const authUser = await createAuthUser(ledger, email, `${role} auth user ${label}`);
   const profile = await createRow(
     ledger,
     "profiles",
     {
       identifier: email,
-      name: `${PROBE_MARKER} ${role} ${label}`,
+      name: `${runMarker} ${role} ${label}`,
       role,
       school_id: school.id,
       auth_user_id: authUser.id,
@@ -393,17 +394,20 @@ async function provisionStaff(ledger, school, label, runId, role) {
   return { email, profile };
 }
 
-export async function provisionProbeTenants(ledger, runId = makeRunId()) {
+export async function provisionProbeTenants(ledger, runMarker, runId = makeRunId()) {
+  if (typeof runMarker !== "string" || runMarker.length < 20) {
+    throw new Error("provisionProbeTenants requires an execution-specific run marker (F6)");
+  }
   const tenants = {};
-  tenants.A = await provisionTenant(ledger, "a", runId);
-  tenants.B = await provisionTenant(ledger, "b", runId);
+  tenants.A = await provisionTenant(ledger, "a", runId, runMarker);
+  tenants.B = await provisionTenant(ledger, "b", runId, runMarker);
 
   tenants.A.staff = {
-    assistant: await provisionStaff(ledger, tenants.A.school, "a", runId, "assistant"),
-    admin: await provisionStaff(ledger, tenants.A.school, "a", runId, "admin"),
+    assistant: await provisionStaff(ledger, tenants.A.school, "a", runId, "assistant", runMarker),
+    admin: await provisionStaff(ledger, tenants.A.school, "a", runId, "admin", runMarker),
   };
 
-  return { runId, tenants };
+  return { runId, runMarker, tenants };
 }
 
-export { PROBE_MARKER };
+export { createRunMarker };

@@ -29,35 +29,51 @@
 // --sweep`), which finds and removes marked residue from any previous run. It is
 // not automatic.
 
-import { PROBE_MARKER, PROBE_TENANT_SLUG_PREFIX, assertScopedFilter } from "./probe-guard.mjs";
+import { assertScopedFilter, ownedByRun } from "./probe-guard.mjs";
 
 /**
  * Tables the sweep and the residue check know about, with the text column that
  * carries PROBE_MARKER. Order is creation order; cleanup walks it backwards.
  */
-export const MARKED_TABLES = [
-  ["schools", "slug", `like.${PROBE_TENANT_SLUG_PREFIX}*`],
-  ["departments", "name", `like.*${PROBE_MARKER}*`],
-  ["professors", "name", `like.*${PROBE_MARKER}*`],
-  ["courses", "name", `like.*${PROBE_MARKER}*`],
-  ["profiles", "identifier", `like.*${PROBE_MARKER}*`],
-  ["counseling_requests", "topic", `like.*${PROBE_MARKER}*`],
-  ["student_courses", "source_text", `like.*${PROBE_MARKER}*`],
-  ["student_mission_progress", "actual_progress_feedback", `like.*${PROBE_MARKER}*`],
-  ["user_notifications", "title", `like.*${PROBE_MARKER}*`],
+/**
+ * Tables the sweep and the residue check know about, with the text column that
+ * carries this RUN's marker. Order is creation order; cleanup walks it backwards.
+ *
+ * Codex round 5, F6: this used to be a table of literal `like.*fixed-marker*`
+ * predicates — a SUBSTRING match on a string shared by every execution. A real
+ * post whose text merely contained the phrase would have been deleted by a
+ * sweep that never created it. The predicate is now built per run, by PREFIX,
+ * from a 128-bit random token, so ownership is provable.
+ */
+export const MARKED_COLUMNS = [
+  ["schools", "slug"],
+  ["departments", "name"],
+  ["professors", "name"],
+  ["courses", "name"],
+  ["profiles", "identifier"],
+  ["counseling_requests", "topic"],
+  ["student_courses", "source_text"],
+  ["student_mission_progress", "actual_progress_feedback"],
+  ["user_notifications", "title"],
   // These four are written by the cross-tenant WRITE probes rather than by
   // provisioning, and they were missing from this list. That mattered: their
   // parent foreign keys are ON DELETE SET NULL, so deleting the probe tenant
   // does NOT remove them — a live run left 4 posts and 2 course_reviews behind
   // while residue verification reported clean. A table the probe can write to
   // must be a table residue verification looks at.
-  ["study_roadmaps", "title", `like.*${PROBE_MARKER}*`],
-  ["study_tasks", "title", `like.*${PROBE_MARKER}*`],
-  ["posts", "title", `like.*${PROBE_MARKER}*`],
-  ["course_reviews", "content", `like.*${PROBE_MARKER}*`],
-  ["roadmap_revision_requests", "title", `like.*${PROBE_MARKER}*`],
-  ["faqs", "question", `like.*${PROBE_MARKER}*`],
+  ["study_roadmaps", "title"],
+  ["study_tasks", "title"],
+  ["posts", "title"],
+  ["course_reviews", "content"],
+  ["roadmap_revision_requests", "title"],
+  ["faqs", "question"],
 ];
+
+/** [table, column, predicate] for one specific execution. */
+export function markedTablesFor(runMarker) {
+  const predicate = ownedByRun(runMarker);
+  return MARKED_COLUMNS.map(([table, column]) => [table, column, predicate]);
+}
 
 /**
  * Tables whose rows carry no marker column of their own and are therefore only
@@ -141,11 +157,11 @@ export class ProbeLedger {
  * look" and "there is nothing there" are different answers, and only one of
  * them means it is safe to stop.
  */
-export async function verifyNoResidue({ rest, auth }) {
+export async function verifyNoResidue({ rest, auth, runMarker }) {
   const residue = [];
   const unverifiable = [];
 
-  for (const [table, column, predicate] of MARKED_TABLES) {
+  for (const [table, column, predicate] of markedTablesFor(runMarker)) {
     try {
       const rows = await rest.select(table, `select=id&${column}=${predicate}`);
       if (!Array.isArray(rows)) {
@@ -161,7 +177,7 @@ export async function verifyNoResidue({ rest, auth }) {
   // Child rows have no marker column; check them through their marked parent so
   // an orphan cannot hide behind "no marker to search for".
   try {
-    const parents = await rest.select("profiles", `select=id&identifier=like.*${PROBE_MARKER}*`);
+    const parents = await rest.select("profiles", `select=id&identifier=${ownedByRun(runMarker)}`);
     if (Array.isArray(parents) && parents.length) {
       residue.push(`student_profiles: ${parents.length} orphaned parent profile(s)`);
     }
@@ -171,7 +187,7 @@ export async function verifyNoResidue({ rest, auth }) {
 
   if (auth) {
     try {
-      const users = await auth.listUsersByEmailPrefix(PROBE_MARKER);
+      const users = await auth.listUsersByEmailPrefix(runMarker);
       if (users.length) residue.push(`auth.users: ${users.length} user(s)`);
     } catch (error) {
       unverifiable.push(`auth.users: ${error?.message ?? error}`);
@@ -204,13 +220,13 @@ export async function verifyNoResidue({ rest, auth }) {
  * Anything the sweep removes is reported. Silently deleting rows the ledger
  * never recorded would hide the very ambiguity this exists to surface.
  */
-export async function teardown({ ledger, rest, auth, logger = console }) {
+export async function teardown({ ledger, rest, auth, runMarker, logger = console }) {
   const failures = await ledger.cleanup();
   for (const failure of failures) {
     logger.error(`[CLEANUP FAILED] ${failure.table} ${failure.id}: ${failure.message}`);
   }
 
-  const swept = await sweepOrphans({ rest, auth });
+  const swept = await sweepOrphans({ rest, auth, runMarker });
   for (const entry of swept.removed) {
     logger.error(`[SWEPT] ${entry} — not in the ledger; an ambiguous create or an earlier crash`);
   }
@@ -218,7 +234,7 @@ export async function teardown({ ledger, rest, auth, logger = console }) {
     logger.error(`[SWEEP FAILED] ${entry}`);
   }
 
-  const residue = await verifyNoResidue({ rest, auth });
+  const residue = await verifyNoResidue({ rest, auth, runMarker });
   for (const entry of residue.residue) logger.error(`[RESIDUE] ${entry}`);
   for (const entry of residue.unverifiable) logger.error(`[UNVERIFIABLE] ${entry}`);
 
@@ -245,11 +261,11 @@ export async function teardown({ ledger, rest, auth, logger = console }) {
  * timed-out create can commit without the ledger ever learning its id. Deletes
  * marked rows in reverse dependency order and removes marked auth users.
  */
-export async function sweepOrphans({ rest, auth }) {
+export async function sweepOrphans({ rest, auth, runMarker }) {
   const removed = [];
   const failures = [];
 
-  for (const [table, column, predicate] of [...MARKED_TABLES].reverse()) {
+  for (const [table, column, predicate] of [...markedTablesFor(runMarker)].reverse()) {
     try {
       const rows = await rest.remove(table, assertScopedFilter(`${column}=${predicate}`));
       const count = Array.isArray(rows) ? rows.length : 0;
@@ -261,7 +277,7 @@ export async function sweepOrphans({ rest, auth }) {
 
   if (auth) {
     try {
-      const users = await auth.listUsersByEmailPrefix(PROBE_MARKER);
+      const users = await auth.listUsersByEmailPrefix(runMarker);
       for (const user of users) {
         try {
           await auth.deleteUser(user.id);
