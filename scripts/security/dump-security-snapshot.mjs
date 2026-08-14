@@ -57,12 +57,25 @@ select json_build_object(
   -- flags but not its BODY, and a trigger's name but not what it does. A
   -- rewritten SECURITY DEFINER body or a gutted trigger would have passed
   -- --check unchanged. Both now carry a definition hash.
+  -- Codex round 4, finding 5: the raw proacl alone is NOT sufficient, and the
+  -- way it fails is the dangerous direction. A function created without an
+  -- explicit revoke-from-public has proacl = NULL, which this rendered as the
+  -- harmless-looking string DEFAULT — while PostgreSQL's default for a
+  -- FUNCTION is EXECUTE GRANTED TO PUBLIC. So a new SECURITY DEFINER function
+  -- callable by anon would have appeared in the snapshot as "DEFAULT" and no
+  -- test could tell the difference. The effective privilege is now COMPUTED,
+  -- per role, with has_function_privilege, so that regression is drift.
   'functions', (
     select coalesce(json_agg(json_build_object(
       'schema', n.nspname, 'name', p.proname, 'args', pg_get_function_identity_arguments(p.oid),
       'security_definer', p.prosecdef,
       'config', coalesce(array_to_string(p.proconfig, ','), ''),
       'acl', coalesce(p.proacl::text, 'DEFAULT'),
+      'acl_is_default', p.proacl is null,
+      'execute_public', has_function_privilege('public', p.oid, 'EXECUTE'),
+      'execute_anon', has_function_privilege('anon', p.oid, 'EXECUTE'),
+      'execute_authenticated', has_function_privilege('authenticated', p.oid, 'EXECUTE'),
+      'execute_service_role', has_function_privilege('service_role', p.oid, 'EXECUTE'),
       'definition_md5', md5(pg_get_functiondef(p.oid))
     ) order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)), '[]'::json)
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace

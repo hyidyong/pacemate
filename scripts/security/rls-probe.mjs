@@ -588,6 +588,83 @@ async function main() {
     ];
 
     // -------------------------------------------------------------------
+    // Codex round 4, finding 6 — official course notices cannot be DELETED by
+    // an unauthorized student.
+    //
+    // Round 3 (F3) closed creation and promotion: a client can no longer author
+    // into `course_notice`. Deletion was left as source-level reasoning only.
+    // It does not need disposable infrastructure to test: the probe provisions
+    // its own notice through the SERVICE ROLE (which bypasses RLS, exactly as
+    // a real publisher's server action does), then attacks it as a student.
+    //
+    // The positive sentinel comes first — the notice must be READABLE by the
+    // student before "they could not delete it" means anything. Otherwise the
+    // deny check passes for a row that simply is not there.
+    // -------------------------------------------------------------------
+    const [officialNotice] = await rest.insert("posts", [
+      {
+        author_id: A.professorProfile.id,
+        school_id: A.school.id,
+        community_type: "student",
+        board_key: "course_notice",
+        category: "notice",
+        course_id: A.course.id,
+        title: `${PROBE_MARKER} official notice`,
+        content: `${PROBE_MARKER} official notice body`,
+        status: "active",
+      },
+    ]);
+    ledger.recordRow("posts", officialNotice.id, "official course notice");
+
+    {
+      const { status, body } = await asA(`posts?select=id&id=eq.${officialNotice.id}`);
+      check(
+        "notice:student-can-read",
+        "the official notice IS visible to the student (positive sentinel)",
+        status === 200 && Array.isArray(body) && body.length === 1,
+        `status ${status}, ${Array.isArray(body) ? body.length : "n/a"} row(s)`,
+      );
+    }
+    {
+      const { status } = await asA(`posts?id=eq.${officialNotice.id}`, { method: "DELETE" });
+      const survivors = await rest.select("posts", `select=id&id=eq.${officialNotice.id}`);
+      check(
+        "notice:student-cannot-delete",
+        "a student must NOT delete an official course notice they did not author",
+        survivors.length === 1,
+        `DELETE ${status}; ${survivors.length} row(s) still present`,
+      );
+    }
+    {
+      // A professor in ANOTHER tenant must not reach it either.
+      const { status } = await asB(`posts?id=eq.${officialNotice.id}`, { method: "DELETE" });
+      const survivors = await rest.select("posts", `select=id&id=eq.${officialNotice.id}`);
+      check(
+        "notice:cross-tenant-cannot-delete",
+        "another tenant's user must NOT delete an official course notice",
+        survivors.length === 1,
+        `DELETE ${status}; ${survivors.length} row(s) still present`,
+      );
+    }
+    {
+      // TRUNCATE is not subject to RLS, so a client role holding it would make
+      // every DELETE policy above decorative. PostgREST has no TRUNCATE verb,
+      // but the privilege must not exist regardless.
+      const { status } = await asA("rpc/nonexistent_truncate_helper", {
+        method: "POST",
+        headers: headersFor(tokenA),
+        body: JSON.stringify({}),
+      });
+      const survivors = await rest.select("posts", `select=id&id=eq.${officialNotice.id}`);
+      check(
+        "notice:no-truncate-path",
+        "no client-reachable path removes the notice wholesale",
+        survivors.length === 1,
+        `probe ${status}; ${survivors.length} row(s) still present`,
+      );
+    }
+
+    // -------------------------------------------------------------------
     // Codex round 4, finding 3 — the weekly advance is ONE atomic transition
     // against ONE exact enrollment.
     //

@@ -198,7 +198,7 @@
       "table": "career_tracks"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "chat_messages"
     },
@@ -208,7 +208,7 @@
       "table": "chat_messages"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "chat_sessions"
     },
@@ -218,7 +218,7 @@
       "table": "chat_sessions"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "comments"
     },
@@ -228,7 +228,7 @@
       "table": "comments"
     },
     {
-      "privileges": "INSERT,SELECT,TRUNCATE",
+      "privileges": "INSERT,SELECT",
       "role": "authenticated",
       "table": "counseling_requests"
     },
@@ -238,7 +238,7 @@
       "table": "counseling_requests"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "course_assessments"
     },
@@ -258,7 +258,7 @@
       "table": "course_offerings"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "course_professors"
     },
@@ -268,7 +268,7 @@
       "table": "course_professors"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE",
+      "privileges": "DELETE,INSERT,SELECT",
       "role": "authenticated",
       "table": "course_reviews"
     },
@@ -283,7 +283,7 @@
       "table": "course_roadmap_personalization_sources"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "course_schedules"
     },
@@ -298,7 +298,7 @@
       "table": "course_weekly_plans"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "courses"
     },
@@ -328,7 +328,7 @@
       "table": "curriculum_versions"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "departments"
     },
@@ -348,7 +348,7 @@
       "table": "escalations"
     },
     {
-      "privileges": "SELECT,TRUNCATE",
+      "privileges": "SELECT",
       "role": "authenticated",
       "table": "faqs"
     },
@@ -358,7 +358,7 @@
       "table": "faqs"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "notices"
     },
@@ -368,7 +368,7 @@
       "table": "notices"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "post_reactions"
     },
@@ -378,7 +378,7 @@
       "table": "post_reactions"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE",
+      "privileges": "DELETE,INSERT,SELECT",
       "role": "authenticated",
       "table": "posts"
     },
@@ -398,7 +398,7 @@
       "table": "professor_admin_tasks"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "professor_availability"
     },
@@ -418,7 +418,7 @@
       "table": "professor_question_auto_reply_rules"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "professor_teaching_slots"
     },
@@ -428,7 +428,7 @@
       "table": "professor_teaching_slots"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE",
+      "privileges": "DELETE,INSERT,SELECT",
       "role": "authenticated",
       "table": "professors"
     },
@@ -438,7 +438,7 @@
       "table": "professors"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE",
+      "privileges": "DELETE,INSERT,SELECT",
       "role": "authenticated",
       "table": "profiles"
     },
@@ -448,7 +448,7 @@
       "table": "profiles"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "reports"
     },
@@ -458,7 +458,7 @@
       "table": "reports"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "roadmap_requests"
     },
@@ -468,7 +468,7 @@
       "table": "roadmap_requests"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "roadmap_results"
     },
@@ -478,7 +478,7 @@
       "table": "roadmap_results"
     },
     {
-      "privileges": "SELECT,TRUNCATE",
+      "privileges": "SELECT",
       "role": "authenticated",
       "table": "roadmap_revision_requests"
     },
@@ -523,7 +523,7 @@
       "table": "student_course_records"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "student_course_schedule_slots"
     },
@@ -538,7 +538,7 @@
       "table": "student_course_study_guides"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "student_courses"
     },
@@ -553,7 +553,7 @@
       "table": "student_curriculum_assignments"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "student_custom_course_schedule_slots"
     },
@@ -563,7 +563,7 @@
       "table": "student_custom_course_schedule_slots"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "student_custom_courses"
     },
@@ -573,7 +573,7 @@
       "table": "student_custom_courses"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "student_mission_progress"
     },
@@ -588,7 +588,7 @@
       "table": "student_personalized_weekly_roadmaps"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "student_profiles"
     },
@@ -603,7 +603,7 @@
       "table": "student_weekly_progress"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "study_roadmaps"
     },
@@ -613,7 +613,7 @@
       "table": "study_roadmaps"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "study_tasks"
     },
@@ -623,7 +623,7 @@
       "table": "study_tasks"
     },
     {
-      "privileges": "DELETE,INSERT,SELECT,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "role": "authenticated",
       "table": "syllabi"
     },
@@ -646,180 +646,294 @@
   "functions": [
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_course_id uuid",
       "config": "search_path=\"\"",
       "definition_md5": "273eac09ae05dbc3bc2c8f0ec33fdb99",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "course_in_current_tenant",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "",
       "config": "search_path=\"\"",
       "definition_md5": "10571578b87d881692e07fcba39c3d23",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "current_professor_id",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "",
       "config": "search_path=\"\"",
       "definition_md5": "17f2a1e23c202890173ac286ee215583",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "current_profile_id",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "",
       "config": "search_path=\"\"",
       "definition_md5": "40cc1262d0b3dbe8b2c405696e90a5f4",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "current_school_id",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "",
       "config": "search_path=\"\"",
       "definition_md5": "868072cc012bd59b4a521df9642deb5e",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "current_user_role",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_board_key text",
       "config": "",
       "definition_md5": "557308a49315d602795c4d9617a1b6dd",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "is_privileged_board_key",
       "schema": "app_private",
       "security_definer": false
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_offering_id uuid",
       "config": "search_path=\"\"",
       "definition_md5": "b4e0a20eb60d05eb4867498a10d97d16",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "is_professor_of_offering",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_offering_id uuid",
       "config": "search_path=\"\"",
       "definition_md5": "a3a5a26f270e313f7e60262702af9ec2",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "is_student_of_offering",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_offering_id uuid",
       "config": "search_path=\"\"",
       "definition_md5": "b876cf185ef252b2a0111b505c40327a",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "offering_in_current_tenant",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres}",
+      "acl_is_default": false,
       "args": "",
       "config": "search_path=\"\"",
       "definition_md5": "0134a16ea5ffdb1120b66c35b53b55b0",
+      "execute_anon": false,
+      "execute_authenticated": false,
+      "execute_public": false,
+      "execute_service_role": false,
       "name": "security_events_reject_update",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres}",
+      "acl_is_default": false,
       "args": "",
       "config": "search_path=\"\"",
       "definition_md5": "c3dd0e1e5a93a6ab0bfeb0b7d718f700",
+      "execute_anon": false,
+      "execute_authenticated": false,
+      "execute_public": false,
+      "execute_service_role": false,
       "name": "security_events_snapshot",
       "schema": "app_private",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
+      "args": "p_enrollment_id uuid, p_expected_week integer, p_feedback text",
+      "config": "search_path=\"\"",
+      "definition_md5": "7ad4e0dd2f6f1c4ae874b8de01031c30",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
+      "name": "advance_student_week",
+      "schema": "public",
+      "security_definer": true
+    },
+    {
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_question_ids uuid[], p_answer text",
       "config": "search_path=\"\"",
       "definition_md5": "a8e4b943e5990d47886a13ef68797253",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "answer_professor_questions",
       "schema": "public",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_offering_id uuid, p_professor_id uuid, p_weeks jsonb",
       "config": "search_path=public",
       "definition_md5": "cd6e2a0bf527bc4a64fee5c2667d4048",
+      "execute_anon": false,
+      "execute_authenticated": false,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "approve_course_weekly_plan",
       "schema": "public",
       "security_definer": false
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_course_id uuid, p_category text, p_question text, p_submission_key uuid, p_source_message_id uuid, p_source_kind text",
       "config": "search_path=\"\"",
       "definition_md5": "8991a12e6f397ca130099d4a2f2e75bf",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "create_professor_question",
       "schema": "public",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_course_id uuid, p_category text, p_question text, p_submission_key uuid, p_source_message_id uuid, p_source_kind text, p_is_anonymous boolean",
       "config": "search_path=\"\"",
       "definition_md5": "9f4bb0648b9b09b3f94ddc1da81e0c6a",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "create_professor_question",
       "schema": "public",
       "security_definer": true
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_value text",
       "config": "search_path=\"\"",
       "definition_md5": "7d9474beb841b60418866fe384fcc482",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "normalize_professor_question",
       "schema": "public",
       "security_definer": false
     },
     {
       "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_value text",
       "config": "search_path=\"\"",
       "definition_md5": "6ad9ece73d8206bb7dbd75491f5ef611",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "professor_question_fingerprint",
       "schema": "public",
       "security_definer": false
     },
     {
-      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_student_course_id uuid, p_slots jsonb",
       "config": "search_path=public",
       "definition_md5": "dcdfd737142d4888d7cbef71ff052025",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "replace_student_course_schedule_slots",
       "schema": "public",
       "security_definer": false
     },
     {
-      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "p_student_custom_course_id uuid, p_slots jsonb",
       "config": "search_path=public",
       "definition_md5": "2bbba5dde03d04483f1c8b22db0280e3",
+      "execute_anon": false,
+      "execute_authenticated": true,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "replace_student_custom_course_schedule_slots",
       "schema": "public",
       "security_definer": false
     },
     {
       "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "acl_is_default": false,
       "args": "",
       "config": "search_path=\"\"",
       "definition_md5": "63f977f8e2e3db6a119fcbe248bf3314",
+      "execute_anon": false,
+      "execute_authenticated": false,
+      "execute_public": false,
+      "execute_service_role": true,
       "name": "set_updated_at",
       "schema": "public",
       "security_definer": false
@@ -843,7 +957,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "chat_messages"
     },
     {
@@ -853,7 +967,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "chat_sessions"
     },
     {
@@ -863,7 +977,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "comments"
     },
     {
@@ -873,7 +987,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE",
+      "privileges": "INSERT,SELECT",
       "table": "counseling_requests"
     },
     {
@@ -883,7 +997,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "course_assessments"
     },
     {
@@ -903,7 +1017,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "course_professors"
     },
     {
@@ -913,7 +1027,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE",
+      "privileges": "DELETE,INSERT,SELECT",
       "table": "course_reviews"
     },
     {
@@ -928,7 +1042,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "course_schedules"
     },
     {
@@ -943,7 +1057,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "courses"
     },
     {
@@ -973,7 +1087,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "departments"
     },
     {
@@ -993,7 +1107,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "REFERENCES,SELECT,TRIGGER,TRUNCATE",
+      "privileges": "SELECT",
       "table": "faqs"
     },
     {
@@ -1003,7 +1117,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "notices"
     },
     {
@@ -1013,7 +1127,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "post_reactions"
     },
     {
@@ -1023,7 +1137,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE",
+      "privileges": "DELETE,INSERT,SELECT",
       "table": "posts"
     },
     {
@@ -1043,7 +1157,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "professor_availability"
     },
     {
@@ -1063,7 +1177,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "professor_teaching_slots"
     },
     {
@@ -1073,7 +1187,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE",
+      "privileges": "DELETE,INSERT,SELECT",
       "table": "professors"
     },
     {
@@ -1083,7 +1197,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE",
+      "privileges": "DELETE,INSERT,SELECT",
       "table": "profiles"
     },
     {
@@ -1093,7 +1207,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "reports"
     },
     {
@@ -1103,7 +1217,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "roadmap_requests"
     },
     {
@@ -1113,7 +1227,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "roadmap_results"
     },
     {
@@ -1123,7 +1237,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "REFERENCES,SELECT,TRIGGER,TRUNCATE",
+      "privileges": "SELECT",
       "table": "roadmap_revision_requests"
     },
     {
@@ -1168,7 +1282,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "student_course_schedule_slots"
     },
     {
@@ -1183,7 +1297,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "student_courses"
     },
     {
@@ -1198,7 +1312,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "student_custom_course_schedule_slots"
     },
     {
@@ -1208,7 +1322,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "student_custom_courses"
     },
     {
@@ -1218,7 +1332,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "student_mission_progress"
     },
     {
@@ -1233,7 +1347,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "student_profiles"
     },
     {
@@ -1248,7 +1362,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "study_roadmaps"
     },
     {
@@ -1258,7 +1372,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "study_tasks"
     },
     {
@@ -1268,7 +1382,7 @@
     },
     {
       "grantee": "authenticated",
-      "privileges": "DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE",
+      "privileges": "DELETE,INSERT,SELECT,UPDATE",
       "table": "syllabi"
     },
     {
@@ -1409,9 +1523,9 @@
       "using": "(EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_professors.course_id) AND (c.school_id = app_private.current_school_id()))))"
     },
     {
-      "check": "((author_id = app_private.current_profile_id()) AND (EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_reviews.course_id) AND (c.school_id = app_private.current_school_id())))))",
+      "check": "((author_id = app_private.current_profile_id()) AND (app_private.current_user_role() = 'student'::user_role) AND (EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_reviews.course_id) AND (c.school_id = app_private.current_school_id())))))",
       "cmd": "INSERT",
-      "policy": "authors write own course reviews",
+      "policy": "students write own course reviews",
       "roles": "authenticated",
       "table": "course_reviews",
       "using": ""
@@ -1827,18 +1941,18 @@
     {
       "check": "",
       "cmd": "SELECT",
-      "policy": "notifications readable by recipient or same-tenant role",
+      "policy": "notifications readable by their recipient",
       "roles": "authenticated",
       "table": "user_notifications",
-      "using": "((recipient_id = ( SELECT p.id\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid()))) OR ((recipient_id IS NULL) AND (recipient_role = ( SELECT p.role\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid()))) AND (school_id IS NOT NULL) AND (school_id = ( SELECT p.school_id\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid())))))"
+      "using": "(recipient_id = app_private.current_profile_id())"
     },
     {
-      "check": "((recipient_id = ( SELECT p.id\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid()))) OR ((recipient_id IS NULL) AND (recipient_role = ( SELECT p.role\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid()))) AND (school_id IS NOT NULL) AND (school_id = ( SELECT p.school_id\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid())))))",
+      "check": "(recipient_id = app_private.current_profile_id())",
       "cmd": "UPDATE",
-      "policy": "notifications updatable by recipient or same-tenant role",
+      "policy": "notifications updatable by their recipient",
       "roles": "authenticated",
       "table": "user_notifications",
-      "using": "((recipient_id = ( SELECT p.id\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid()))) OR ((recipient_id IS NULL) AND (recipient_role = ( SELECT p.role\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid()))) AND (school_id IS NOT NULL) AND (school_id = ( SELECT p.school_id\n   FROM profiles p\n  WHERE (p.auth_user_id = auth.uid())))))"
+      "using": "(recipient_id = app_private.current_profile_id())"
     }
   ],
   "public_privileges": [],

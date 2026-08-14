@@ -234,3 +234,109 @@ test("the append-only triggers are present, enabled, and hashed", () => {
     assert.match(trigger.definition_md5 ?? "", /^[0-9a-f]{32}$/, `${trigger.trigger} has no hash`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Codex round 4, finding 5 — EFFECTIVE function EXECUTE.
+//
+// The previous snapshot recorded a function's raw `proacl`. When a function is
+// created without an explicit revoke, proacl is NULL — which the dump rendered
+// as the reassuring string "DEFAULT". PostgreSQL's default for a FUNCTION is
+// EXECUTE GRANTED TO PUBLIC, and every role inherits PUBLIC. So the single most
+// dangerous regression available — a new SECURITY DEFINER function callable by
+// anon — was recorded as "DEFAULT" and no test could see it.
+//
+// EXECUTE is now computed per role with has_function_privilege.
+// ---------------------------------------------------------------------------
+
+test("the snapshot records EFFECTIVE execute privileges, not just the raw ACL", () => {
+  assert.ok(snapshot.functions.length > 5);
+  for (const fn of snapshot.functions) {
+    for (const field of ["execute_public", "execute_anon", "execute_authenticated", "execute_service_role"]) {
+      assert.equal(
+        typeof fn[field],
+        "boolean",
+        `${fn.schema}.${fn.name} is missing ${field}; a raw ACL cannot answer this`,
+      );
+    }
+    assert.equal(typeof fn.acl_is_default, "boolean");
+  }
+});
+
+test("NO function in public or app_private is executable by anon", () => {
+  const reachable = snapshot.functions
+    .filter((fn) => fn.execute_anon)
+    .map((fn) => `${fn.schema}.${fn.name}(${fn.args})`);
+  assert.deepEqual(reachable, [], `anon can EXECUTE: ${reachable.join(", ")}`);
+});
+
+test("NO function is executable by PUBLIC, which every role inherits", () => {
+  // This is the exact regression the raw ACL could not express: a function
+  // created without `revoke ... from public` lands here silently.
+  const viaPublic = snapshot.functions
+    .filter((fn) => fn.execute_public)
+    .map((fn) => `${fn.schema}.${fn.name}(${fn.args})`);
+  assert.deepEqual(viaPublic, [], `PUBLIC can EXECUTE: ${viaPublic.join(", ")}`);
+});
+
+test("no function was left with PostgreSQL's default ACL", () => {
+  // acl_is_default means proacl IS NULL, i.e. nobody ever narrowed it. For a
+  // function that means PUBLIC EXECUTE. Catching it by shape as well as by
+  // effect means a future Postgres default change cannot quietly reopen this.
+  const untouched = snapshot.functions
+    .filter((fn) => fn.acl_is_default)
+    .map((fn) => `${fn.schema}.${fn.name}(${fn.args})`);
+  assert.deepEqual(
+    untouched,
+    [],
+    `these functions never had their ACL narrowed: ${untouched.join(", ")}`,
+  );
+});
+
+test("every SECURITY DEFINER function is reachable only by an authenticated role", () => {
+  // A SECURITY DEFINER function runs with the OWNER's privileges, so who may
+  // call it is the whole security question.
+  for (const fn of snapshot.functions.filter((f) => f.security_definer)) {
+    const where = `${fn.schema}.${fn.name}(${fn.args})`;
+    assert.equal(fn.execute_anon, false, `${where} is callable by anon`);
+    assert.equal(fn.execute_public, false, `${where} is callable via PUBLIC`);
+    assert.ok(fn.config.includes("search_path"), `${where} has a mutable search_path`);
+  }
+});
+
+test("the identity helpers stay callable by authenticated, or every policy breaks", () => {
+  // The mirror image: a least-privilege sweep that revokes too much would take
+  // RLS down with it, and every policy would deny.
+  for (const name of ["current_profile_id", "current_school_id", "current_user_role"]) {
+    const fn = snapshot.functions.find((f) => f.schema === "app_private" && f.name === name);
+    assert.ok(fn, `missing app_private.${name}`);
+    assert.equal(fn.execute_authenticated, true, `authenticated cannot call ${name}; RLS would fail closed`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Codex round 4, finding 6 — TRUNCATE is not subject to RLS.
+// ---------------------------------------------------------------------------
+
+test("no client role holds TRUNCATE anywhere: it bypasses RLS entirely", () => {
+  // TRUNCATE ignores row policies and fires no row triggers, so a client role
+  // holding it makes every DELETE policy in the schema decorative. Measured
+  // before 20260814180000: authenticated effectively held it on 31 of 54 tables.
+  const offenders = snapshot.effective_privileges
+    .filter((row) => row.role !== "service_role")
+    .filter((row) => /TRUNCATE/.test(row.privileges))
+    .map((row) => `${row.role}:${row.table}`);
+  assert.deepEqual(offenders, [], `client roles hold TRUNCATE on: ${offenders.join(", ")}`);
+});
+
+test("the posts DELETE surface a client keeps is exactly the RLS-governed one", () => {
+  // The Data API verbs must survive the least-privilege pass — a sweep that
+  // also removes what the app needs is not a fix.
+  const authenticated = snapshot.effective_privileges.find(
+    (row) => row.table === "posts" && row.role === "authenticated",
+  );
+  assert.ok(authenticated, "authenticated must still reach posts");
+  for (const verb of ["SELECT", "INSERT", "DELETE"]) {
+    assert.match(authenticated.privileges, new RegExp(verb), `posts lost ${verb} for authenticated`);
+  }
+  assert.doesNotMatch(authenticated.privileges, /TRUNCATE/);
+});
