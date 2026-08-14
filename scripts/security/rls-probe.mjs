@@ -562,6 +562,53 @@ async function main() {
       check(probe.id, probe.property, count === 1, `POST ${status}; ${detail}`);
     }
 
+    // -------------------------------------------------------------------
+    // Codex round 4, finding 2 — a course review is STUDENT experience.
+    //
+    // `/reviews` is gated by redirectNonStudent, so the product has always
+    // said this. Nothing below the route enforced it: the INSERT policy
+    // checked `author_id = me` and tenancy, and the server action checked
+    // only that a session existed. So any authenticated staff member could
+    // publish a student-voice review of a colleague's course, in their own
+    // name, and it would render alongside genuine ones.
+    //
+    // Every attempt below is same-tenant and self-authored — the ONLY thing
+    // that may deny them is the caller's role. Outcome is read back with the
+    // service role; a status code is never the evidence.
+    // -------------------------------------------------------------------
+    const staffReviewAttempts = [
+      { id: "deny:professor-review", role: "professor", token: tokenProfA, authorId: A.professorProfile.id },
+      { id: "deny:assistant-review", role: "assistant", token: await signIn(A.staff.assistant.email, PROBE_PASSWORD), authorId: A.staff.assistant.profile.id },
+      { id: "deny:admin-review", role: "admin", token: await signIn(A.staff.admin.email, PROBE_PASSWORD), authorId: A.staff.admin.profile.id },
+    ];
+
+    for (const attempt of staffReviewAttempts) {
+      const marker = tag(`${attempt.role}-review`);
+      const res = await asA("course_reviews", {
+        method: "POST",
+        headers: headersFor(attempt.token),
+        body: JSON.stringify({
+          author_id: attempt.authorId,
+          course_id: A.course.id,
+          content: marker,
+        }),
+      });
+      const rows = await rest
+        .select("course_reviews", `select=id&content=eq.${encodeURIComponent(marker)}`)
+        .catch(() => null);
+      if (rows === null) {
+        check(attempt.id, `a ${attempt.role} must NOT publish a course review`, false, "read-back FAILED — cannot verify");
+        continue;
+      }
+      for (const row of rows) ledger.recordRow("course_reviews", row.id, attempt.id);
+      check(
+        attempt.id,
+        `a ${attempt.role} must NOT publish a student course review`,
+        rows.length === 0,
+        `POST ${res.status}; ${rows.length} row(s) in the database`,
+      );
+    }
+
     // The cross-tenant study task needs a valid OWN parent roadmap, because
     // study_tasks.roadmap_id is NOT NULL — otherwise the insert fails on the
     // schema before RLS is ever consulted, and a 400 reads as a denial.

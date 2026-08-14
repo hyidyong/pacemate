@@ -362,10 +362,47 @@ export async function provisionTenant(ledger, label, runId) {
  * the caller's top-level `finally`, which also covers the case where this
  * function never returns at all.
  */
+/**
+ * Codex round 4, finding 2 — signed-in STAFF identities in tenant A.
+ *
+ * Course reviews are student experience (`/reviews` is gated by
+ * `redirectNonStudent`), but nothing outside that route said so: the INSERT
+ * policy checked authorship and tenancy only, and the server action checked
+ * only that a session existed. Proving the invariant needs a real professor, a
+ * real assistant and a real admin who can sign in and attempt the write — a
+ * denial that rests on "no such user exists" proves nothing.
+ *
+ * These live only in tenant A; tenant B's probes are about cross-tenant reach
+ * and do not need them.
+ */
+async function provisionStaff(ledger, school, label, runId, role) {
+  const email = `${PROBE_MARKER}-${role}-${label}-${runId}@probe.invalid`;
+  const authUser = await createAuthUser(ledger, email, `${role} auth user ${label}`);
+  const profile = await createRow(
+    ledger,
+    "profiles",
+    {
+      identifier: email,
+      name: `${PROBE_MARKER} ${role} ${label}`,
+      role,
+      school_id: school.id,
+      auth_user_id: authUser.id,
+    },
+    `${role} profile ${label}`,
+  );
+  return { email, profile };
+}
+
 export async function provisionProbeTenants(ledger, runId = makeRunId()) {
   const tenants = {};
   tenants.A = await provisionTenant(ledger, "a", runId);
   tenants.B = await provisionTenant(ledger, "b", runId);
+
+  tenants.A.staff = {
+    assistant: await provisionStaff(ledger, tenants.A.school, "a", runId, "assistant"),
+    admin: await provisionStaff(ledger, tenants.A.school, "a", runId, "admin"),
+  };
+
   return { runId, tenants };
 }
 

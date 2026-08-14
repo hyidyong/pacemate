@@ -25,6 +25,19 @@ export async function createCourseReview(formData: FormData) {
     return { ok: false, message: "로그인 후 후기를 작성할 수 있습니다." };
   }
 
+  // Codex round 4, finding 2. A course review is student experience — /reviews
+  // is gated by redirectNonStudent. That gate protected the PAGE, and a server
+  // action runs before any page renders, so it protected nothing here: a
+  // professor, assistant or admin could post a student-voice review in their
+  // own name. Confirmed live against the database: all three roles got 201.
+  //
+  // The database now refuses this too (20260814160000). Both checks exist on
+  // purpose: neither the action nor the policy should be the only thing
+  // standing between staff opinion and the student review feed.
+  if (profile.role !== "student") {
+    return { ok: false, message: "수강 후기는 학생만 작성할 수 있습니다." };
+  }
+
   if (!courseId || content.length < 8) {
     return { ok: false, message: "과목과 후기를 조금 더 구체적으로 입력해 주세요." };
   }
