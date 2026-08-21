@@ -80,6 +80,14 @@ export function createAbortScope() {
    * Reads are not tracked: a GET that never returned created nothing.
    */
   const inFlight = new Set();
+  // A transport rejection does not prove the server rejected the mutation.
+  // Keep that uncertainty after the client Promise leaves `inFlight`; only a
+  // later successful response from the SAME underlying attempt can clear it.
+  const ambiguous = new Set();
+  const waiters = new Set();
+  const notify = () => {
+    for (const waiter of [...waiters]) waiter();
+  };
 
   return {
     get signal() {
@@ -91,13 +99,37 @@ export function createAbortScope() {
     get pendingMutations() {
       return inFlight.size;
     },
-    /** Register an underlying attempt; returns a function to deregister it. */
+    get ambiguousMutations() {
+      return ambiguous.size;
+    },
+    /** Register an underlying attempt and expose its outcome to the scope. */
     trackMutation(attempt) {
-      const entry = { attempt };
+      const entry = { attempt, outcome: "pending" };
       inFlight.add(entry);
-      const done = () => inFlight.delete(entry);
-      attempt.then(done, done);
-      return done;
+      attempt.then(
+        () => {
+          entry.outcome = "fulfilled";
+          inFlight.delete(entry);
+          // A real response proves the server-side attempt completed. This is
+          // the only outcome that releases a previously latched ambiguity.
+          ambiguous.delete(entry);
+          notify();
+        },
+        () => {
+          entry.outcome = "rejected";
+          inFlight.delete(entry);
+          // If the wrapper already classified this mutation as ambiguous, the
+          // rejection leaves the latch in place: no response proved the result.
+          notify();
+        },
+      );
+      return entry;
+    },
+    markMutationAmbiguous(entry) {
+      if (!entry || entry.outcome === "fulfilled") return;
+      entry.ambiguousSince ??= Date.now();
+      ambiguous.add(entry);
+      notify();
     },
     /**
      * Resolves when every tracked mutation has genuinely settled, or rejects
@@ -105,20 +137,45 @@ export function createAbortScope() {
      * signal to enter ambiguity recovery — never to assume the work is over.
      */
     async settled(timeoutMs) {
-      if (inFlight.size === 0) return { ok: true, outstanding: 0 };
-      let timer;
-      const deadline = new Promise((resolve) => {
-        timer = setTimeout(() => resolve("timeout"), timeoutMs);
-      });
-      try {
-        const all = Promise.allSettled([...inFlight].map((entry) => entry.attempt));
-        const outcome = await Promise.race([all.then(() => "settled"), deadline]);
-        return outcome === "settled"
-          ? { ok: true, outstanding: 0 }
-          : { ok: false, outstanding: inFlight.size };
-      } finally {
-        clearTimeout(timer);
+      if (inFlight.size === 0 && ambiguous.size === 0) {
+        return { ok: true, outstanding: 0 };
       }
+      return new Promise((resolve) => {
+        const inFlightDeadline = Date.now() + timeoutMs;
+        let finished = false;
+        let timer;
+        const finish = (result) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer);
+          waiters.delete(check);
+          resolve(result);
+        };
+        const expire = () =>
+          finish({
+            ok: false,
+            outstanding: inFlight.size,
+            ambiguous: ambiguous.size,
+          });
+        const check = () => {
+          if (inFlight.size === 0 && ambiguous.size === 0) {
+            finish({ ok: true, outstanding: 0 });
+            return;
+          }
+          // Repeated settled() calls share the original ambiguity window. A
+          // normal quiesce pass followed by exact-run recovery must not restart
+          // the full grace period and turn 30 seconds into 40.
+          const ambiguityDeadline = Math.max(
+            0,
+            ...[...ambiguous].map((entry) => entry.ambiguousSince + timeoutMs),
+          );
+          const deadline = ambiguous.size > 0 ? ambiguityDeadline : inFlightDeadline;
+          clearTimeout(timer);
+          timer = setTimeout(expire, Math.max(0, deadline - Date.now()));
+        };
+        waiters.add(check);
+        check();
+      });
     },
     abort(reason = "probe scope cancelled") {
       if (!controller.signal.aborted) {
@@ -140,6 +197,7 @@ export async function boundedRequest(
   const controller = new AbortController();
   const method = String(init.method ?? "GET").toUpperCase();
   let timedOut = false;
+  let trackedMutation = null;
 
   // Codex round 4, 4B. The deadline must NOT depend on the transport
   // co-operating. Aborting the controller only helps if whatever implements
@@ -193,11 +251,12 @@ export async function boundedRequest(
     // THIS attempt is still open and can still commit. Registering it means
     // cleanup waits for the real thing, not for our own giving up. Reads are
     // not registered — a GET that never returned created nothing.
-    if (scope && MUTATING.has(method)) scope.trackMutation(attempt);
+    if (scope && MUTATING.has(method)) trackedMutation = scope.trackMutation(attempt);
     return await Promise.race([attempt, deadline]);
   } catch (error) {
     // A mutating verb that never returned may still have committed.
     const ambiguous = MUTATING.has(method);
+    if (ambiguous && scope) scope.markMutationAmbiguous(trackedMutation);
     if (timedOut || error?.name === "AbortError") {
       throw new ProbeRequestError(`request to ${url} exceeded ${timeoutMs}ms`, {
         timedOut: true,

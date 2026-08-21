@@ -128,9 +128,24 @@ async function main() {
   // F5: the service-role clients register their mutations in the same registry.
   // They deliberately do NOT take scopeSignal — cleanup runs through them at
   // exactly the moment the scope is cancelled.
-  const rest = createProbeRest({ url, serviceRoleKey: serviceKey, scope });
-  const auth = createProbeAuthAdmin({ url, serviceRoleKey: serviceKey, scope });
-  const signIn = signInFactory({ url, anonKey, scopeSignal: scope.signal });
+  const rest = createProbeRest({
+    url,
+    serviceRoleKey: serviceKey,
+    timeoutMs: PROBE_TIMEOUT_MS,
+    scope,
+  });
+  const auth = createProbeAuthAdmin({
+    url,
+    serviceRoleKey: serviceKey,
+    timeoutMs: PROBE_TIMEOUT_MS,
+    scope,
+  });
+  const signIn = signInFactory({
+    url,
+    anonKey,
+    timeoutMs: PROBE_TIMEOUT_MS,
+    scopeSignal: scope.signal,
+  });
 
   // Operator-run recovery for the case `finally` cannot cover (SIGKILL, crash).
   if (process.argv.includes("--sweep")) {
@@ -207,18 +222,23 @@ async function main() {
           `owned by ${runMarker}`,
       );
       const settled = await scope.settled(PROBE_RECOVERY_TIMEOUT_MS);
-      if (!settled.ok) {
-        return {
-          ok: false,
-          detail:
-            `${settled.outstanding} mutation(s) remain unsettled; recover with ` +
-            `node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
-        };
-      }
+      // Sweep even when the client-side attempt already rejected. In that
+      // case there is no Promise left to await, but the server can still commit
+      // during this bounded recovery window.
       const result = await teardown({ ledger, rest, auth, runMarker });
       cleanupFailures = result.failures;
       sweepFailures = result.swept?.failures ?? [];
       residue = result.residue;
+      if (!settled.ok) {
+        return {
+          ok: false,
+          detail:
+            `exact-run recovery ${result.ok ? "removed all observed residue" : result.detail}, but ` +
+            `${settled.ambiguous ?? 0} mutation outcome(s) remain unacknowledged and ` +
+            `${settled.outstanding} mutation(s) remain in flight; recover with ` +
+            `node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+        };
+      }
       return {
         ok: result.ok,
         detail: result.ok

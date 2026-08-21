@@ -26,9 +26,12 @@ import { assertSafeToProbe, createRunMarker } from "./lib/probe-guard.mjs";
 import { createProbeRest } from "./lib/probe-rest.mjs";
 import { createAbortScope, createRoleClient } from "./lib/probe-http.mjs";
 import { createProbeLifecycle } from "./lib/probe-lifecycle.mjs";
-import { ProbeLedger, verifyNoResidue } from "./lib/probe-ledger.mjs";
+import { ProbeLedger, sweepOrphans, verifyNoResidue } from "./lib/probe-ledger.mjs";
 
 const MARKER = "stage9-audit-probe";
+const RECOVERY_TIMEOUT_MS = Number(
+  process.env.PACEMATE_SECURITY_PROBE_RECOVERY_TIMEOUT_MS ?? 30000,
+);
 
 async function main() {
   const env = loadEnvLocal();
@@ -66,26 +69,58 @@ async function main() {
   const created = { events: [] };
   const ledger = new ProbeLedger({ rest, auth: null });
 
+  const cleanupDisposable = async ({ sweep = false } = {}) => {
+    const failures = await ledger.cleanup();
+    for (const failure of failures) {
+      console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id}: ${failure.message}`);
+    }
+    let sweepFailures = [];
+    if (sweep) {
+      const swept = await sweepOrphans({ rest, auth: null, runMarker });
+      sweepFailures = swept.failures;
+      for (const entry of swept.removed) console.error(`[SWEPT] ${entry}`);
+      for (const entry of sweepFailures) console.error(`[SWEEP FAILED] ${entry}`);
+    }
+    // The shared residue check knows nothing about this probe's own marker, so
+    // the disposable profile carries the run marker and is covered here.
+    const residue = await verifyNoResidue({ rest, auth: null, runMarker });
+    // This probe creates no auth users, so the missing auth client is expected.
+    const unverifiable = residue.unverifiable.filter((entry) => !entry.startsWith("auth.users:"));
+    for (const entry of residue.residue) console.error(`[RESIDUE] ${entry}`);
+    for (const entry of unverifiable) console.error(`[UNVERIFIABLE] ${entry}`);
+    const ok =
+      failures.length === 0 &&
+      sweepFailures.length === 0 &&
+      residue.residue.length === 0 &&
+      unverifiable.length === 0;
+    return { ok, detail: ok ? "clean" : "residue, sweep, or cleanup failure" };
+  };
+
   const lifecycle = createProbeLifecycle({
     abortWork: (reason) => scope.abort(reason),
     awaitMutations: (ms) => scope.settled(ms),
-    cleanup: async () => {
-      const failures = await ledger.cleanup();
-      for (const failure of failures) {
-        console.error(`[CLEANUP FAILED] ${failure.table} ${failure.id}: ${failure.message}`);
+    recoverAmbiguous: async ({ quiesce }) => {
+      if (!quiesce.bodyStopped) {
+        return {
+          ok: false,
+          detail: `body still active; recover with node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+        };
       }
-      // The shared residue check knows nothing about this probe's own marker,
-      // so the disposable profile carries PROBE_MARKER too and is covered by
-      // the same machinery every other probe uses.
-      const residue = await verifyNoResidue({ rest, auth: null, runMarker });
-      // No auth client here: this probe creates no auth users, so "no auth
-      // client supplied" is expected rather than an unverifiable check.
-      const unverifiable = residue.unverifiable.filter((entry) => !entry.startsWith("auth.users:"));
-      for (const entry of residue.residue) console.error(`[RESIDUE] ${entry}`);
-      for (const entry of unverifiable) console.error(`[UNVERIFIABLE] ${entry}`);
-      const ok = failures.length === 0 && residue.residue.length === 0 && unverifiable.length === 0;
-      return { ok, detail: ok ? "clean" : "residue or cleanup failure" };
+      const settled = await scope.settled(RECOVERY_TIMEOUT_MS);
+      const result = await cleanupDisposable({ sweep: true });
+      if (!settled.ok) {
+        return {
+          ok: false,
+          detail:
+            `exact-run recovery ${result.ok ? "removed all observed residue" : result.detail}, but ` +
+            `${settled.ambiguous ?? 0} mutation outcome(s) remain unacknowledged and ` +
+            `${settled.outstanding} mutation(s) remain in flight; recover with ` +
+            `node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+        };
+      }
+      return result;
     },
+    cleanup: cleanupDisposable,
   });
 
   const { bodyError } = await lifecycle.run(async () => {

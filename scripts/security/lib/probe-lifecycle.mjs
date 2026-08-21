@@ -63,7 +63,21 @@ export function createProbeLifecycle({
   let recoveryResult = null;
   let signalsSeen = [];
   let bodySettled = null;
+  let bodyOutcomeError = null;
   let quiesced = false;
+
+  function includeBodyAmbiguity(stopped) {
+    if (!bodyOutcomeError?.ambiguous || stopped?.ambiguous) return stopped;
+    logger.error(
+      "[quiesce] the body ended with an unacknowledged mutating request; forcing marker recovery",
+    );
+    return {
+      ...stopped,
+      ok: false,
+      detail: `${stopped?.detail ?? "body stopped"}; mutating request outcome unacknowledged`,
+      ambiguous: true,
+    };
+  }
 
   /**
    * Codex round 4, 4A — QUIESCE BEFORE DESTROYING.
@@ -123,16 +137,24 @@ export function createProbeLifecycle({
         mutationsSettled: true,
       };
     }
+    const unacknowledged = Number(drained?.ambiguous ?? 0);
+    const outstanding = drained?.outstanding ?? "?";
     logger.error(
-      `[quiesce] ${drained?.outstanding ?? "?"} mutation(s) still in flight at the end of the run;` +
-        " a late commit is possible, so this run cannot be reported clean",
+      unacknowledged > 0
+        ? `[quiesce] ${unacknowledged} mutation outcome(s) remain unacknowledged;` +
+            " forcing marker recovery"
+        : `[quiesce] ${outstanding} mutation(s) still in flight at the end of the run;` +
+            " a late commit is possible, so this run cannot be reported clean",
     );
     return {
       ok: false,
-      detail: `${drained?.outstanding ?? "?"} mutation(s) unsettled`,
+      detail:
+        unacknowledged > 0
+          ? `${unacknowledged} mutation outcome(s) unacknowledged`
+          : `${outstanding} mutation(s) unsettled`,
       ambiguous: true,
       bodyStopped: true,
-      mutationsSettled: false,
+      mutationsSettled: outstanding === 0,
     };
   }
 
@@ -178,12 +200,26 @@ export function createProbeLifecycle({
       if (typeof awaitMutations === "function") {
         const drained = await awaitMutations(quiesceTimeoutMs);
         if (!drained?.ok) {
-          logger.error(
-            `[quiesce] ${drained?.outstanding ?? "?"} mutation(s) still in flight after ` +
-              `${quiesceTimeoutMs}ms — a late commit is possible; forcing marker recovery`,
+          const unacknowledged = Number(drained?.ambiguous ?? 0);
+          const outstanding = drained?.outstanding ?? "?";
+          if (unacknowledged > 0) {
+            logger.error(
+              `[quiesce] ${unacknowledged} mutation outcome(s) remain unacknowledged; ` +
+                "forcing marker recovery",
+            );
+          }
+          if (unacknowledged === 0) {
+            logger.error(
+              `[quiesce] ${drained?.outstanding ?? "?"} mutation(s) still in flight after ` +
+                `${quiesceTimeoutMs}ms — a late commit is possible; forcing marker recovery`,
+            );
+          }
+          problems.push(
+            unacknowledged > 0
+              ? `${unacknowledged} mutation outcome(s) unacknowledged`
+              : `${outstanding} mutation(s) unsettled`,
           );
-          problems.push(`${drained?.outstanding ?? "?"} mutation(s) unsettled`);
-          mutationsSettled = false;
+          mutationsSettled = outstanding === 0;
         }
       }
 
@@ -297,7 +333,7 @@ export function createProbeLifecycle({
     signalsSeen.push("MESSAGE");
     logger.error("\n[probe:cancel] cancellation requested — quiescing, then cleaning up");
     void (async () => {
-      const stopped = await quiesce("probe:cancel");
+      const stopped = includeBodyAmbiguity(await quiesce("probe:cancel"));
       const result = await cleanupAndRecover("probe:cancel", stopped);
       const ok = Boolean(result?.ok);
       if (!ok) {
@@ -319,7 +355,7 @@ export function createProbeLifecycle({
         logger.error(`\n[${signal}] interrupted — quiescing, then cleaning up; do not kill -9`);
         void (async () => {
           // 4A: stop the work before destroying anything it may still create.
-          const stopped = await quiesce(signal);
+          const stopped = includeBodyAmbiguity(await quiesce(signal));
           const result = await cleanupAndRecover(signal, stopped);
           const code = result?.ok
             ? signal === "SIGINT"
@@ -356,6 +392,7 @@ export function createProbeLifecycle({
     async run(body) {
       install();
       let bodyError = null;
+      bodyOutcomeError = null;
       let value;
       // The body's settlement is tracked so a signal handler can WAIT for it
       // rather than racing it (4A). Never rejects: it records instead.
@@ -364,6 +401,7 @@ export function createProbeLifecycle({
           value = await body();
         } catch (error) {
           bodyError = error;
+          bodyOutcomeError = error;
         }
       })();
       let stopped = {
@@ -377,7 +415,7 @@ export function createProbeLifecycle({
         await bodySettled;
         // Even on the happy path, a mutation whose wrapper timed out may still
         // be open. Quiescing here is what stops cleanup racing it.
-        stopped = await quiesceNormally();
+        stopped = includeBodyAmbiguity(await quiesceNormally());
       } finally {
         await cleanupAndRecover(bodyError ? "error" : "normal", stopped);
         uninstall();

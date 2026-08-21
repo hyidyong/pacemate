@@ -85,13 +85,19 @@ async function main() {
         };
       }
       const settled = await scope.settled(RECOVERY_TIMEOUT_MS);
+      // A rejected client Promise can no longer be awaited, so always run the
+      // exact-run sweep after the bounded ambiguity window.
+      const result = await teardown({ ledger, rest, auth, runMarker });
       if (!settled.ok) {
         return {
           ok: false,
-          detail: `${settled.outstanding} mutation(s) unsettled; recover with node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
+          detail:
+            `exact-run recovery ${result.ok ? "removed all observed residue" : result.detail}, but ` +
+            `${settled.ambiguous ?? 0} mutation outcome(s) remain unacknowledged and ` +
+            `${settled.outstanding} mutation(s) remain in flight; recover with ` +
+            `node scripts/security/rls-probe.mjs --sweep --run ${runMarker}`,
         };
       }
-      const result = await teardown({ ledger, rest, auth, runMarker });
       return {
         ok: result.ok,
         detail: result.ok

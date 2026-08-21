@@ -342,6 +342,89 @@ test("an ambiguous late commit is swept again after the underlying mutation sett
   assert.equal(result.cleanup.ok, true);
 });
 
+test("a rejected mutation latches ambiguity and exact-run recovery removes its later commit only", async () => {
+  const scope = createAbortScope();
+  const rows = [{ id: "bystander-row", owner: "unrelated-run" }];
+  let recoveryCalls = 0;
+
+  const removeOwnedRows = () => {
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      if (rows[index].owner === "this-run") rows.splice(index, 1);
+    }
+  };
+
+  // The client observes a broken connection immediately. The independent
+  // server-side operation nevertheless commits after that rejected Promise,
+  // which is the outcome an HTTP client can no longer observe or await.
+  const rejectBeforeLateCommit = () => {
+    setTimeout(() => rows.push({ id: "owned-late-row", owner: "this-run" }), 40);
+    return Promise.reject(new TypeError("connection closed before response"));
+  };
+
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => {
+      removeOwnedRows();
+      return { ok: true, detail: "initial exact-run pass complete" };
+    },
+    awaitMutations: (ms) => scope.settled(ms),
+    quiesceTimeoutMs: 20,
+    recoverAmbiguous: async () => {
+      recoveryCalls += 1;
+      const settled = await scope.settled(80);
+      removeOwnedRows();
+      return {
+        ok: settled.ok,
+        detail: settled.ok
+          ? "exact-run recovery clean"
+          : "unacknowledged mutation remains ambiguous after exact-run recovery",
+      };
+    },
+    logger: quietLogger,
+  });
+
+  const result = await lifecycle.run(() =>
+    boundedRequest(
+      "https://probe.test/reject-before-commit",
+      { method: "POST" },
+      { timeoutMs: 100, fetchImpl: rejectBeforeLateCommit, scope },
+    ),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  assert.equal(result.bodyError?.ambiguous, true, "the transport outcome is ambiguous");
+  assert.equal(scope.pendingMutations, 0, "the rejected client Promise is no longer pending");
+  assert.equal(scope.ambiguousMutations, 1, "the unacknowledged mutation must remain latched");
+  assert.equal(result.quiesce.ambiguous, true, "lifecycle must consume the ambiguity latch");
+  assert.equal(recoveryCalls, 1, "the exact-run recovery path must run once");
+  assert.equal(result.cleanup.ok, false, "a persistent unacknowledged mutation cannot report clean");
+  assert.deepEqual(rows, [{ id: "bystander-row", owner: "unrelated-run" }]);
+});
+
+test("an ambiguous body error triggers recovery even after the mutation registry drains", async () => {
+  let recoveryCalls = 0;
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => ({ ok: true, detail: "initial pass complete" }),
+    awaitMutations: async () => ({ ok: true, outstanding: 0 }),
+    recoverAmbiguous: async () => {
+      recoveryCalls += 1;
+      return { ok: false, detail: "unacknowledged mutation requires exact-run recovery" };
+    },
+    logger: quietLogger,
+  });
+  const ambiguousError = Object.assign(new Error("client rejected the mutation"), {
+    ambiguous: true,
+  });
+
+  const result = await lifecycle.run(async () => {
+    throw ambiguousError;
+  });
+
+  assert.equal(result.bodyError, ambiguousError);
+  assert.equal(result.quiesce.ambiguous, true);
+  assert.equal(recoveryCalls, 1);
+  assert.equal(result.cleanup.ok, false);
+});
+
 test("a permanently unsettled mutation fails with durable recovery information", async () => {
   let recoveryCalls = 0;
   const lifecycle = createProbeLifecycle({
