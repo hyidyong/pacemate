@@ -5,6 +5,19 @@ Historical reports may be investigated but are not automatically considered curr
 
 ## Stage 10 external verification status (2026-08-21)
 
+- **Current dependency/test correction.** The independently verified baseline
+  after the `js-yaml` patch was `649 total / 646 pass / 0 fail / 3 skip`.
+  Current remediation adds sixteen focused/adversarial checks for
+  `665 / 662 / 0 / 3`.
+  `npm audit` now reports `0 critical / 5 high`; direct `js-yaml@4.3.1` is not
+  an audit finding. Older audit inventories below are retained as historical
+  stage evidence, not current dependency status.
+- **Production guard and Realtime oracle: repository-local adversarial PASS.**
+  Exact cloud-origin enforcement, independent configured-ref denial, zero-spawn
+  production-loopback refusal, reciprocal broadcast peer isolation, foreign
+  observer liveness, and bounded delayed-leak detection are executable and
+  green offline. This does not change the live status below.
+
 - **Local clean rebuild: BLOCKED / UNVERIFIED.** The pinned Supabase CLI and
   loopback-only reset wrapper are present, but Docker Desktop returned repeated
   EOF / Docker API 500 errors while pulling
@@ -13,8 +26,9 @@ Historical reports may be investigated but are not automatically considered curr
 - **Credentialed security and Realtime E2E: BLOCKED / UNVERIFIED.** Current
   permissions expose no approved scratch project. The live runner refuses the
   linked production ref before spawning either probe. Real socket coverage is
-  implemented and offline-tested, but its direct, broadcast, peer, and
-  cross-tenant delivery assertions have not run against a live scratch target.
+  implemented and offline-tested, but its direct, reciprocal broadcast-peer,
+  foreign-sentinel, delayed-leak, and cross-tenant delivery assertions have not
+  run against a live scratch target.
 - **Recovery: BLOCKED.** Read-only production metadata reports
   `walg_enabled=true`, `pitr_enabled=false`, and an empty backup list. No restore
   point or disposable restore target exists, so no restore drill, RPO, or RTO is

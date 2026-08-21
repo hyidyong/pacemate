@@ -26,6 +26,12 @@ const FULLY_ALLOWED = {
   PACEMATE_LOADTEST_TARGET_KIND: "non-production",
 };
 
+const LOCAL_ENV = {
+  PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
+  PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: "pacemate-stage-10-local",
+  PACEMATE_LOADTEST_TARGET_KIND: "non-production",
+};
+
 test("an empty environment refuses to mutate", () => {
   const result = evaluateMutationGuard({}, PROD_URL);
   assert.equal(result.allowed, false, "the default must be refusal, not permission");
@@ -56,6 +62,47 @@ test("a correctly declared non-production project is allowed", () => {
   assert.equal(result.allowed, true, result.problems.join("; "));
   assert.equal(result.projectRef, "stagingref000000");
   assert.equal(result.declaredNonProduction, true);
+});
+
+test("a plaintext cloud Supabase origin is refused", () => {
+  const result = evaluateMutationGuard(FULLY_ALLOWED, "http://stagingref000000.supabase.co");
+  assert.equal(result.allowed, false, "service-role credentials must never use plaintext HTTP");
+  assert.match(result.problems.join("\n"), /https/);
+});
+
+test("an attacker suffix after a plausible Supabase hostname is refused", () => {
+  const result = evaluateMutationGuard(
+    FULLY_ALLOWED,
+    "https://stagingref000000.supabase.co.attacker.example",
+  );
+  assert.equal(result.allowed, false, "a matching first label must not authorize an attacker origin");
+  assert.match(result.problems.join("\n"), /exactly|canonical|origin/);
+});
+
+test("an arbitrary domain carrying a plausible project-ref label is refused", () => {
+  const result = evaluateMutationGuard(FULLY_ALLOWED, "https://stagingref000000.evil.test");
+  assert.equal(result.allowed, false, "project identity must not be inferred from the first label");
+  assert.match(result.problems.join("\n"), /exactly|canonical|origin/);
+});
+
+test("non-canonical cloud Supabase origin variants are refused", () => {
+  for (const url of [
+    "https://stagingref000000.attacker.supabase.co",
+    "https://stagingref000000.supabase.co:444",
+    "https://user@stagingref000000.supabase.co",
+    "https://stagingref000000.supabase.co.",
+  ]) {
+    const result = evaluateMutationGuard(FULLY_ALLOWED, url);
+    assert.equal(result.allowed, false, `${url} must not be accepted as the declared project origin`);
+  }
+});
+
+test("the repository-local Supabase origin remains available with its explicit local identity", () => {
+  for (const url of ["http://127.0.0.1:54321", "http://localhost:54321"]) {
+    const result = evaluateMutationGuard(LOCAL_ENV, url);
+    assert.equal(result.allowed, true, `${url}: ${result.problems.join("; ")}`);
+    assert.equal(result.projectRef, "pacemate-stage-10-local");
+  }
 });
 
 test("loopback application targets need no opt-in", () => {

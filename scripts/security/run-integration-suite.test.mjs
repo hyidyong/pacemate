@@ -43,6 +43,44 @@ test("credentialed integration refuses the compiled production ref", () => {
   assert.match(validation.message, /KNOWN PRODUCTION/);
 });
 
+test("production ref plus loopback URL is refused before any child process", () => {
+  let spawnCount = 0;
+  const result = runIntegrationSuite({
+    env: {
+      ...SCRATCH_ENV,
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+      PACEMATE_SECURITY_PROBE_ALLOW_LOOPBACK: "1",
+      PACEMATE_SECURITY_PROBE_PROJECT_REF: "szztsqdnvenfbgxtylkl",
+    },
+    spawn: () => {
+      spawnCount += 1;
+      return { status: 0 };
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /KNOWN PRODUCTION/);
+  assert.equal(spawnCount, 0, "production identity must be refused before the first spawn");
+});
+
+test("mismatched cloud URL and configured ref are refused before any child process", () => {
+  let spawnCount = 0;
+  const result = runIntegrationSuite({
+    env: {
+      ...SCRATCH_ENV,
+      PACEMATE_SECURITY_PROBE_PROJECT_REF: "different-scratch-ref",
+    },
+    spawn: () => {
+      spawnCount += 1;
+      return { status: 0 };
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /does not match|expected exactly/);
+  assert.equal(spawnCount, 0, "identity disagreement must be refused before the first spawn");
+});
+
 test("the scratch integration command order is explicit and stops at first failure", () => {
   assert.deepEqual(INTEGRATION_COMMANDS, [
     ["scripts/security/rls-probe.mjs"],

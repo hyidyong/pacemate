@@ -203,10 +203,14 @@ export function evaluateHostGuard(env, rawUrl, expectedRef) {
 export function evaluateProbeGuard(env, supabaseUrl) {
   const problems = [];
   const actualRef = projectRefFromSupabaseUrl(supabaseUrl);
+  const expectedRef = env.PACEMATE_SECURITY_PROBE_PROJECT_REF;
+  const productionRefs = [...new Set([actualRef, expectedRef])].filter(
+    (projectRef) => projectRef && KNOWN_PRODUCTION_PROJECT_REFS.has(projectRef),
+  );
 
-  if (actualRef && KNOWN_PRODUCTION_PROJECT_REFS.has(actualRef)) {
+  for (const productionRef of productionRefs) {
     problems.push(
-      `project "${actualRef}" is a KNOWN PRODUCTION project and cannot be probed`,
+      `project "${productionRef}" is a KNOWN PRODUCTION project and cannot be probed`,
     );
   }
 
@@ -216,7 +220,6 @@ export function evaluateProbeGuard(env, supabaseUrl) {
     );
   }
 
-  const expectedRef = env.PACEMATE_SECURITY_PROBE_PROJECT_REF;
   const host = evaluateHostGuard(env, supabaseUrl, expectedRef);
   problems.push(...host.problems);
 

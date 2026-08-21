@@ -10,30 +10,77 @@
 // Everything here is a pure function over an env bag so it can be tested
 // without touching a network or a database.
 
+import {
+  LOOPBACK_HOSTS,
+  SUPABASE_HOST_SUFFIXES,
+  isLoopbackUrl,
+  projectRefFromSupabaseUrl,
+} from "../../security/lib/probe-guard.mjs";
 import { KNOWN_PRODUCTION_PROJECT_REFS } from "../../security/lib/production-targets.mjs";
 
-export { KNOWN_PRODUCTION_PROJECT_REFS };
+export {
+  KNOWN_PRODUCTION_PROJECT_REFS,
+  LOOPBACK_HOSTS,
+  isLoopbackUrl,
+  projectRefFromSupabaseUrl,
+};
 
-export const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+export const LOCAL_SUPABASE_PROJECT_REF = "pacemate-stage-10-local";
 
-export function isLoopbackUrl(rawUrl) {
+function evaluateSupabaseMutationOrigin(rawUrl, expectedRef) {
+  const problems = [];
+  let url;
   try {
-    const url = new URL(rawUrl);
-    return LOOPBACK_HOSTS.has(url.hostname);
+    url = new URL(rawUrl);
   } catch {
-    return false;
+    return {
+      problems: [`Supabase target "${rawUrl}" is not a valid URL`],
+      loopback: false,
+      projectRef: null,
+    };
   }
-}
 
-export function projectRefFromSupabaseUrl(rawUrl) {
-  try {
-    const { hostname } = new URL(rawUrl);
-    // https://<ref>.supabase.co
-    const [ref] = hostname.split(".");
-    return ref || null;
-  } catch {
-    return null;
+  if (url.username || url.password) {
+    problems.push("the Supabase URL must not embed credentials");
   }
+
+  const loopback = isLoopbackUrl(rawUrl);
+  if (loopback) {
+    if (!["http:", "https:"].includes(url.protocol)) {
+      problems.push(`the local Supabase target must use http or https, got ${url.protocol.replace(":", "")}`);
+    }
+    if (expectedRef && expectedRef !== LOCAL_SUPABASE_PROJECT_REF) {
+      problems.push(
+        `loopback load testing is reserved for the repository-local project "${LOCAL_SUPABASE_PROJECT_REF}", not "${expectedRef}"`,
+      );
+    }
+    return {
+      problems,
+      loopback: true,
+      projectRef: expectedRef === LOCAL_SUPABASE_PROJECT_REF ? expectedRef : null,
+    };
+  }
+
+  if (url.protocol !== "https:") {
+    problems.push(
+      `privileged credentials may only be sent to a cloud Supabase project over https, got ${url.protocol.replace(":", "")}`,
+    );
+  }
+  if (url.port) {
+    problems.push(`unexpected port ${url.port} on a cloud Supabase project host`);
+  }
+
+  const actualRef = projectRefFromSupabaseUrl(rawUrl);
+  const expectedHosts = expectedRef
+    ? SUPABASE_HOST_SUFFIXES.map((suffix) => `${expectedRef}${suffix}`)
+    : [];
+  if (expectedRef && !expectedHosts.includes(url.hostname)) {
+    problems.push(
+      `refusing to send privileged credentials to origin "${url.origin}"; expected exactly one of ${expectedHosts.join(", ")}`,
+    );
+  }
+
+  return { problems, loopback: false, projectRef: actualRef };
 }
 
 /**
@@ -105,8 +152,15 @@ export const TEST_TENANT_SLUG_PREFIX = "pacemate-loadtest-";
  */
 export function evaluateMutationGuard(env, supabaseUrl) {
   const problems = [];
-  const actualRef = projectRefFromSupabaseUrl(supabaseUrl);
-  const isKnownProduction = actualRef ? KNOWN_PRODUCTION_PROJECT_REFS.has(actualRef) : false;
+  const expectedRef = env.PACEMATE_LOADTEST_EXPECTED_PROJECT_REF;
+  const target = evaluateSupabaseMutationOrigin(supabaseUrl, expectedRef);
+  const actualRef = target.projectRef;
+  const productionRef = [actualRef, expectedRef].find(
+    (projectRef) => projectRef && KNOWN_PRODUCTION_PROJECT_REFS.has(projectRef),
+  );
+  const isKnownProduction = Boolean(productionRef);
+
+  problems.push(...target.problems);
 
   if (env.PACEMATE_LOADTEST_ALLOW_MUTATIONS !== "1") {
     problems.push(
@@ -114,14 +168,13 @@ export function evaluateMutationGuard(env, supabaseUrl) {
     );
   }
 
-  const expectedRef = env.PACEMATE_LOADTEST_EXPECTED_PROJECT_REF;
   if (!expectedRef) {
     problems.push(
       "set PACEMATE_LOADTEST_EXPECTED_PROJECT_REF to the Supabase project ref you intend to mutate",
     );
-  } else if (!actualRef) {
+  } else if (!actualRef && !target.loopback) {
     problems.push("could not derive a Supabase project ref from the configured URL");
-  } else if (expectedRef !== actualRef) {
+  } else if (!target.loopback && expectedRef !== actualRef) {
     problems.push(
       `configured Supabase project is "${actualRef}" but PACEMATE_LOADTEST_EXPECTED_PROJECT_REF is "${expectedRef}"`,
     );
@@ -134,7 +187,7 @@ export function evaluateMutationGuard(env, supabaseUrl) {
     // Nothing the environment or a tenant marker says can make production a
     // permissible load-test target.
     problems.push(
-      `project "${actualRef}" is a KNOWN PRODUCTION project and cannot be load tested`,
+      `project "${productionRef}" is a KNOWN PRODUCTION project and cannot be load tested`,
     );
   } else if (!declaredNonProduction && !isolatedSchoolId) {
     problems.push(
@@ -146,6 +199,7 @@ export function evaluateMutationGuard(env, supabaseUrl) {
     allowed: problems.length === 0,
     problems,
     projectRef: actualRef,
+    loopback: target.loopback,
     isKnownProduction,
     isolatedSchoolId: isolatedSchoolId ?? null,
     declaredNonProduction,

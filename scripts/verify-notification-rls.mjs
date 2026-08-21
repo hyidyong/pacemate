@@ -36,16 +36,15 @@ import { ProbeLedger, teardown } from "./security/lib/probe-ledger.mjs";
 import { createProbeLifecycle } from "./security/lib/probe-lifecycle.mjs";
 import { createProbeRunSecret } from "./security/lib/probe-credentials.mjs";
 import {
-  classifyNotificationDelivery,
   createRealtimeInbox,
-  waitForRealtimeRow,
+  observeNotificationDelivery,
 } from "./security/lib/realtime-delivery.mjs";
 
 const TIMEOUT_MS = Number(process.env.PACEMATE_SECURITY_PROBE_TIMEOUT_MS ?? 15000);
 const RECOVERY_TIMEOUT_MS = Number(
   process.env.PACEMATE_SECURITY_PROBE_RECOVERY_TIMEOUT_MS ?? 30000,
 );
-const EXPECTED_CHECKS = 18;
+const EXPECTED_CHECKS = 22;
 
 async function main() {
   const env = loadEnvLocal();
@@ -475,22 +474,30 @@ async function main() {
         "user_notifications",
         broadcastFor(profileB.id),
       );
+      const realtimeForeignSentinel = await record("user_notifications", {
+        recipient_id: foreignProfile.id,
+        recipient_role: null,
+        school_id: foreign.id,
+        category: "system",
+        title: `${runMarker} foreign Realtime sentinel ${runId}`,
+        body: `${runMarker} foreign Realtime sentinel body`,
+        target_href: "/notifications",
+      });
 
-      // Wait only for the three required positive deliveries. A short quiet
-      // window follows so an unauthorized delivery cannot win by arriving a
-      // little later than the intended row.
-      await Promise.all([
-        waitForRealtimeRow(inboxes.a, realtimeDirect.id, { timeoutMs: TIMEOUT_MS }),
-        waitForRealtimeRow(inboxes.a, realtimeBroadcastA.id, { timeoutMs: TIMEOUT_MS }),
-        waitForRealtimeRow(inboxes.b, realtimeBroadcastB.id, { timeoutMs: TIMEOUT_MS }),
-      ]);
-      await new Promise((resolve) => setTimeout(resolve, 750));
-
-      for (const verdict of classifyNotificationDelivery({
+      // First prove every socket can receive an authorized row, including the
+      // foreign observer. Only then begin a second, bounded observation window
+      // for forbidden delivery. The window uses the configured probe timeout,
+      // not an unrelated short sleep.
+      const observation = await observeNotificationDelivery({
         directId: realtimeDirect.id,
         broadcastIds: { a: realtimeBroadcastA.id, b: realtimeBroadcastB.id },
+        foreignSentinelId: realtimeForeignSentinel.id,
         inboxes,
-      })) {
+        deliveryTimeoutMs: TIMEOUT_MS,
+        settlementMs: TIMEOUT_MS,
+      });
+
+      for (const verdict of observation.verdicts) {
         check(verdict.id, verdict.property, verdict.pass, verdict.detail);
       }
     } finally {

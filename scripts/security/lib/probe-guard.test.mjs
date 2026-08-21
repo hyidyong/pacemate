@@ -72,6 +72,37 @@ test("the known production project is refused even with every write opt-in", () 
   assert.match(verdict.problems.join("\n"), /KNOWN PRODUCTION/);
 });
 
+test("a configured production ref is refused for loopback, malformed, and unrelated URLs", () => {
+  const productionEnv = {
+    PACEMATE_SECURITY_PROBE_ALLOW_WRITES: "1",
+    PACEMATE_SECURITY_PROBE_ALLOW_LOOPBACK: "1",
+    PACEMATE_SECURITY_PROBE_PROJECT_REF: "szztsqdnvenfbgxtylkl",
+  };
+
+  for (const url of [
+    "http://127.0.0.1:54321",
+    "not a URL",
+    "https://unrelated.example",
+  ]) {
+    const verdict = evaluateProbeGuard(productionEnv, url);
+    assert.equal(verdict.allowed, false, `${url} must not hide a configured production identity`);
+    assert.match(verdict.problems.join("\n"), /KNOWN PRODUCTION/);
+  }
+});
+
+test("an explicitly opted-in loopback probe remains allowed for a non-production local identity", () => {
+  const verdict = evaluateProbeGuard(
+    {
+      PACEMATE_SECURITY_PROBE_ALLOW_WRITES: "1",
+      PACEMATE_SECURITY_PROBE_ALLOW_LOOPBACK: "1",
+      PACEMATE_SECURITY_PROBE_PROJECT_REF: "fakeproject",
+    },
+    "http://127.0.0.1:54321",
+  );
+  assert.equal(verdict.allowed, true, verdict.problems.join("; "));
+  assert.equal(verdict.loopback, true);
+});
+
 test("a tenant is disposable only when the database row carries the marker", () => {
   const runMarker = createRunMarker("a".repeat(32));
   assert.equal(isProbeTenant({ slug: `${runMarker}-a-run123` }, runMarker), true);

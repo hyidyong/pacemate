@@ -94,8 +94,9 @@ react-dom@19.2.7
 reported that the lockfile passes supply-chain policies. The lockfile diff is
 limited to the aligned Next packages and their platform-specific SWC packages.
 
-`npm audit` reports `6 high / 0 critical` advisories. This is not a new patch
-regression: the non-Next dependency versions are unchanged, and the reported
+At this historical checkpoint, `npm audit` reported `6 high / 0 critical`
+advisories. This was not a new patch regression: the non-Next dependency
+versions were unchanged, and the reported
 Next path is through the unchanged `postcss@8.4.31` and `sharp@0.34.5`
 dependencies. It remains explicit residual dependency risk; no forced or major
 upgrade was performed outside the approved 15.5.21 scope.
@@ -646,9 +647,9 @@ The handlers themselves remain exercised platform-independently by the
 lifecycle and IPC-cancel tests. There is no new failure in any previous-stage
 cohort.
 
-### Fresh final release gate
+### Original final release gate (historical, before independent-review follow-ups)
 
-Executed after all production-code and test changes:
+Executed after the original Stage 10 production-code and test changes:
 
 | Command | Result |
 |---|---|
@@ -666,7 +667,7 @@ The audit still reports high-severity paths through `brace-expansion`,
 forces Next.js `16.3.2`, outside the approved patch-only framework checkpoint.
 No forced major upgrade or test/security weakening was used to hide this risk.
 
-Baseline comparison:
+Historical baseline comparison:
 
 - initial merged-main baseline: `628 / 622 / 3 / 3`;
 - after KI-002 correction: `628 / 625 / 0 / 3`;
@@ -679,6 +680,39 @@ checkpoint was
 `the documented --sweep --family command executes and preserves bystanders`;
 Checkpoint 6 records its exact Windows handle-drain root cause, fix, five-repeat
 focused result, and later full-suite passes.
+
+### Current independent-review remediation evidence (2026-08-21)
+
+The prior final table is preserved as historical evidence. After the direct
+`js-yaml` correction and before these four merge-blocker fixes, independent
+verification established the current starting baseline as
+`649 total / 646 pass / 0 fail / 3 skip`, with `npm audit` at
+`0 critical / 5 high`. Direct `js-yaml` resolves to `4.3.1` and no longer
+appears in the audit inventory.
+
+Independent review invalidated the breadth of the earlier repository-local
+production-target and Realtime-oracle PASS claims. The narrow remediations are:
+
+- load-test service-role traffic now accepts cloud targets only at an exact
+  canonical HTTPS Supabase hostname; attacker suffixes, arbitrary domains,
+  plaintext cloud URLs, embedded credentials, and non-default ports fail;
+- probe safety checks every supplied project identity, so a compiled production
+  ref refuses loopback/malformed/unrelated URLs and the integration wrapper
+  spawns zero commands; URL/ref mismatch also refuses before spawn;
+- recipient A and B each have a positive broadcast expectation and an explicit
+  negative expectation for the peer's fan-out row;
+- the foreign observer must receive its own authorized, post-subscription row,
+  while home observers must not receive it; after all authorized deliveries,
+  the oracle observes for one configured probe-timeout window and fails any
+  immediate or delayed forbidden delivery in that window.
+
+Focused RED evidence was captured by exact name before each implementation.
+Post-remediation full-suite evidence is
+`665 total / 662 pass / 0 fail / 3 skip`. Repository-local guard/oracle status
+is now **PASS under adversarial tests**. Credentialed RLS plus real Realtime
+socket/INSERT execution remains **BLOCKED / UNVERIFIED** because no approved
+scratch project or credentials are available; no fake/offline result replaces
+that live claim.
 
 ### Credential and scope scan
 
@@ -734,9 +768,10 @@ supabase/config.toml
 
 ### Final capability classification
 
-- Repository-local implementation, offline CI, compiled production refusal,
-  focused regressions, full tests, static gates, production build, budgets,
-  lockfiles, rendered non-destructive QA, and secret scan: **PASS**.
+- Repository-local implementation, offline CI, adversarial compiled-production
+  and exact-origin refusal, the bounded Realtime oracle, focused regressions,
+  full tests, static gates, production build, budgets, lockfiles, rendered
+  non-destructive QA, and secret scan: **PASS**.
 - Empty-database migration rebuild: **BLOCKED / UNVERIFIED** by Docker public
   ECR pull failures before database creation.
 - Credentialed RLS and real Realtime socket/INSERT run: **BLOCKED /
@@ -749,6 +784,7 @@ supabase/config.toml
   coverage remains green offline.
 
 No production reset, rebuild, restore, recovery, fixture, load, notification,
-course-setting, roadmap-feedback, or support mutation occurred. No commit,
-push, pull request, or merge was created. Work stopped on
-`upgrade/stage-10` with the change set unstaged for owner review.
+course-setting, roadmap-feedback, or support mutation occurred. The original
+handoff stopped before commit/push/PR; Stage 10 was subsequently committed and
+PR #44 remains draft. This independent-review remediation is unstaged and
+uncommitted at the existing branch HEAD. No merge occurred.

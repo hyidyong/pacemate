@@ -4,7 +4,8 @@
 
 Stage 10 — Production QA / CI/CD / Release Readiness
 
-Status: REPOSITORY-LOCAL IMPLEMENTATION AND FINAL GATE PASS on `upgrade/stage-10`
+Status: REPOSITORY-LOCAL REMEDIATION VERIFIED on `upgrade/stage-10`; LIVE
+SCRATCH/RECOVERY ITEMS REMAIN BLOCKED / UNVERIFIED
 
 Base: `main` at `8e178a676c89106497747eda54ac17d0f479af7f`
 
@@ -27,9 +28,11 @@ did not read, change, or include it.
 2. **KI-002 — RESOLVED.** The three stale source-shape assertions were replaced
    by executable action/helper coverage and mutation-checked. New independent
    baseline: `628 / 625 / 0 / 3`.
-3. **Production-target safety — PASS.** Security and load harnesses share a
-   compiled production denylist; every opt-in still refuses the known
-   production ref.
+3. **Production-target safety — REPOSITORY-LOCAL PASS after independent-review
+   remediation.** Load-test cloud origins must be exact canonical HTTPS
+   Supabase hosts. Security probes evaluate both URL-derived and independently
+   configured refs, so a production ref is refused even with a loopback,
+   malformed, or non-identifying URL and before the integration runner spawns.
 4. **CI separation — PASS.** Offline CI has no secrets and runs the complete
    repository-local release gate. Credentialed security verification is a
    manual protected-scratch workflow and fails closed when invoked without its
@@ -39,12 +42,14 @@ did not read, change, or include it.
    are committed in the working tree. Docker image pulls failed before DB
    creation with repeated EOF / Docker API 500 responses; production was not
    used as a fallback.
-6. **Realtime probe implementation — PASS; live socket E2E BLOCKED /
-   UNVERIFIED.** The live notification probe now opens authenticated sockets
-   for two intended users and a foreign tenant, inserts direct and per-recipient
-   broadcast rows, proves intended delivery plus peer/cross-tenant non-delivery,
-   and uses Stage 9 lifecycle/recovery cleanup. No approved scratch credentials
-   were available, so the runner refused before spawning a live probe.
+6. **Realtime oracle — REPOSITORY-LOCAL ADVERSARIAL PASS; live socket E2E
+   BLOCKED / UNVERIFIED.** The helper now requires reciprocal same-tenant peer
+   negatives, an authorized foreign-observer sentinel, reverse tenant
+   isolation, and a bounded settlement window that starts only after all
+   positive deliveries are observable. Broken-observer, immediate-leak,
+   delayed-leak, and all-to-all models fail offline. No approved scratch
+   credentials were available, so these properties have not run against real
+   Supabase sockets/INSERTs and are not claimed as live E2E evidence.
 7. **Rendered QA — PASS for non-mutating routes and controls.** Sessionless
    support refusal; professor and assistant workspaces; stale admin outcome;
    authenticated support form; professor course settings; student roadmap
@@ -55,6 +60,16 @@ did not read, change, or include it.
 8. **Recovery — BLOCKED.** Read-only production metadata reports WAL-G enabled,
    PITR disabled, and zero listed backups. There is no verified restore point,
    disposable restore target, measured restore drill, RPO, or RTO.
+
+## Current repository-local evidence
+
+- Independently verified pre-remediation baseline after the `js-yaml` correction:
+  `649 total / 646 pass / 0 fail / 3 skip`.
+- Post-remediation full suite: `665 total / 662 pass / 0 fail / 3 skip`.
+- `npm audit`: `0 critical / 5 high`; direct `js-yaml` resolves to `4.3.1`
+  and is not an audit finding.
+- Credentialed RLS/Realtime execution, clean rebuild, and recovery remain
+  separate external `BLOCKED / UNVERIFIED` items.
 
 ## Release evidence location
 
@@ -75,7 +90,7 @@ did not read, change, or include it.
 
 ## Completion boundary
 
-Stage 10 repository-local execution ended on the branch after the final release
-gate and evidence package. Do not commit, push, create a PR, or merge
+PR #44 remains draft. The independent-review remediation is local and
+uncommitted at the current Stage 10 HEAD. Do not commit, push, or merge
 automatically. Blocked live evidence stays blocked; a green offline gate does
-not convert it into a pass.
+not convert it into a live-integration pass.
