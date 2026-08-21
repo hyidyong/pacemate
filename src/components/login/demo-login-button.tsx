@@ -2,60 +2,87 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { signInAsDemoAccount } from "@/services/demo-login.actions";
+import { signInAsDemoRole } from "@/services/demo-login.actions";
 
-export type DemoLoginAccount = {
-  identifier: string;
-  name: string;
-  role: string;
+export type DemoLoginRole = "student" | "professor" | "assistant" | "admin";
+
+const ROLE_LABELS: Record<DemoLoginRole, string> = {
+  student: "학생 데모 로그인",
+  professor: "교수 데모 로그인",
+  assistant: "조교 데모 로그인",
+  admin: "관리자 데모 로그인",
 };
 
 /**
  * Stage 9: this component used to `import demoUsers from "@/config/demo-users.json"`,
  * which put four plaintext passwords — including the admin account's — into the
- * public login page's JavaScript bundle. It now receives only names, roles and
- * identifiers from the server, and the sign-in happens in a server action that
- * looks the password up server-side.
+ * public login page's JavaScript bundle.
+ *
+ * Post-Stage-10 UX restoration: it receives only the list of ROLES the server
+ * is willing to demo, renders one button per role, and posts the role back to a
+ * server action that resolves the account and its runtime credential on the
+ * server. Nothing here knows who the demo accounts are or how to sign in as
+ * them. When the server offers no roles (the production default) it renders
+ * nothing at all.
  */
-export function DemoLoginButton({ accounts }: { accounts: DemoLoginAccount[] }) {
-  const [isOpen, setIsOpen] = useState(false);
+export function DemoLoginButton({ roles }: { roles: DemoLoginRole[] }) {
   const [isPending, startTransition] = useTransition();
+  const [activeRole, setActiveRole] = useState<DemoLoginRole | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!accounts.length) {
+  if (!roles.length) {
     return null;
   }
 
-  const handleDemoLogin = (identifier: string) => {
+  const handleDemoLogin = (role: DemoLoginRole) => {
+    setError(null);
+    setActiveRole(role);
     startTransition(async () => {
-      await signInAsDemoAccount(identifier);
+      // On success the action redirects and never resolves here.
+      const result = await signInAsDemoRole(role);
+      if (result && result.ok === false) {
+        setError(result.message);
+        setActiveRole(null);
+      }
     });
   };
 
   return (
-    <div className="mt-4 border border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="text-sm font-bold text-gray-700">QA 전용 데모 로그인</h3>
-        <Button variant="ghost" size="sm" onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? "접기" : "펼치기"}
-        </Button>
-      </div>
+    <section
+      aria-labelledby="demo-login-heading"
+      className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4"
+      data-testid="demo-login-panel"
+    >
+      <h3 id="demo-login-heading" className="text-sm font-bold text-gray-700">
+        데모 계정으로 바로 로그인
+      </h3>
+      <p className="mt-1 text-xs text-gray-500">
+        역할을 선택하면 데모 계정으로 로그인합니다. 화면 둘러보기 용도입니다.
+      </p>
 
-      {isOpen && (
-        <div className="grid grid-cols-2 gap-2 mt-3">
-          {accounts.map((user) => (
-            <Button
-              key={user.identifier}
-              variant="outline"
-              size="sm"
-              className="text-xs justify-start"
-              disabled={isPending}
-              onClick={() => handleDemoLogin(user.identifier)}
-            >
-              {user.name} ({user.role})
-            </Button>
-          ))}
-        </div>
-      )}
-    </div>
+      {error ? (
+        <p role="alert" className="mt-2 text-xs font-semibold text-red-600">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {roles.map((role) => (
+          <Button
+            key={role}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="justify-center text-xs"
+            disabled={isPending}
+            aria-busy={isPending && activeRole === role}
+            data-testid={`demo-login-${role}`}
+            onClick={() => handleDemoLogin(role)}
+          >
+            {isPending && activeRole === role ? "로그인 중…" : ROLE_LABELS[role]}
+          </Button>
+        ))}
+      </div>
+    </section>
   );
 }

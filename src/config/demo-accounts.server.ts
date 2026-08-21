@@ -1,6 +1,15 @@
 import "server-only";
 
 import demoUsers from "@/config/demo-users.json";
+import {
+  listAvailableDemoLoginRoles,
+  parseDemoPasswordTable,
+  resolveDemoCredentialForRole,
+  type DemoCredential,
+  type DemoLoginConfig,
+  type DemoLoginRole,
+  type DemoPasswordTable,
+} from "@/config/demo-login-policy";
 
 /**
  * Stage 9 (Codex F5) — the demo roster, with no credential in the repository.
@@ -24,34 +33,29 @@ import demoUsers from "@/config/demo-users.json";
  * FAIL CLOSED. The shortcut is inert unless BOTH PACEMATE_ENABLE_DEMO_LOGIN=1
  * and a matching entry in PACEMATE_DEMO_PASSWORDS are present. A deployment
  * that sets neither — production — has no reusable demo login at all.
+ *
+ * Post-Stage-10 UX restoration: the browser is now told only which ROLES are
+ * available and posts a role back. Identifier and password are resolved here
+ * through the pure policy in `demo-login-policy.ts`.
  */
 
-export type DemoAccountSummary = {
-  identifier: string;
-  name: string;
-  role: string;
-};
+export type { DemoLoginRole } from "@/config/demo-login-policy";
 
-let cached: Record<string, string> | null | undefined;
+let cached: DemoPasswordTable | null | undefined;
 
-function passwordTable(): Record<string, string> | null {
-  if (cached !== undefined) return cached;
-  const raw = process.env.PACEMATE_DEMO_PASSWORDS;
-  if (!raw) {
-    cached = null;
-    return cached;
-  }
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    cached =
-      parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? (parsed as Record<string, string>)
-        : null;
-  } catch {
-    // A malformed value disables the shortcut rather than half-enabling it.
-    cached = null;
+function passwordTable(): DemoPasswordTable | null {
+  if (cached === undefined) {
+    cached = parseDemoPasswordTable(process.env.PACEMATE_DEMO_PASSWORDS);
   }
   return cached;
+}
+
+function currentConfig(): DemoLoginConfig {
+  return {
+    flag: process.env.PACEMATE_ENABLE_DEMO_LOGIN,
+    table: passwordTable(),
+    roster: demoUsers,
+  };
 }
 
 /** True only when an operator has switched the shortcut on AND supplied credentials. */
@@ -60,23 +64,17 @@ export function isDemoLoginEnabled(): boolean {
 }
 
 /**
- * What the browser is allowed to know: who the accounts are, never how to
- * authenticate as them. Only accounts that actually have a runtime credential
- * are offered, so the UI cannot advertise a login that would fail.
+ * What the browser is allowed to know: which roles can be demoed. Never an
+ * identifier, never a credential. Only roles with a runtime credential are
+ * offered, so the UI cannot advertise a login that would fail.
  */
-export function listDemoAccounts(): DemoAccountSummary[] {
-  if (!isDemoLoginEnabled()) return [];
-  const table = passwordTable() ?? {};
-  return demoUsers
-    .filter((user) => typeof table[user.identifier] === "string" && table[user.identifier].length > 0)
-    .map((user) => ({ identifier: user.identifier, name: user.name, role: user.role }));
+export function listDemoLoginRoles(): DemoLoginRole[] {
+  return listAvailableDemoLoginRoles(currentConfig());
 }
 
-/** Server-side only: resolve the runtime password for a roster identifier. */
-export function findDemoPassword(identifier: string): string | null {
-  if (!isDemoLoginEnabled()) return null;
-  const password = (passwordTable() ?? {})[identifier];
-  return typeof password === "string" && password.length > 0 ? password : null;
+/** Server-side only: resolve the identity and runtime password for a role. */
+export function findDemoCredentialForRole(role: unknown): DemoCredential | null {
+  return resolveDemoCredentialForRole(role, currentConfig());
 }
 
 /** Test seam: the table is memoised, so tests must be able to clear it. */
