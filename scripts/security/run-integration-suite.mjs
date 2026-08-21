@@ -30,13 +30,14 @@ export function validateIntegrationEnv(env) {
     }
   }
 
+  // The guard runs UNCONDITIONALLY. A missing or malformed URL must never cause
+  // a production identity supplied in PACEMATE_SECURITY_PROBE_PROJECT_REF to go
+  // unexamined; the guard parses and validates both identities itself.
   const rawUrl = typeof env.NEXT_PUBLIC_SUPABASE_URL === "string"
     ? env.NEXT_PUBLIC_SUPABASE_URL.trim()
     : "";
-  if (rawUrl) {
-    const guard = evaluateProbeGuard(env, rawUrl);
-    problems.push(...guard.problems);
-  }
+  const guard = evaluateProbeGuard(env, rawUrl);
+  problems.push(...guard.problems);
 
   return problems.length
     ? {

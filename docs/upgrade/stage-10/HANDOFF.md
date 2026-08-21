@@ -299,7 +299,10 @@ remain synchronized.
 
 The runner validates URL, publishable key, service-role key, explicit write
 opt-in, exact ref, exact trusted host, and the compiled production denylist
-before its first child process. It runs commands in a fixed order and stops at
+before its first child process. (Historical wording. The "exact ref" check at
+this checkpoint was a literal comparison and the guard was skipped when the
+URL was empty; see "Final independent-verification blocker" below for the
+2026-08-22 correction.) It runs commands in a fixed order and stops at
 the first nonzero exit. At this checkpoint the independently verified live
 commands are the RLS probe followed by the notification RLS probe; the snapshot
 and Realtime commands are intentionally added only after their own safe-target
@@ -698,7 +701,9 @@ production-target and Realtime-oracle PASS claims. The narrow remediations are:
   plaintext cloud URLs, embedded credentials, and non-default ports fail;
 - probe safety checks every supplied project identity, so a compiled production
   ref refuses loopback/malformed/unrelated URLs and the integration wrapper
-  spawns zero commands; URL/ref mismatch also refuses before spawn;
+  spawns zero commands; URL/ref mismatch also refuses before spawn
+  (overclaimed as written: only the exact canonical spelling of the configured
+  ref was recognised — see the final-blocker section below);
 - recipient A and B each have a positive broadcast expectation and an explicit
   negative expectation for the peer's fan-out row;
 - the foreign observer must receive its own authorized, post-subscription row,
@@ -713,6 +718,100 @@ is now **PASS under adversarial tests**. Credentialed RLS plus real Realtime
 socket/INSERT execution remains **BLOCKED / UNVERIFIED** because no approved
 scratch project or credentials are available; no fake/offline result replaces
 that live claim.
+
+### Final independent-verification blocker — configured-ref canonicalisation (2026-08-22)
+
+The section above is preserved as written. A final independent verification of
+it reproduced one remaining production-safety bypass in
+`scripts/security/lib/probe-guard.mjs`.
+
+**Root cause.** `evaluateProbeGuard` read `PACEMATE_SECURITY_PROBE_PROJECT_REF`
+and tested it with `KNOWN_PRODUCTION_PROJECT_REFS.has(value)` — a literal
+string comparison — before any parsing or shape validation. On an opted-in
+loopback target the cloud URL/ref equality check is intentionally skipped, so
+the configured ref was never examined again. Consequently `" <prod>"`,
+`"<prod> "`, `"<PROD>"`, mixed-case `<prod>`, and shape-invalid values such as
+`not/a/ref` were all ACCEPTED with both opt-ins on `http://127.0.0.1:54321`,
+and `runIntegrationSuite` went on to spawn both child processes. Only the exact
+canonical spelling was refused. Separately, `validateIntegrationEnv` skipped
+the guard entirely when the URL was empty, so a production ref supplied with a
+missing URL was reported only as "missing URL", never as production.
+
+**Fix.** One shared parser, `scripts/security/lib/project-ref.mjs`
+(`parseProjectRef`), now runs BEFORE every production-denylist, host/local,
+URL-ref equality, and spawn decision:
+
+- canonicalisation is limited to trimming outer whitespace and lower-casing,
+  and is used only to RECOGNISE production (exact match or embedded label, so
+  `<prod>.supabase.co` pasted as a ref is also named as production);
+- a value is usable only if it is already canonical and a single lowercase DNS
+  label (`/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/`) — the shape shared by the
+  compiled production ref, the scratch fixtures, the subprocess harness's
+  loopback identity `fakeproject`, and any label of `<ref>.supabase.co`;
+- anything else (whitespace, case variation, slash, dot, query, hash, port,
+  URL, hostname, empty/whitespace-only, non-string) fails closed and yields
+  `ref: null`, so no later comparison can run on it;
+- `projectRefFromSupabaseUrl` and `evaluateHostGuard` use the same parser, so
+  URL-derived and configured identities are compared on equal terms and an
+  unvalidated expected ref can never shape the trusted-host list;
+- `validateIntegrationEnv` now calls the guard unconditionally, so a missing or
+  malformed URL cannot hide a production identity configured elsewhere.
+
+The loadtest guard (`scripts/loadtest/lib/safety.mjs`) was not changed: its
+loopback path already requires strict equality with the explicit local
+identity `pacemate-stage-10-local`, and its cloud path requires equality with
+the URL-derived ref, so whitespace/case variants were already refused there.
+The probe harness has no such local constant; its loopback identity remains
+any shape-valid, non-production label (the subprocess tests use `fakeproject`).
+
+**RED → GREEN.** New tests were added first and failed against the committed
+HEAD (`node --test --test-reporter=tap` on the two existing files:
+`27 tests / 20 pass / 7 fail`; the new parser test file failed with
+`ERR_MODULE_NOT_FOUND`):
+
+1. `production ref variants (whitespace, case) are refused on every URL, with both opt-ins`
+2. `malformed configured refs fail closed even on an opted-in loopback target`
+3. `a malformed expected ref is never used to build the trusted host list`
+4. `URL-derived refs pass through the same validator as configured refs`
+5. `production ref variants are refused with zero spawns on loopback and cloud URLs`
+6. `malformed configured refs are refused with zero spawns on an opted-in loopback target`
+7. `identity disagreement is refused with zero spawns in every shape`
+
+After the fix, focused GREEN:
+`node --test --test-reporter=tap scripts/security/lib/project-ref.test.mjs scripts/security/lib/probe-guard.test.mjs scripts/security/run-integration-suite.test.mjs scripts/loadtest/lib/safety.test.mjs scripts/security/lib/realtime-delivery.test.mjs`
+→ `61 tests / 61 pass / 0 fail / 0 skip`. No existing guard test was removed
+or weakened; the 13 new tests are 4 (parser) + 5 (guard) + 4 (wrapper).
+
+**Injected-spawn adversarial matrix** (real `runIntegrationSuite`, counting
+fake `spawn`, both opt-ins set, loopback URL unless stated): canonical
+production ref (loopback, production URL, scratch URL); leading-space,
+trailing-space, uppercase, and mixed-case production ref; `not/a/ref`; empty;
+whitespace-only; `https://example.com`; `foo.supabase.co`; `ref?x=1`;
+`ref#frag`; `ref:5432`; `ref/path`; `<prod>.supabase.co`; scratch URL with a
+different scratch ref; malformed URL, unrelated URL, and EMPTY URL each with the
+production ref — all 21 **REFUSED, 0 spawns**; every production-bearing case
+names `KNOWN PRODUCTION`. Legitimate paths preserved: canonical scratch cloud
+project (`stagingref000000`) and opted-in loopback with `fakeproject` both
+**ALLOWED, 2 spawns** (both configured commands).
+
+**Regression gates after the fix:** full `npm test`
+`678 total / 675 pass / 0 fail / 3 skip` (same three Windows signal skips);
+Stage 10 focused cohort `135 / 135`; Stage 5 `48 / 48`; Stage 6 `11 / 11`;
+Stage 7 `62 / 62`; Stage 8 `45 / 45`; Stage 9 27-file cohort
+`318 / 315 / 0 / 3`; typecheck PASS; lint PASS (same single `no-img-element`
+warning); production build PASS; bundle budgets PASS (`ppN98M8AcvLpGiupmvJlZ`);
+frozen pnpm lockfile PASS with no lockfile change; `npm audit`
+`0 critical / 5 high`, `js-yaml@4.3.1` absent from findings; `git diff --check`
+clean; credential scan of the change set `0` hits.
+
+**Files changed in this remediation:** `scripts/security/lib/project-ref.mjs`
+(new), `scripts/security/lib/project-ref.test.mjs` (new),
+`scripts/security/lib/probe-guard.mjs`, `scripts/security/lib/probe-guard.test.mjs`,
+`scripts/security/run-integration-suite.mjs`,
+`scripts/security/run-integration-suite.test.mjs`, and the Stage 10 documents.
+No `src/`, RLS, migration, dependency, or lockfile change. Live credentialed
+execution remains **BLOCKED / UNVERIFIED**; this is repository-local evidence
+only.
 
 ### Credential and scope scan
 
@@ -751,6 +850,8 @@ scripts/security/lib/probe-cleanup.test.mjs
 scripts/security/lib/probe-guard.mjs
 scripts/security/lib/probe-guard.test.mjs
 scripts/security/lib/production-targets.mjs
+scripts/security/lib/project-ref.mjs            (final-blocker fix, 2026-08-22)
+scripts/security/lib/project-ref.test.mjs       (final-blocker fix, 2026-08-22)
 scripts/security/lib/realtime-delivery.mjs
 scripts/security/lib/realtime-delivery.test.mjs
 scripts/security/rls-probe.mjs
@@ -769,7 +870,8 @@ supabase/config.toml
 ### Final capability classification
 
 - Repository-local implementation, offline CI, adversarial compiled-production
-  and exact-origin refusal, the bounded Realtime oracle, focused regressions,
+  refusal (including canonicalised/shape-validated configured refs since the
+  2026-08-22 fix), exact-origin refusal, the bounded Realtime oracle, focused regressions,
   full tests, static gates, production build, budgets, lockfiles, rendered
   non-destructive QA, and secret scan: **PASS**.
 - Empty-database migration rebuild: **BLOCKED / UNVERIFIED** by Docker public

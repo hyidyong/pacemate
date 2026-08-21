@@ -323,6 +323,10 @@ GitHub Actions, Supabase CLI/Postgres/Auth/Realtime, Supabase JavaScript client.
   The validator requires URL, publishable key, service key, write opt-in, and
   exact project ref, and imports the same compiled production denylist used by
   the probes. Missing environment is failure, never skip.
+  Addendum (2026-08-22): "exact project ref" means a ref accepted by the shared
+  parser `scripts/security/lib/project-ref.mjs` — already canonical, a single
+  lowercase DNS label, and not production on its trimmed/lower-cased form. The
+  guard runs even when the URL is missing so a production ref is always named.
 
 - [ ] **Step 3: Add package scripts**
 
@@ -426,6 +430,14 @@ GitHub Actions, Supabase CLI/Postgres/Auth/Realtime, Supabase JavaScript client.
   ```
 
   Re-run both load-test safety and probe-guard suites.
+
+  Addendum (2026-08-22, final independent-verification blocker): a literal
+  `Set.has` on the raw configured ref is insufficient. Independent verification
+  showed whitespace-padded, case-varied, and shape-invalid configured refs
+  bypassing it on an opted-in loopback target. The configured ref must be
+  parsed by `parseProjectRef` (`scripts/security/lib/project-ref.mjs`) before
+  the denylist check; production is matched on the canonical form and
+  malformed refs fail closed with no usable ref.
 
 - [ ] **Step 3: Pin the Supabase CLI**
 

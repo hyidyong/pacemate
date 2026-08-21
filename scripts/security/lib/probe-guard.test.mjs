@@ -10,6 +10,7 @@ import {
   assertScopedFilter,
   assertSafeToProbe,
   createRunMarker,
+  evaluateHostGuard,
   evaluateProbeGuard,
   isProbeTenant,
   projectRefFromSupabaseUrl,
@@ -144,4 +145,88 @@ test("Realtime foreign-tenant auth fixtures retain exact-run recovery ownership"
     runMarkerFromProbeAuthEmail(`${runMarker}-notif-foreign@real.example`),
     null,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Final Stage 10 verifier blocker — configured project identity must be parsed
+// and validated before any production/host/equality decision.
+// ---------------------------------------------------------------------------
+
+const PROD_REF = "szztsqdnvenfbgxtylkl";
+const LOOPBACK_URL = "http://127.0.0.1:54321";
+const FULL_OPT_IN = {
+  PACEMATE_SECURITY_PROBE_ALLOW_WRITES: "1",
+  PACEMATE_SECURITY_PROBE_ALLOW_LOOPBACK: "1",
+};
+const PRODUCTION_VARIANTS = [
+  PROD_REF,
+  ` ${PROD_REF}`,
+  `${PROD_REF} `,
+  PROD_REF.toUpperCase(),
+  "SzZtSqDnVeNfBgXtYlKl",
+];
+
+test("production ref variants (whitespace, case) are refused on every URL, with both opt-ins", () => {
+  for (const ref of PRODUCTION_VARIANTS) {
+    for (const url of [PROD_URL, LOOPBACK_URL, SCRATCH_URL, "not a URL", "https://unrelated.example"]) {
+      const verdict = evaluateProbeGuard(
+        { ...FULL_OPT_IN, PACEMATE_SECURITY_PROBE_PROJECT_REF: ref },
+        url,
+      );
+      assert.equal(verdict.allowed, false, `${JSON.stringify(ref)} on ${url} must be refused`);
+      assert.match(
+        verdict.problems.join("\n"),
+        /KNOWN PRODUCTION/,
+        `${JSON.stringify(ref)} on ${url} must be identified as production`,
+      );
+    }
+  }
+});
+
+test("malformed configured refs fail closed even on an opted-in loopback target", () => {
+  const malformed = [
+    "not/a/ref",
+    "",
+    "   ",
+    "https://example.com",
+    "foo.supabase.co",
+    "ref?x=1",
+    "ref#frag",
+    "ref:5432",
+    "ref/path",
+    " fakeproject",
+    "fakeproject ",
+    "FakeProject",
+  ];
+  for (const ref of malformed) {
+    for (const url of [LOOPBACK_URL, SCRATCH_URL]) {
+      const verdict = evaluateProbeGuard(
+        { ...FULL_OPT_IN, PACEMATE_SECURITY_PROBE_PROJECT_REF: ref },
+        url,
+      );
+      assert.equal(verdict.allowed, false, `${JSON.stringify(ref)} on ${url} must be refused`);
+      assert.match(verdict.problems.join("\n"), /PACEMATE_SECURITY_PROBE_PROJECT_REF/);
+    }
+  }
+});
+
+test("a malformed expected ref is never used to build the trusted host list", () => {
+  const verdict = evaluateHostGuard({}, SCRATCH_URL, " stagingref000000");
+  assert.equal(verdict.allowed, false);
+  assert.match(verdict.problems.join("\n"), /not a valid Supabase project ref|lowercase/);
+});
+
+test("URL-derived refs pass through the same validator as configured refs", () => {
+  assert.equal(projectRefFromSupabaseUrl("https://under_score.supabase.co"), null);
+  assert.equal(projectRefFromSupabaseUrl("https://-leading.supabase.co"), null);
+  assert.equal(projectRefFromSupabaseUrl(`https://${PROD_REF.toUpperCase()}.supabase.co`), PROD_REF);
+});
+
+test("a configured production ref is refused when the URL yields no ref and loopback is not opted in", () => {
+  const verdict = evaluateProbeGuard(
+    { PACEMATE_SECURITY_PROBE_ALLOW_WRITES: "1", PACEMATE_SECURITY_PROBE_PROJECT_REF: PROD_REF },
+    LOOPBACK_URL,
+  );
+  assert.equal(verdict.allowed, false);
+  assert.match(verdict.problems.join("\n"), /KNOWN PRODUCTION/);
 });

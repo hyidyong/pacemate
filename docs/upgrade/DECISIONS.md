@@ -1138,3 +1138,32 @@ Consequences: unavailable Docker or scratch permissions produce BLOCKED
 evidence, not a fallback to production. Read-only production metadata may be
 inspected, but no reset, rebuild, restore drill, fixture probe, or load test may
 run there.
+
+## D-041 — project identity is parsed and validated before any safety decision
+
+Status: Accepted (Stage 10 final independent-verification remediation, 2026-08-22)
+
+Decision: a Supabase project ref — whether configured through
+`PACEMATE_SECURITY_PROBE_PROJECT_REF` or derived from a URL — is security-
+sensitive structured input. One shared parser
+(`scripts/security/lib/project-ref.mjs`) runs before every production-denylist
+check, host/local-target decision, URL/ref equality decision, and child-process
+spawn. Canonicalisation is limited to trimming outer whitespace and
+lower-casing and is used only to RECOGNISE a production identity (exact or as
+an embedded label). A value is usable only if it is already canonical and a
+single lowercase DNS label; everything else fails closed with no usable ref.
+The guard is evaluated even when the URL is missing or malformed.
+
+Reason: D-040's denylist compared the raw configured string literally.
+Independent verification reproduced that whitespace-padded, case-varied, and
+shape-invalid production refs were not recognised as production and, on an
+opted-in loopback target, reached the integration wrapper's spawn calls.
+Trimming or lower-casing only at the final comparison would still let
+malformed values through every other decision.
+
+Consequences: the loadtest guard keeps its separate explicit local identity
+(`pacemate-stage-10-local`); the probe harness's loopback identity remains any
+shape-valid non-production label (`fakeproject` in the subprocess tests). A
+legitimate scratch ref must be supplied exactly as it appears in its Supabase
+hostname. This is repository-local, injected-spawn evidence; live credentialed
+execution remains BLOCKED / UNVERIFIED.

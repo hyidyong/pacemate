@@ -7,8 +7,9 @@ Historical reports may be investigated but are not automatically considered curr
 
 - **Current dependency/test correction.** The independently verified baseline
   after the `js-yaml` patch was `649 total / 646 pass / 0 fail / 3 skip`.
-  Current remediation adds sixteen focused/adversarial checks for
-  `665 / 662 / 0 / 3`.
+  The first remediation round added sixteen focused/adversarial checks for
+  `665 / 662 / 0 / 3`; the final configured-ref blocker fix (2026-08-22) adds
+  thirteen more for `678 / 675 / 0 / 3`.
   `npm audit` now reports `0 critical / 5 high`; direct `js-yaml@4.3.1` is not
   an audit finding. Older audit inventories below are retained as historical
   stage evidence, not current dependency status.
@@ -17,6 +18,15 @@ Historical reports may be investigated but are not automatically considered curr
   production-loopback refusal, reciprocal broadcast peer isolation, foreign
   observer liveness, and bounded delayed-leak detection are executable and
   green offline. This does not change the live status below.
+  Correction (2026-08-22): the "independent configured-ref denial" above was a
+  literal string comparison. A final independent verification reproduced that
+  `" <prod>"`, `"<prod> "`, upper/mixed-case `<prod>`, and `not/a/ref` were
+  accepted as configured refs on an opted-in loopback target and reached both
+  integration spawns. Fixed: the configured ref is now parsed and
+  shape-validated by a shared validator before every denylist/host/equality
+  decision; production is matched on the canonical form; malformed refs fail
+  closed. Verified with injected spawn (21 unsafe combinations, 0 spawns),
+  not against live credentials.
 
 - **Local clean rebuild: BLOCKED / UNVERIFIED.** The pinned Supabase CLI and
   loopback-only reset wrapper are present, but Docker Desktop returned repeated
@@ -25,7 +35,8 @@ Historical reports may be investigated but are not automatically considered curr
   created, so migration-chain rebuild success is not claimed.
 - **Credentialed security and Realtime E2E: BLOCKED / UNVERIFIED.** Current
   permissions expose no approved scratch project. The live runner refuses the
-  linked production ref before spawning either probe. Real socket coverage is
+  linked production ref — canonical, whitespace-padded, or case-varied — before
+  spawning either probe. Real socket coverage is
   implemented and offline-tested, but its direct, reciprocal broadcast-peer,
   foreign-sentinel, delayed-leak, and cross-tenant delivery assertions have not
   run against a live scratch target.

@@ -28,11 +28,21 @@ did not read, change, or include it.
 2. **KI-002 — RESOLVED.** The three stale source-shape assertions were replaced
    by executable action/helper coverage and mutation-checked. New independent
    baseline: `628 / 625 / 0 / 3`.
-3. **Production-target safety — REPOSITORY-LOCAL PASS after independent-review
-   remediation.** Load-test cloud origins must be exact canonical HTTPS
-   Supabase hosts. Security probes evaluate both URL-derived and independently
-   configured refs, so a production ref is refused even with a loopback,
-   malformed, or non-identifying URL and before the integration runner spawns.
+3. **Production-target safety — REPOSITORY-LOCAL PASS after two rounds of
+   independent-review remediation.** Load-test cloud origins must be exact
+   canonical HTTPS Supabase hosts. Security probes evaluate both URL-derived
+   and independently configured refs. The first remediation compared the
+   configured ref LITERALLY against the compiled denylist; a final independent
+   verification (2026-08-22) reproduced that leading-space, trailing-space,
+   upper/mixed-case, and shape-invalid (`not/a/ref`) configured refs were not
+   recognised as production and, on an opted-in loopback target, let the
+   integration wrapper reach both child-process spawns. The configured ref is
+   now parsed by one shared validator (`scripts/security/lib/project-ref.mjs`)
+   before any denylist, host, equality, or spawn decision: production is
+   recognised on the trimmed, lower-cased form and as an embedded label;
+   anything not already a canonical single lowercase DNS label fails closed.
+   This is repository-local adversarial evidence with injected spawn, not a
+   live credentialed run.
 4. **CI separation — PASS.** Offline CI has no secrets and runs the complete
    repository-local release gate. Credentialed security verification is a
    manual protected-scratch workflow and fails closed when invoked without its
@@ -65,7 +75,10 @@ did not read, change, or include it.
 
 - Independently verified pre-remediation baseline after the `js-yaml` correction:
   `649 total / 646 pass / 0 fail / 3 skip`.
-- Post-remediation full suite: `665 total / 662 pass / 0 fail / 3 skip`.
+- Post-remediation full suite (first round): `665 total / 662 pass / 0 fail / 3 skip`.
+- After the final configured-ref blocker fix (2026-08-22, +13 adversarial
+  tests): `678 total / 675 pass / 0 fail / 3 skip`; Stage 10 focused cohort
+  `135 / 135`; Stage 8 `45 / 45`; Stage 9 cohort `318 / 315 / 0 / 3`.
 - `npm audit`: `0 critical / 5 high`; direct `js-yaml` resolves to `4.3.1`
   and is not an audit finding.
 - Credentialed RLS/Realtime execution, clean rebuild, and recovery remain

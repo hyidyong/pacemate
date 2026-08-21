@@ -21,7 +21,8 @@
 // Everything here is a pure function over an env bag plus small helpers, so the
 // decision logic is unit-testable with no network.
 
-import { KNOWN_PRODUCTION_PROJECT_REFS } from "./production-targets.mjs";
+import { isKnownProductionProjectRef } from "./production-targets.mjs";
+import { parseProjectRef } from "./project-ref.mjs";
 
 /**
  * Codex round 5, F6 — OWNERSHIP MUST BE EXECUTION-SPECIFIC.
@@ -119,9 +120,14 @@ export function projectRefFromSupabaseUrl(rawUrl) {
     const { hostname } = new URL(rawUrl);
     for (const suffix of SUPABASE_HOST_SUFFIXES) {
       if (hostname.endsWith(suffix)) {
-        const ref = hostname.slice(0, -suffix.length);
-        // A ref is a single label. `a.b.supabase.co` is not a project host.
-        return ref && !ref.includes(".") ? ref : null;
+        // A ref is a single label. `a.b.supabase.co` is not a project host, and
+        // the label must satisfy the same shape the configured ref must, so the
+        // two identities are compared on equal terms. (`URL` already lower-cases
+        // the hostname, so a canonical production ref is still recognised.)
+        // Shape-only here: a well-formed PRODUCTION label must be returned so
+        // the caller can refuse it by name, not disappear into `null`.
+        const label = hostname.slice(0, -suffix.length);
+        return parseProjectRef(label).wellFormed ? label : null;
       }
     }
     return null;
@@ -156,7 +162,7 @@ export function isLoopbackUrl(rawUrl) {
  * harness's own subprocess tests can drive the real runner against a local
  * stand-in. It is never a path to a remote host.
  */
-export function evaluateHostGuard(env, rawUrl, expectedRef) {
+export function evaluateHostGuard(env, rawUrl, rawExpectedRef) {
   const problems = [];
   let url;
   try {
@@ -164,6 +170,15 @@ export function evaluateHostGuard(env, rawUrl, expectedRef) {
   } catch {
     return { allowed: false, problems: [`"${rawUrl}" is not a valid URL`], loopback: false };
   }
+
+  // The expected ref is structured input too: an unvalidated value must never
+  // be spliced into the trusted-host list. Callers normally pass an already
+  // parsed ref; re-parsing here keeps this function safe when called directly.
+  const expected = parseProjectRef(rawExpectedRef, {
+    source: "PACEMATE_SECURITY_PROBE_PROJECT_REF",
+  });
+  problems.push(...expected.problems);
+  const expectedRef = expected.ref;
 
   if (url.username || url.password) {
     problems.push("the Supabase URL must not embed credentials");
@@ -199,20 +214,32 @@ export function evaluateHostGuard(env, rawUrl, expectedRef) {
 
 /**
  * Synchronous verdict on whether this run may write anything at all.
+ *
+ * Order matters and is deliberate: both identities — the one derived from the
+ * URL and the one the operator configured — are parsed and validated FIRST.
+ * Production is recognised on the canonical form of each, so whitespace, case,
+ * a loopback URL, both opt-ins, or a missing/malformed URL cannot hide a
+ * production identity supplied in the other place. Only a ref the parser
+ * accepted is ever used for the host or equality decisions that follow.
  */
 export function evaluateProbeGuard(env, supabaseUrl) {
   const problems = [];
   const actualRef = projectRefFromSupabaseUrl(supabaseUrl);
-  const expectedRef = env.PACEMATE_SECURITY_PROBE_PROJECT_REF;
-  const productionRefs = [...new Set([actualRef, expectedRef])].filter(
-    (projectRef) => projectRef && KNOWN_PRODUCTION_PROJECT_REFS.has(projectRef),
-  );
+  const configured = parseProjectRef(env.PACEMATE_SECURITY_PROBE_PROJECT_REF, {
+    source: "PACEMATE_SECURITY_PROBE_PROJECT_REF",
+  });
+  const expectedRef = configured.ref;
 
+  const productionRefs = new Set(configured.productionRefs);
+  if (actualRef && isKnownProductionProjectRef(actualRef)) productionRefs.add(actualRef);
   for (const productionRef of productionRefs) {
     problems.push(
       `project "${productionRef}" is a KNOWN PRODUCTION project and cannot be probed`,
     );
   }
+  // Shape/canonical-form problems for the configured ref (production problems
+  // were already reported above, once per ref).
+  problems.push(...configured.problems.filter((problem) => !problem.includes("KNOWN PRODUCTION")));
 
   if (env.PACEMATE_SECURITY_PROBE_ALLOW_WRITES !== "1") {
     problems.push(
@@ -220,14 +247,16 @@ export function evaluateProbeGuard(env, supabaseUrl) {
     );
   }
 
+  // Only the validated ref reaches the host guard; an invalid one is passed as
+  // null so it can never shape the trusted-host list.
   const host = evaluateHostGuard(env, supabaseUrl, expectedRef);
   problems.push(...host.problems);
 
-  if (!expectedRef) {
+  if (!configured.present) {
     problems.push(
       "set PACEMATE_SECURITY_PROBE_PROJECT_REF to the Supabase project ref you intend to probe",
     );
-  } else if (!host.loopback) {
+  } else if (configured.valid && !host.loopback) {
     if (!actualRef) {
       problems.push("could not derive a Supabase project ref from the configured URL");
     } else if (expectedRef !== actualRef) {

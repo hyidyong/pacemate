@@ -6,7 +6,10 @@ Date: 2026-08-21 (Asia/Seoul)
 
 Production project `szztsqdnvenfbgxtylkl` was never used for reset, rebuild,
 restore, recovery, fixture, or load testing. The repository now refuses that
-ref through a compiled denylist shared by the security and load harnesses.
+ref through a compiled denylist shared by the security and load harnesses;
+since the 2026-08-22 final-blocker fix the security-probe guard recognises it
+on the canonical (trimmed, lower-cased) form of the configured ref and rejects
+malformed configured refs fail-closed (repository-local evidence, D-041).
 `supabase/config.toml` is local-only and contains no cloud ref or secret. The
 reset wrapper accepts only a running stack whose reported API URL is loopback.
 

@@ -52,7 +52,10 @@ the historical review record into a false chronology.
    against production project `szztsqdnvenfbgxtylkl`.
 2. Every mutating live probe must retain the Stage 9 explicit opt-in, exact
    project-ref match, production denylist, scoped ownership, fatal cleanup, and
-   zero-residue verification.
+   zero-residue verification. Project identity is security-sensitive structured
+   input: a configured ref is parsed and shape-validated before any denylist,
+   host, or equality decision, production is recognised on its canonical
+   (trimmed, lower-cased) form, and malformed refs fail closed.
 3. RLS remains the Realtime authorization boundary. Client filtering is only
    defence in depth.
 4. No test, RLS policy, privilege guard, migration postcondition, or CI gate is
