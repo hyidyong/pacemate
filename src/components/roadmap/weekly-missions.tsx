@@ -41,7 +41,21 @@ export function WeeklyMissions({ studentId, courseId, currentWeek, initialGuide 
 
   return (
     <div className="section" style={{ border: "1px solid var(--color-border)", padding: "16px", borderRadius: "8px", marginTop: "16px" }}>
-      <h3>주차별 맞춤 예습/복습 가이드 (현재 {currentWeek}주차)</h3>
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Current-week indicator: the existing currentWeek prop (student_courses.current_week) shown inside a circle. */}
+        <span
+          data-testid="current-week-indicator"
+          role="img"
+          aria-label={`현재 ${currentWeek}주차`}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-base font-bold leading-none text-white shadow-sm"
+        >
+          {currentWeek}
+        </span>
+        <div className="min-w-0">
+          <h3 className="m-0">주차별 맞춤 예습/복습 가이드</h3>
+          <p className="m-0 text-xs font-semibold text-blue-700">현재 {currentWeek}주차</p>
+        </div>
+      </div>
       {status ? (
         <p
           role={status.ok ? "status" : "alert"}

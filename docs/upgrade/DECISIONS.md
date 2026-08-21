@@ -1167,3 +1167,40 @@ shape-valid non-production label (`fakeproject` in the subprocess tests). A
 legitimate scratch ref must be supplied exactly as it appears in its Supabase
 hostname. This is repository-local, injected-spawn evidence; live credentialed
 execution remains BLOCKED / UNVERIFIED.
+
+## D-042 — demo quick login is role-keyed and resolved only on the server
+
+Status: Accepted (post-Stage-10 UX restoration, 2026-08-22; not a numbered
+stage)
+
+Decision: the demo quick login on `/login` is keyed by ROLE — `student`,
+`professor`, `assistant`, `admin` — never by identifier and never by filling a
+password field in the browser. The client receives only the list of role names
+that are currently available (`listDemoLoginRoles()`); demo identifiers and
+passwords stay server-only (`demo-accounts.server.ts`, `import "server-only"`,
+pure policy in `demo-login-policy.ts`). Activation requires the existing
+explicit server-side configuration — `PACEMATE_ENABLE_DEMO_LOGIN=1` AND a
+parsable `PACEMATE_DEMO_PASSWORDS` object with a non-empty credential for the
+role. Absent, malformed, non-object, or incomplete configuration fails closed;
+there is no hardcoded fallback credential. The server action
+(`signInAsDemoRole`) validates the role, resolves it to a server-side
+credential, and then calls the existing `createDemoSession` path, so Supabase
+password auth, profile/role verification, onboarding redirects and the signed
+session cookie are the same as for the normal login form. Normal
+role/profile/onboarding authorization remains authoritative; production and
+any unconfigured environment stay disabled.
+
+Reason: Stage 9 (Codex F5; see `docs/upgrade/stage-09/HANDOFF.md`) removed the
+plaintext roster because a `"use client"` import shipped four passwords in the
+public bundle. Restoring a one-click demo must not recreate any channel by
+which a credential, or even an identifier, can reach the browser. A role name
+is the minimum the client needs; everything else is a server decision.
+
+Consequences: exposing a demo password or identifier through client props,
+static bundles, rendered HTML, logs, or `NEXT_PUBLIC_*` configuration is
+prohibited and guarded by `demo-credentials.test.mjs`,
+`demo-login-roles.test.mjs` and `demo-login-policy.test.mjs`. The identifier-
+keyed action `signInAsDemoAccount` no longer exists. Assistant demo login may
+legitimately land on the existing assistant onboarding / advising-professor
+gate (`/onboarding?step=assistant-lab`); that is the pre-existing
+authorization flow in `createDemoSession`, not a bypass.
