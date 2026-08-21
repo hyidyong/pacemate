@@ -35,12 +35,17 @@ import { createAbortScope, createRoleClient } from "./security/lib/probe-http.mj
 import { ProbeLedger, teardown } from "./security/lib/probe-ledger.mjs";
 import { createProbeLifecycle } from "./security/lib/probe-lifecycle.mjs";
 import { createProbeRunSecret } from "./security/lib/probe-credentials.mjs";
+import {
+  classifyNotificationDelivery,
+  createRealtimeInbox,
+  waitForRealtimeRow,
+} from "./security/lib/realtime-delivery.mjs";
 
 const TIMEOUT_MS = Number(process.env.PACEMATE_SECURITY_PROBE_TIMEOUT_MS ?? 15000);
 const RECOVERY_TIMEOUT_MS = Number(
   process.env.PACEMATE_SECURITY_PROBE_RECOVERY_TIMEOUT_MS ?? 30000,
 );
-const EXPECTED_CHECKS = 12;
+const EXPECTED_CHECKS = 18;
 
 async function main() {
   const env = loadEnvLocal();
@@ -180,11 +185,15 @@ async function main() {
     // The cross-tenant fixture is addressed to a REAL profile in the other
     // tenant. Addressing it to nobody would prove nothing: an unreadable row is
     // unreadable for everyone, so the deny check would pass vacuously.
+    const foreignEmail = `${runMarker}-notif-foreign-${runId}@probe.invalid`;
+    const foreignAuthUser = await auth.createUser(foreignEmail, authSecret);
+    ledger.recordAuthUser(foreignAuthUser.id, "notif foreign student");
     const foreignProfile = await record("profiles", {
-      identifier: `${runMarker}-notif-foreign-${runId}@probe.invalid`,
+      identifier: foreignEmail,
       name: `${runMarker} notif foreign student`,
       role: "student",
       school_id: foreign.id,
+      auth_user_id: foreignAuthUser.id,
     });
     const foreignBroadcast = await record("user_notifications", {
       recipient_id: foreignProfile.id,
@@ -196,8 +205,7 @@ async function main() {
       target_href: "/notifications",
     });
 
-    const asUser = async (userEmail) => {
-      const token = await signIn(userEmail, authSecret);
+    const asUser = (token) => {
       return createRoleClient({
         url,
         baseHeaders: {
@@ -211,8 +219,11 @@ async function main() {
       });
     };
 
-    const asStudent = await asUser(email);
-    const asStudentB = await asUser(emailB);
+    const tokenA = await signIn(email, authSecret);
+    const tokenB = await signIn(emailB, authSecret);
+    const tokenForeign = await signIn(foreignEmail, authSecret);
+    const asStudent = asUser(tokenA);
+    const asStudentB = asUser(tokenB);
 
     // The broadcast is addressed by TITLE, not by row id, because the row id is
     // exactly what the per-recipient redesign changes. Asking "what does this
@@ -415,6 +426,79 @@ async function main() {
         bAfter.rows.length === 1 && bAfter.rows[0].is_read === false,
         `B now sees ${bAfter.rows.length} row(s), is_read=${bAfter.rows[0]?.is_read}`,
       );
+    }
+
+    // ---------------------------------------------------------------------
+    // Stage 10: real authenticated Realtime sockets + real INSERT delivery.
+    // ---------------------------------------------------------------------
+    const inboxes = {
+      a: createRealtimeInbox({
+        url,
+        anonKey,
+        accessToken: tokenA,
+        label: `${runId}:student-a`,
+        timeoutMs: TIMEOUT_MS,
+      }),
+      b: createRealtimeInbox({
+        url,
+        anonKey,
+        accessToken: tokenB,
+        label: `${runId}:student-b`,
+        timeoutMs: TIMEOUT_MS,
+      }),
+      foreign: createRealtimeInbox({
+        url,
+        anonKey,
+        accessToken: tokenForeign,
+        label: `${runId}:foreign-student`,
+        timeoutMs: TIMEOUT_MS,
+      }),
+    };
+
+    try {
+      await Promise.all(Object.values(inboxes).map((inbox) => inbox.start()));
+
+      const realtimeDirect = await record("user_notifications", {
+        recipient_id: profile.id,
+        recipient_role: null,
+        school_id: home.id,
+        category: "system",
+        title: `${runMarker} own direct ${runId}`,
+        body: `${runMarker} Realtime direct body`,
+        target_href: "/notifications",
+      });
+      const realtimeBroadcastA = await record(
+        "user_notifications",
+        broadcastFor(profile.id),
+      );
+      const realtimeBroadcastB = await record(
+        "user_notifications",
+        broadcastFor(profileB.id),
+      );
+
+      // Wait only for the three required positive deliveries. A short quiet
+      // window follows so an unauthorized delivery cannot win by arriving a
+      // little later than the intended row.
+      await Promise.all([
+        waitForRealtimeRow(inboxes.a, realtimeDirect.id, { timeoutMs: TIMEOUT_MS }),
+        waitForRealtimeRow(inboxes.a, realtimeBroadcastA.id, { timeoutMs: TIMEOUT_MS }),
+        waitForRealtimeRow(inboxes.b, realtimeBroadcastB.id, { timeoutMs: TIMEOUT_MS }),
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 750));
+
+      for (const verdict of classifyNotificationDelivery({
+        directId: realtimeDirect.id,
+        broadcastIds: { a: realtimeBroadcastA.id, b: realtimeBroadcastB.id },
+        inboxes,
+      })) {
+        check(verdict.id, verdict.property, verdict.pass, verdict.detail);
+      }
+    } finally {
+      const closes = await Promise.allSettled(
+        Object.values(inboxes).map((inbox) => inbox.close()),
+      );
+      const closeFailure = closes.find((result) => result.status === "rejected");
+      if (closeFailure) throw closeFailure.reason;
     }
   });
 

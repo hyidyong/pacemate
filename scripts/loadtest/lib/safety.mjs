@@ -10,6 +10,10 @@
 // Everything here is a pure function over an env bag so it can be tested
 // without touching a network or a database.
 
+import { KNOWN_PRODUCTION_PROJECT_REFS } from "../../security/lib/production-targets.mjs";
+
+export { KNOWN_PRODUCTION_PROJECT_REFS };
+
 export const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 
 export function isLoopbackUrl(rawUrl) {
@@ -75,16 +79,6 @@ export function evaluateTargetGuard(env, baseUrl) {
 }
 
 /**
- * Projects known to be PRODUCTION. Compiled into the repository on purpose:
- * a denylist that lives in an environment variable is just another thing the
- * operator can assert away, and the whole point of this list is that it cannot
- * be overridden by the environment being checked.
- *
- * Add a ref here whenever a new production project appears.
- */
-export const KNOWN_PRODUCTION_PROJECT_REFS = new Set(["szztsqdnvenfbgxtylkl"]);
-
-/**
  * A tenant may only be treated as isolated when the DATABASE says so. The
  * marker lives in `schools.slug`, is read back server-side, and cannot be
  * conjured by passing a UUID on the command line.
@@ -102,10 +96,9 @@ export const TEST_TENANT_SLUG_PREFIX = "pacemate-loadtest-";
  *   B. `PACEMATE_LOADTEST_SCHOOL_ID=<the real tenant's uuid>` — an arbitrary
  *      UUID was accepted as proof of isolation.
  *
- * Self-assertion is therefore no longer evidence. On a project in
- * KNOWN_PRODUCTION_PROJECT_REFS, `TARGET_KIND` is IGNORED entirely, and the
- * only remaining path is a tenant whose test marker is verified against the
- * database by verifyIsolatedTenant() before anything is written.
+ * Self-assertion is therefore no longer evidence. Stage 10 tightens the rule:
+ * a project in KNOWN_PRODUCTION_PROJECT_REFS is refused outright, even if a
+ * marked tenant exists. Load testing belongs on a scratch project.
  *
  * This function stays pure and synchronous (env in, verdict out); the
  * server-side confirmation it demands is performed by assertSafeToMutate().
@@ -138,17 +131,11 @@ export function evaluateMutationGuard(env, supabaseUrl) {
   const declaredNonProduction = env.PACEMATE_LOADTEST_TARGET_KIND === "non-production";
 
   if (isKnownProduction) {
-    // Nothing the environment can say makes this project non-production.
-    if (declaredNonProduction && !isolatedSchoolId) {
-      problems.push(
-        `project "${actualRef}" is a KNOWN PRODUCTION project; PACEMATE_LOADTEST_TARGET_KIND=non-production is self-asserted and is ignored here`,
-      );
-    }
-    if (!isolatedSchoolId) {
-      problems.push(
-        `project "${actualRef}" is a KNOWN PRODUCTION project; the only permitted path is a dedicated test tenant whose slug starts with "${TEST_TENANT_SLUG_PREFIX}", named via PACEMATE_LOADTEST_SCHOOL_ID`,
-      );
-    }
+    // Nothing the environment or a tenant marker says can make production a
+    // permissible load-test target.
+    problems.push(
+      `project "${actualRef}" is a KNOWN PRODUCTION project and cannot be load tested`,
+    );
   } else if (!declaredNonProduction && !isolatedSchoolId) {
     problems.push(
       'target is not declared non-production; set PACEMATE_LOADTEST_TARGET_KIND=non-production, or name a marked test tenant with PACEMATE_LOADTEST_SCHOOL_ID',
@@ -163,7 +150,7 @@ export function evaluateMutationGuard(env, supabaseUrl) {
     isolatedSchoolId: isolatedSchoolId ?? null,
     declaredNonProduction,
     // A claimed tenant is never trusted on its own; the caller must confirm it.
-    requiresTenantVerification: Boolean(isolatedSchoolId),
+    requiresTenantVerification: Boolean(isolatedSchoolId) && !isKnownProduction,
   };
 }
 

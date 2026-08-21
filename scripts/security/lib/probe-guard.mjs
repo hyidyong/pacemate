@@ -2,10 +2,9 @@
 //
 // The harness provisions two disposable tenants, two auth users and a small set
 // of rows in each, then attacks them from the anon key and from each tenant's
-// user. It runs against the LIVE project because that is the only database this
-// project has (KI-021), so the protection cannot be "we clean up afterwards" —
-// cleanup is not a safety mechanism. These guards run BEFORE the first write and
-// fail closed, in the same spirit as scripts/loadtest/lib/safety.mjs.
+// user. Stage 10 forbids running it against every compiled production project;
+// cleanup is not a safety mechanism. These guards run BEFORE the first write
+// and fail closed, in the same spirit as scripts/loadtest/lib/safety.mjs.
 //
 // The rules:
 //
@@ -21,6 +20,8 @@
 //
 // Everything here is a pure function over an env bag plus small helpers, so the
 // decision logic is unit-testable with no network.
+
+import { KNOWN_PRODUCTION_PROJECT_REFS } from "./production-targets.mjs";
 
 /**
  * Codex round 5, F6 — OWNERSHIP MUST BE EXECUTION-SPECIFIC.
@@ -43,7 +44,7 @@ export const PROBE_MARKER_FAMILY = "pacemate-probe";
 const RUN_MARKER_RE = /^pacemate-probe-[0-9a-f]{32}$/;
 const OWNED_VALUE_RE = /^(pacemate-probe-[0-9a-f]{32})(?=$|[-\s])/;
 const PROBE_AUTH_EMAIL_RE =
-  /^(pacemate-probe-[0-9a-f]{32})-(?:(?:prof-)?[ab]|(?:assistant|admin)-a|notif-[ab])-[a-z0-9]{5,}@probe\.invalid$/;
+  /^(pacemate-probe-[0-9a-f]{32})-(?:(?:prof-)?[ab]|(?:assistant|admin)-a|notif-(?:a|b|foreign))-[a-z0-9]{5,}@probe\.invalid$/;
 
 /**
  * A marker that belongs to exactly one execution.
@@ -202,6 +203,12 @@ export function evaluateHostGuard(env, rawUrl, expectedRef) {
 export function evaluateProbeGuard(env, supabaseUrl) {
   const problems = [];
   const actualRef = projectRefFromSupabaseUrl(supabaseUrl);
+
+  if (actualRef && KNOWN_PRODUCTION_PROJECT_REFS.has(actualRef)) {
+    problems.push(
+      `project "${actualRef}" is a KNOWN PRODUCTION project and cannot be probed`,
+    );
+  }
 
   if (env.PACEMATE_SECURITY_PROBE_ALLOW_WRITES !== "1") {
     problems.push(

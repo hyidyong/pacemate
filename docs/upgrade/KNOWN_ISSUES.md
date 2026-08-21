@@ -3,6 +3,38 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## Stage 10 external verification status (2026-08-21)
+
+- **Local clean rebuild: BLOCKED / UNVERIFIED.** The pinned Supabase CLI and
+  loopback-only reset wrapper are present, but Docker Desktop returned repeated
+  EOF / Docker API 500 errors while pulling
+  `public.ecr.aws/supabase/postgres-meta:v0.98.0`. No database or migration was
+  created, so migration-chain rebuild success is not claimed.
+- **Credentialed security and Realtime E2E: BLOCKED / UNVERIFIED.** Current
+  permissions expose no approved scratch project. The live runner refuses the
+  linked production ref before spawning either probe. Real socket coverage is
+  implemented and offline-tested, but its direct, broadcast, peer, and
+  cross-tenant delivery assertions have not run against a live scratch target.
+- **Recovery: BLOCKED.** Read-only production metadata reports
+  `walg_enabled=true`, `pitr_enabled=false`, and an empty backup list. No restore
+  point or disposable restore target exists, so no restore drill, RPO, or RTO is
+  claimed.
+
+## KI-023 — assistant onboarding action accepted the wrong role
+
+Status: **RESOLVED IN STAGE 10** (2026-08-21).
+
+Rendered QA reproduced an assistant redirecting back to `/login` from required
+onboarding. The shared helper in `onboarding.actions.ts` accepted only a
+student, while `saveAssistantOnboarding` called that helper; conversely a
+student session could reach the assistant action and set its workspace cookie.
+Two executable action tests failed by exact name before the fix. The helper now
+requires the caller's exact requested role, and the assistant action asks for
+`assistant`. Focused result: `23/23` across assistant onboarding, onboarding,
+privileged-action, tenant, and Server Action contracts. Clean rendered rerun:
+assistant onboarding -> `/admin` -> `/professor`, with no console or server
+error and no database write.
+
 ## KI-022 — Stage 9 security/privacy/recovery: findings deferred, blocked, or bounded
 
 Status: OPEN (documented 2026-08-14; full evidence in docs/upgrade/stage-09/).
@@ -991,14 +1023,33 @@ Remaining (Stage 2 scope — DO NOT patch display counts):
 
 ## KI-002 — 3 stale source-regex tests fail on the baseline
 
-Status: OPEN (pre-existing on bbd3aa3; not behavior bugs).
-`node --test "src/**/*.test.mjs"` → 144 tests, 141 pass, 3 fail:
+Status: **RESOLVED IN STAGE 10** (2026-08-21; tests corrected, no production
+behavior changed). The fresh merged-main/Node 24 baseline reproduced all three
+names at `628 total / 622 pass / 3 fail / 3 skip`:
+
 - src/services/admin-notifications.test.mjs ×2 — assert exact source strings that changed when
   broadcast dedup / notification dedupe features were added later.
 - src/services/question-notice-workflow.test.mjs ×1 — expects `from("chat_messages")` in a file
   refactored since.
-These freeze implementation text, not behavior. Triage in a later stage: rewrite as behavior
-assertions or update the regexes deliberately.
+
+The exact RED names were:
+
+1. `admin broadcasts fan out only to student and professor recipients`
+2. `broadcast UI is in-app, recipient-scoped, and newest first`
+3. `AI escalation persists a user chat message and exposes its id to the handoff action`
+
+The fan-out test now executes the real admin action against a recording client
+and asserts exact recipient, role, tenant, target, content, and unread rows. The
+menu test executes the real sort/deduplication/target-safety helpers and retains
+the dedicated unfiltered-Realtime plus exact-recipient guard contract. The
+obsolete tutor test was replaced by the current rendered path: the real
+`submitQuestionToProfessor` action must pass the edited question and UUID
+idempotency key to `createProfessorQuestionRecord` as a direct question.
+
+Focused GREEN: `7/7`; related notification/action/security GREEN: `40/40`.
+Deliberate mutations of the tenant stamp, question source kind, and exact
+recipient guard each failed under the intended named test before the source was
+restored. New full-suite baseline: `628 total / 625 pass / 0 fail / 3 skip`.
 
 ## KI-003 — Fetch failures render as empty states (indistinguishable from no data)
 

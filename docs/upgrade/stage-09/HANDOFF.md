@@ -903,3 +903,14 @@ audit trail → documentation.
 - Rotate the four demo passwords and consider deleting the `admin1@` account.
 - `supabase/schema.sql` should be regenerated or deleted; it is stale, partly
   corrupt, and is cited as authoritative by 18 documents.
+
+---
+
+## Post-merge status addendum (Stage 10, 2026-08-21)
+
+PR #43 was merged into `main` as `8e178a676c89106497747eda54ac17d0f479af7f`;
+the verified Stage 9 head was
+`cbafe108859567c103cd28a710e1ba0000e78ef5`. The review-round text above is
+preserved as historical evidence. Current status and all follow-up outcomes are
+recorded in `docs/upgrade/stage-10/HANDOFF.md`; this addendum does not rewrite
+the chronology or retroactively turn blocked Stage 9 evidence into a pass.

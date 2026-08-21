@@ -20,9 +20,9 @@ const allowedStudentTypes = new Set<StudentType>([
   "current_student",
 ]);
 
-async function getProfileId() {
+async function getProfileId(requiredRole: "student" | "assistant" = "student") {
   const session = await readDemoSession();
-  return session?.role === "student" ? session.profileId : null;
+  return session?.role === requiredRole ? session.profileId : null;
 }
 
 function text(value: FormDataEntryValue | null) {
@@ -226,7 +226,7 @@ async function ensureDefaultSchoolAndDepartment(profileId: string, departmentKey
 }
 
 export async function saveAssistantOnboarding(formData: FormData) {
-  const profileId = await getProfileId();
+  const profileId = await getProfileId("assistant");
   if (!profileId) {
     redirect("/login");
   }
