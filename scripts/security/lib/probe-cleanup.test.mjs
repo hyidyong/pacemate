@@ -521,7 +521,7 @@ test("family recovery removes only structurally valid probe runs", async () => {
   const auth = createFakeAuth();
   auth.listProbeFamilyUsers = async () =>
     [...auth.users.values()].filter((user) =>
-      /^pacemate-probe-[0-9a-f]{32}-(?:(?:prof-)?[ab]|notif-[ab])-[a-z0-9]+@probe\.invalid$/.test(user.email),
+      /^pacemate-probe-[0-9a-f]{32}-(?:(?:prof-)?[ab]|notif-(?:a|b|foreign))-[a-z0-9]+@probe\.invalid$/.test(user.email),
     );
 
   await rest.insert("faqs", [
@@ -542,6 +542,7 @@ test("family recovery removes only structurally valid probe runs", async () => {
   await auth.createUser(`${runA}-a-run123@probe.invalid`);
   await auth.createUser(`${runB}-prof-b-run456@probe.invalid`);
   await auth.createUser(`${runB}-notif-a-run456@probe.invalid`);
+  await auth.createUser(`${runB}-notif-foreign-run456@probe.invalid`);
   await auth.createUser("alice+pacemate-probe@example.test");
 
   const exact = await sweepOrphans({ rest, auth, runMarker: runA });

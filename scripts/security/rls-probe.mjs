@@ -161,7 +161,8 @@ async function main() {
           "  --run <marker>   remove exactly one execution's rows (printed at the start of every run)\n" +
           "  --family         remove every probe-family row (use only when no probe is running)",
       );
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     const family = !sweepMarker;
     const target = sweepMarker ?? PROBE_MARKER_FAMILY;
@@ -175,10 +176,12 @@ async function main() {
       : await verifyNoResidue({ rest, auth, runMarker: target });
     if (failures.length || !residue.clean) {
       console.error(`Sweep incomplete. failures=${JSON.stringify(failures)} residue=${JSON.stringify(residue)}`);
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     console.log("Sweep verified clean.");
-    process.exit(0);
+    process.exitCode = 0;
+    return;
   }
 
   const { check, results } = makeReporter();

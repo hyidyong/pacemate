@@ -1,0 +1,37 @@
+name: Scratch Supabase credentialed security integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scratch_security:
+    name: Disposable scratch project only
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: scratch
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SCRATCH_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SCRATCH_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SCRATCH_SUPABASE_SERVICE_ROLE_KEY }}
+      PACEMATE_SECURITY_PROBE_PROJECT_REF: ${{ secrets.SCRATCH_SUPABASE_PROJECT_REF }}
+      PACEMATE_SECURITY_PROBE_ALLOW_WRITES: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact npm dependency graph
+        run: npm ci
+
+      # The runner validates all variables and the compiled production denylist
+      # before spawning the first fixture-writing process.
+      - name: Run scratch-only live security probes
+        run: npm run test:security:live

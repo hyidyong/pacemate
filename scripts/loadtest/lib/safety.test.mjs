@@ -26,6 +26,12 @@ const FULLY_ALLOWED = {
   PACEMATE_LOADTEST_TARGET_KIND: "non-production",
 };
 
+const LOCAL_ENV = {
+  PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
+  PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: "pacemate-stage-10-local",
+  PACEMATE_LOADTEST_TARGET_KIND: "non-production",
+};
+
 test("an empty environment refuses to mutate", () => {
   const result = evaluateMutationGuard({}, PROD_URL);
   assert.equal(result.allowed, false, "the default must be refusal, not permission");
@@ -56,6 +62,47 @@ test("a correctly declared non-production project is allowed", () => {
   assert.equal(result.allowed, true, result.problems.join("; "));
   assert.equal(result.projectRef, "stagingref000000");
   assert.equal(result.declaredNonProduction, true);
+});
+
+test("a plaintext cloud Supabase origin is refused", () => {
+  const result = evaluateMutationGuard(FULLY_ALLOWED, "http://stagingref000000.supabase.co");
+  assert.equal(result.allowed, false, "service-role credentials must never use plaintext HTTP");
+  assert.match(result.problems.join("\n"), /https/);
+});
+
+test("an attacker suffix after a plausible Supabase hostname is refused", () => {
+  const result = evaluateMutationGuard(
+    FULLY_ALLOWED,
+    "https://stagingref000000.supabase.co.attacker.example",
+  );
+  assert.equal(result.allowed, false, "a matching first label must not authorize an attacker origin");
+  assert.match(result.problems.join("\n"), /exactly|canonical|origin/);
+});
+
+test("an arbitrary domain carrying a plausible project-ref label is refused", () => {
+  const result = evaluateMutationGuard(FULLY_ALLOWED, "https://stagingref000000.evil.test");
+  assert.equal(result.allowed, false, "project identity must not be inferred from the first label");
+  assert.match(result.problems.join("\n"), /exactly|canonical|origin/);
+});
+
+test("non-canonical cloud Supabase origin variants are refused", () => {
+  for (const url of [
+    "https://stagingref000000.attacker.supabase.co",
+    "https://stagingref000000.supabase.co:444",
+    "https://user@stagingref000000.supabase.co",
+    "https://stagingref000000.supabase.co.",
+  ]) {
+    const result = evaluateMutationGuard(FULLY_ALLOWED, url);
+    assert.equal(result.allowed, false, `${url} must not be accepted as the declared project origin`);
+  }
+});
+
+test("the repository-local Supabase origin remains available with its explicit local identity", () => {
+  for (const url of ["http://127.0.0.1:54321", "http://localhost:54321"]) {
+    const result = evaluateMutationGuard(LOCAL_ENV, url);
+    assert.equal(result.allowed, true, `${url}: ${result.problems.join("; ")}`);
+    assert.equal(result.projectRef, "pacemate-stage-10-local");
+  }
 });
 
 test("loopback application targets need no opt-in", () => {
@@ -142,9 +189,11 @@ test("BYPASS B: an arbitrary school UUID on production is not proof of isolation
     },
     PROD_URL,
   );
-  // The synchronous stage cannot know the tenant is real, so it must demand
-  // server-side verification rather than allowing the run outright.
-  assert.equal(sync.requiresTenantVerification, true, "a claimed tenant must always be verified");
+  // Production is refused before any database lookup. A tenant id cannot make
+  // the target eligible for verification in the first place.
+  assert.equal(sync.allowed, false);
+  assert.equal(sync.requiresTenantVerification, false);
+  assert.match(sync.problems.join("\n"), /KNOWN PRODUCTION/);
 
   // The database says this tenant carries no test marker.
   const rest = {
@@ -164,12 +213,12 @@ test("BYPASS B: an arbitrary school UUID on production is not proof of isolation
         },
         { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000", rest },
       ),
-    /does not carry the test marker/,
-    "naming a real tenant's UUID must not authorize destructive work on production",
+    /KNOWN PRODUCTION/,
+    "naming any tenant UUID must not authorize destructive work on production",
   );
 });
 
-test("a genuinely marked test tenant on a shared project is allowed", async () => {
+test("even a genuinely marked test tenant cannot authorize load testing on production", async () => {
   const markedId = "77777777-0000-4000-8000-000000000077";
   const rest = {
     select: async () => [
@@ -177,17 +226,17 @@ test("a genuinely marked test tenant on a shared project is allowed", async () =
     ],
   };
 
-  const guard = await assertSafeToMutate(
-    {
-      PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
-      PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: PROD_REF,
-      PACEMATE_LOADTEST_SCHOOL_ID: markedId,
-    },
-    { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000", rest },
+  await assert.rejects(
+    () => assertSafeToMutate(
+      {
+        PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
+        PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: PROD_REF,
+        PACEMATE_LOADTEST_SCHOOL_ID: markedId,
+      },
+      { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000", rest },
+    ),
+    /KNOWN PRODUCTION/,
   );
-
-  assert.equal(guard.isolatedSchoolId, markedId);
-  assert.equal(guard.isKnownProduction, true, "the project is still production; only the tenant is isolated");
 });
 
 test("a claimed tenant that does not exist is refused", async () => {
@@ -203,10 +252,10 @@ test("verification cannot be skipped by omitting the database client", async () 
       assertSafeToMutate(
         {
           PACEMATE_LOADTEST_ALLOW_MUTATIONS: "1",
-          PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: PROD_REF,
+          PACEMATE_LOADTEST_EXPECTED_PROJECT_REF: "stagingref000000",
           PACEMATE_LOADTEST_SCHOOL_ID: REAL_TENANT_UUID,
         },
-        { supabaseUrl: PROD_URL, baseUrl: "http://127.0.0.1:3000" },
+        { supabaseUrl: STAGING_URL, baseUrl: "http://127.0.0.1:3000" },
       ),
     /cannot verify the claimed test tenant/,
   );

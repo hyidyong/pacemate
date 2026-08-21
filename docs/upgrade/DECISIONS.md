@@ -1099,3 +1099,71 @@ DEFINER/INVOKER mode, config/search path, raw ACL and effective EXECUTE ACL.
 Consequences: handler schema, body, owner, mode, config, ACL, tags, enabled
 state, definition or removal all produce drift. Three unchanged live dumps were
 byte-identical.
+
+## D-039 — offline CI and credentialed security verification are separate trust domains
+
+Status: Accepted (Stage 10, 2026-08-21)
+
+Decision: pull-request and `main` CI is deterministic, credential-free, and
+complete for repository-local gates. Live Supabase security verification is a
+separate, manually dispatched workflow bound to a protected `scratch`
+environment and `SCRATCH_*` secrets. Invoking the live command without every
+required value is a hard failure, never a skip. Offline CI may use only
+loopback placeholders and cannot infer a live result.
+
+Reason: a secret-bearing default CI job risks accidental production targeting,
+while silently skipped integration tests create false release evidence. The two
+jobs have different authority and must report independently.
+
+Consequences: `npm test` and `.github/workflows/ci.yml` remain useful without
+cloud access; `npm run test:security:live` is the explicit credentialed gate.
+A release report must carry a missing scratch run as BLOCKED/UNVERIFIED even
+when every offline gate is green.
+
+## D-040 — destructive database proof is loopback-or-approved-scratch only
+
+Status: Accepted (Stage 10, 2026-08-21)
+
+Decision: the known production ref is compiled into a shared denylist consumed
+by security-probe and load-test guards. Environment opt-ins cannot override the
+denylist. A local reset is permitted only after a running Supabase stack reports
+a loopback API URL; cloud rebuild, recovery, load, and fixture tests require an
+explicitly approved non-production ref and exact guard match.
+
+Reason: a configurable "production override" turns a safety control into a
+typing test. The production project must remain impossible to select through
+the repository's destructive harnesses.
+
+Consequences: unavailable Docker or scratch permissions produce BLOCKED
+evidence, not a fallback to production. Read-only production metadata may be
+inspected, but no reset, rebuild, restore drill, fixture probe, or load test may
+run there.
+
+## D-041 — project identity is parsed and validated before any safety decision
+
+Status: Accepted (Stage 10 final independent-verification remediation, 2026-08-22)
+
+Decision: a Supabase project ref — whether configured through
+`PACEMATE_SECURITY_PROBE_PROJECT_REF` or derived from a URL — is security-
+sensitive structured input. One shared parser
+(`scripts/security/lib/project-ref.mjs`) runs before every production-denylist
+check, host/local-target decision, URL/ref equality decision, and child-process
+spawn. Canonicalisation is limited to trimming outer whitespace and
+lower-casing and is used only to RECOGNISE a production identity (exact or as
+an embedded label). A value is usable only if it is already canonical and a
+single lowercase DNS label; everything else fails closed with no usable ref.
+The guard is evaluated even when the URL is missing or malformed.
+
+Reason: D-040's denylist compared the raw configured string literally.
+Independent verification reproduced that whitespace-padded, case-varied, and
+shape-invalid production refs were not recognised as production and, on an
+opted-in loopback target, reached the integration wrapper's spawn calls.
+Trimming or lower-casing only at the final comparison would still let
+malformed values through every other decision.
+
+Consequences: the loadtest guard keeps its separate explicit local identity
+(`pacemate-stage-10-local`); the probe harness's loopback identity remains any
+shape-valid non-production label (`fakeproject` in the subprocess tests). A
+legitimate scratch ref must be supplied exactly as it appears in its Supabase
+hostname. This is repository-local, injected-spawn evidence; live credentialed
+execution remains BLOCKED / UNVERIFIED.

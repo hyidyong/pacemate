@@ -10,26 +10,77 @@
 // Everything here is a pure function over an env bag so it can be tested
 // without touching a network or a database.
 
-export const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+import {
+  LOOPBACK_HOSTS,
+  SUPABASE_HOST_SUFFIXES,
+  isLoopbackUrl,
+  projectRefFromSupabaseUrl,
+} from "../../security/lib/probe-guard.mjs";
+import { KNOWN_PRODUCTION_PROJECT_REFS } from "../../security/lib/production-targets.mjs";
 
-export function isLoopbackUrl(rawUrl) {
-  try {
-    const url = new URL(rawUrl);
-    return LOOPBACK_HOSTS.has(url.hostname);
-  } catch {
-    return false;
-  }
-}
+export {
+  KNOWN_PRODUCTION_PROJECT_REFS,
+  LOOPBACK_HOSTS,
+  isLoopbackUrl,
+  projectRefFromSupabaseUrl,
+};
 
-export function projectRefFromSupabaseUrl(rawUrl) {
+export const LOCAL_SUPABASE_PROJECT_REF = "pacemate-stage-10-local";
+
+function evaluateSupabaseMutationOrigin(rawUrl, expectedRef) {
+  const problems = [];
+  let url;
   try {
-    const { hostname } = new URL(rawUrl);
-    // https://<ref>.supabase.co
-    const [ref] = hostname.split(".");
-    return ref || null;
+    url = new URL(rawUrl);
   } catch {
-    return null;
+    return {
+      problems: [`Supabase target "${rawUrl}" is not a valid URL`],
+      loopback: false,
+      projectRef: null,
+    };
   }
+
+  if (url.username || url.password) {
+    problems.push("the Supabase URL must not embed credentials");
+  }
+
+  const loopback = isLoopbackUrl(rawUrl);
+  if (loopback) {
+    if (!["http:", "https:"].includes(url.protocol)) {
+      problems.push(`the local Supabase target must use http or https, got ${url.protocol.replace(":", "")}`);
+    }
+    if (expectedRef && expectedRef !== LOCAL_SUPABASE_PROJECT_REF) {
+      problems.push(
+        `loopback load testing is reserved for the repository-local project "${LOCAL_SUPABASE_PROJECT_REF}", not "${expectedRef}"`,
+      );
+    }
+    return {
+      problems,
+      loopback: true,
+      projectRef: expectedRef === LOCAL_SUPABASE_PROJECT_REF ? expectedRef : null,
+    };
+  }
+
+  if (url.protocol !== "https:") {
+    problems.push(
+      `privileged credentials may only be sent to a cloud Supabase project over https, got ${url.protocol.replace(":", "")}`,
+    );
+  }
+  if (url.port) {
+    problems.push(`unexpected port ${url.port} on a cloud Supabase project host`);
+  }
+
+  const actualRef = projectRefFromSupabaseUrl(rawUrl);
+  const expectedHosts = expectedRef
+    ? SUPABASE_HOST_SUFFIXES.map((suffix) => `${expectedRef}${suffix}`)
+    : [];
+  if (expectedRef && !expectedHosts.includes(url.hostname)) {
+    problems.push(
+      `refusing to send privileged credentials to origin "${url.origin}"; expected exactly one of ${expectedHosts.join(", ")}`,
+    );
+  }
+
+  return { problems, loopback: false, projectRef: actualRef };
 }
 
 /**
@@ -75,16 +126,6 @@ export function evaluateTargetGuard(env, baseUrl) {
 }
 
 /**
- * Projects known to be PRODUCTION. Compiled into the repository on purpose:
- * a denylist that lives in an environment variable is just another thing the
- * operator can assert away, and the whole point of this list is that it cannot
- * be overridden by the environment being checked.
- *
- * Add a ref here whenever a new production project appears.
- */
-export const KNOWN_PRODUCTION_PROJECT_REFS = new Set(["szztsqdnvenfbgxtylkl"]);
-
-/**
  * A tenant may only be treated as isolated when the DATABASE says so. The
  * marker lives in `schools.slug`, is read back server-side, and cannot be
  * conjured by passing a UUID on the command line.
@@ -102,18 +143,24 @@ export const TEST_TENANT_SLUG_PREFIX = "pacemate-loadtest-";
  *   B. `PACEMATE_LOADTEST_SCHOOL_ID=<the real tenant's uuid>` — an arbitrary
  *      UUID was accepted as proof of isolation.
  *
- * Self-assertion is therefore no longer evidence. On a project in
- * KNOWN_PRODUCTION_PROJECT_REFS, `TARGET_KIND` is IGNORED entirely, and the
- * only remaining path is a tenant whose test marker is verified against the
- * database by verifyIsolatedTenant() before anything is written.
+ * Self-assertion is therefore no longer evidence. Stage 10 tightens the rule:
+ * a project in KNOWN_PRODUCTION_PROJECT_REFS is refused outright, even if a
+ * marked tenant exists. Load testing belongs on a scratch project.
  *
  * This function stays pure and synchronous (env in, verdict out); the
  * server-side confirmation it demands is performed by assertSafeToMutate().
  */
 export function evaluateMutationGuard(env, supabaseUrl) {
   const problems = [];
-  const actualRef = projectRefFromSupabaseUrl(supabaseUrl);
-  const isKnownProduction = actualRef ? KNOWN_PRODUCTION_PROJECT_REFS.has(actualRef) : false;
+  const expectedRef = env.PACEMATE_LOADTEST_EXPECTED_PROJECT_REF;
+  const target = evaluateSupabaseMutationOrigin(supabaseUrl, expectedRef);
+  const actualRef = target.projectRef;
+  const productionRef = [actualRef, expectedRef].find(
+    (projectRef) => projectRef && KNOWN_PRODUCTION_PROJECT_REFS.has(projectRef),
+  );
+  const isKnownProduction = Boolean(productionRef);
+
+  problems.push(...target.problems);
 
   if (env.PACEMATE_LOADTEST_ALLOW_MUTATIONS !== "1") {
     problems.push(
@@ -121,14 +168,13 @@ export function evaluateMutationGuard(env, supabaseUrl) {
     );
   }
 
-  const expectedRef = env.PACEMATE_LOADTEST_EXPECTED_PROJECT_REF;
   if (!expectedRef) {
     problems.push(
       "set PACEMATE_LOADTEST_EXPECTED_PROJECT_REF to the Supabase project ref you intend to mutate",
     );
-  } else if (!actualRef) {
+  } else if (!actualRef && !target.loopback) {
     problems.push("could not derive a Supabase project ref from the configured URL");
-  } else if (expectedRef !== actualRef) {
+  } else if (!target.loopback && expectedRef !== actualRef) {
     problems.push(
       `configured Supabase project is "${actualRef}" but PACEMATE_LOADTEST_EXPECTED_PROJECT_REF is "${expectedRef}"`,
     );
@@ -138,17 +184,11 @@ export function evaluateMutationGuard(env, supabaseUrl) {
   const declaredNonProduction = env.PACEMATE_LOADTEST_TARGET_KIND === "non-production";
 
   if (isKnownProduction) {
-    // Nothing the environment can say makes this project non-production.
-    if (declaredNonProduction && !isolatedSchoolId) {
-      problems.push(
-        `project "${actualRef}" is a KNOWN PRODUCTION project; PACEMATE_LOADTEST_TARGET_KIND=non-production is self-asserted and is ignored here`,
-      );
-    }
-    if (!isolatedSchoolId) {
-      problems.push(
-        `project "${actualRef}" is a KNOWN PRODUCTION project; the only permitted path is a dedicated test tenant whose slug starts with "${TEST_TENANT_SLUG_PREFIX}", named via PACEMATE_LOADTEST_SCHOOL_ID`,
-      );
-    }
+    // Nothing the environment or a tenant marker says can make production a
+    // permissible load-test target.
+    problems.push(
+      `project "${productionRef}" is a KNOWN PRODUCTION project and cannot be load tested`,
+    );
   } else if (!declaredNonProduction && !isolatedSchoolId) {
     problems.push(
       'target is not declared non-production; set PACEMATE_LOADTEST_TARGET_KIND=non-production, or name a marked test tenant with PACEMATE_LOADTEST_SCHOOL_ID',
@@ -159,11 +199,12 @@ export function evaluateMutationGuard(env, supabaseUrl) {
     allowed: problems.length === 0,
     problems,
     projectRef: actualRef,
+    loopback: target.loopback,
     isKnownProduction,
     isolatedSchoolId: isolatedSchoolId ?? null,
     declaredNonProduction,
     // A claimed tenant is never trusted on its own; the caller must confirm it.
-    requiresTenantVerification: Boolean(isolatedSchoolId),
+    requiresTenantVerification: Boolean(isolatedSchoolId) && !isKnownProduction,
   };
 }
 

@@ -6,8 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "node --test \"src/**/*.test.mjs\" \"scripts/**/*.test.mjs\" \"supabase/**/*.test.mjs\"",
+    "test:offline": "npm test",
+    "test:security:live": "node scripts/security/run-integration-suite.mjs",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "node scripts/supabase/run-local-reset.mjs",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:bundle": "node scripts/check-bundle-budgets.mjs",
+    "check:diff": "git diff --check",
+    "check:release": "npm test && npm run typecheck && npm run lint && npm run build && npm run check:bundle && npm run check:diff"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.19",
@@ -23,7 +32,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "lucide-react": "^0.468.0",
-    "next": "^15.5.0",
+    "next": "15.5.21",
     "pdf-parse": "1.1.1",
     "postcss": "^8.5.16",
     "react": "^19.0.0",
@@ -39,7 +48,9 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^8.57.0",
-    "eslint-config-next": "^15.3.5",
+    "eslint-config-next": "15.5.21",
+    "js-yaml": "4.3.1",
+    "supabase": "2.115.0",
     "typescript": "^5.5.4"
   }
 }
