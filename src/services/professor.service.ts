@@ -3,7 +3,8 @@
 // currently allow; counseling request reads need the service role because the
 // authenticated role can no longer read student names after the profile
 // column-grant hardening migrations.
-import { supabase as anonSupabase } from "@/lib/supabase/client";
+// Stage 9: the anon read policies these two queries used are gone
+// (20260814010000); they now read as the signed-in caller.
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { RoadmapRevisionRequest } from "@/services/roadmap-revisions.service";
@@ -98,10 +99,61 @@ export type ProfessorPageData = {
   roadmapRequests: RoadmapRevisionRequest[];
 };
 
+/**
+ * Codex round 3, F9 — the assistant workspace.
+ *
+ * `/professor` admits `["professor", "assistant"]`, and the repository is clear
+ * that this is intended: Stage 6's resolveCounselingWriteProfessorIds gives an
+ * assistant write scope over "every professor in the tenant", the answer RPC has
+ * a tenant-scoped assistant branch, and KI-017 B-24 records that the OLD
+ * behaviour — silently rendering the first professor's workspace — was the bug,
+ * not the access itself.
+ *
+ * Round 2 removed that impersonating fallback, which closed a cross-tenant leak
+ * but left assistants with an empty page. The scope is restored here through the
+ * authoritative relationship (professors.school_id = the assistant's tenant)
+ * rather than by borrowing one professor's identity: the assistant sees their
+ * university's counseling workload, and the panels that belong to a professor's
+ * own identity — profile, courses, availability, FAQs — stay empty because an
+ * assistant does not have one.
+ */
+async function resolveTenantProfessorIds(schoolId: string | null): Promise<string[]> {
+  if (!schoolId) return [];
+  const { data, error } = await createSupabaseAdminClient()
+    .from("professors")
+    .select("id")
+    .eq("school_id", schoolId);
+  if (error) return [];
+  return (data ?? []).map((row) => row.id as string);
+}
+
 export async function getProfessorPageData(
   profile: DemoProfile | null,
 ): Promise<ProfessorPageData> {
   const professor = await getCurrentProfessor(profile);
+
+  // An assistant has no professors row by design. They get their tenant's
+  // counseling scope and nothing that implies a professor identity.
+  if (!professor && profile?.role === "assistant") {
+    const tenantProfessorIds = await resolveTenantProfessorIds(profile.school_id);
+    const [counselingRequests, calendarRequests, roadmapRequests] = await Promise.all([
+      getCounselingRequests(tenantProfessorIds),
+      getCalendarRequests(tenantProfessorIds),
+      getRoadmapRequests(),
+    ]);
+    return {
+      profile,
+      professor: null,
+      courses: [],
+      teachingSlots: [],
+      availability: [],
+      adminTasks: [],
+      faqs: [],
+      counselingRequests,
+      calendarRequests,
+      roadmapRequests,
+    };
+  }
 
   if (!professor) {
     return {
@@ -134,8 +186,8 @@ export async function getProfessorPageData(
       getAvailability(professor.id),
       getAdminTasks(professor.id),
       getFaqs(professor.id),
-      getCounselingRequests(professor.id),
-      getCalendarRequests(professor.id),
+      getCounselingRequests([professor.id]),
+      getCalendarRequests([professor.id]),
       getRoadmapRequests(),
     ]);
 
@@ -181,19 +233,17 @@ async function getCurrentProfessor(profile: DemoProfile | null) {
       .eq("profile_id", profile.id)
       .maybeSingle();
 
-    if (data) {
-      return data;
-    }
+    return data;
   }
 
-  const { data } = await supabase
-    .from("professors")
-    .select("id, profile_id, name, office, email, bio, department:departments(name)")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  return data;
+  // Stage 9: this used to fall back to `.order("created_at").limit(1)` — the
+  // globally first professor row. Every assistant took that branch (assistants
+  // never have a linked `professors` row), as did any SSO-provisioned professor
+  // whose profile was not linked yet. The page then loaded THAT professor's
+  // courses, schedule and counseling caseload, including student names and
+  // identifiers, with no tenant relationship to the viewer. Returning null lets
+  // getProfessorPageData render its existing "not linked" empty state instead.
+  return null;
 }
 
 async function getProfessorCourses(professorId: string): Promise<ProfessorCourse[]> {
@@ -234,7 +284,7 @@ async function getTeachingSlots(
 async function getAvailability(
   professorId: string,
 ): Promise<ProfessorAvailability[]> {
-  const { data, error } = await anonSupabase
+  const { data, error } = await (await createSupabaseServerClient())
     .from("professor_availability")
     .select("id, professor_id, day_of_week, specific_date, start_time, end_time, slot_minutes, is_active")
     .eq("professor_id", professorId)
@@ -268,7 +318,7 @@ async function getAdminTasks(
 }
 
 async function getFaqs(professorId: string): Promise<ProfessorFaq[]> {
-  const { data, error } = await anonSupabase
+  const { data, error } = await (await createSupabaseServerClient())
     .from("faqs")
     .select("id, question, answer, category, approved_at, course:courses(id, name)")
     .eq("professor_id", professorId)
@@ -283,15 +333,17 @@ async function getFaqs(professorId: string): Promise<ProfessorFaq[]> {
 }
 
 async function getCounselingRequests(
-  professorId: string,
+  professorIds: string[],
 ): Promise<ProfessorCounselingRequest[]> {
-  // Service role: the professor page has already resolved the professor from
-  // the signed session, and the query is scoped to that professor_id.
+  if (!professorIds.length) return [];
+  // Service role: the caller's scope has already been resolved from the signed
+  // session — a professor's own id, or every professor in an assistant's own
+  // tenant — and the query is constrained to that set.
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("counseling_requests")
     .select("id, student_id, requested_start, requested_end, topic, status, professor_note, location, suggested_start, suggested_end, student:profiles(name, identifier)")
-    .eq("professor_id", professorId)
+    .in("professor_id", professorIds)
     .order("requested_start", { ascending: true })
     .limit(12);
 
@@ -307,8 +359,9 @@ async function getCounselingRequests(
 }
 
 async function getCalendarRequests(
-  professorId: string,
+  professorIds: string[],
 ): Promise<ProfessorCounselingRequest[]> {
+  if (!professorIds.length) return [];
   // The calendar's busy computation needs EVERY pending/approved request for
   // this professor — the management list above keeps its own narrower query.
   // Same service-role rationale as getCounselingRequests.
@@ -316,7 +369,7 @@ async function getCalendarRequests(
   const { data, error } = await supabase
     .from("counseling_requests")
     .select("id, student_id, requested_start, requested_end, topic, status, professor_note, location, suggested_start, suggested_end, student:profiles(name, identifier)")
-    .eq("professor_id", professorId)
+    .in("professor_id", professorIds)
     .in("status", ["pending", "approved"])
     .order("requested_start", { ascending: true });
 

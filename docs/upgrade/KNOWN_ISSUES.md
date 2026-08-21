@@ -3,6 +3,485 @@
 Issues must be added only when reproduced or supported by repository/runtime evidence.
 Historical reports may be investigated but are not automatically considered currently reproducible bugs.
 
+## KI-022 — Stage 9 security/privacy/recovery: findings deferred, blocked, or bounded
+
+Status: OPEN (documented 2026-08-14; full evidence in docs/upgrade/stage-09/).
+Stage 9 closed 8 P0 and 12 P1 findings (IMPLEMENTATION_PLAN.md §2). What
+follows is what it did NOT close, with the reason.
+
+### Codex security review round 2 (2026-08-14) — status changes
+
+All nine findings were verified against the branch before any change and **all
+nine were confirmed**. Eight are closed; the corrections they forced to earlier
+Stage 9 claims are recorded here so the history stays honest.
+
+**Closed this round.** F1 probe cleanup (ledger + fault injection, 27 tests),
+F2 cross-tenant write primitives (five tables, not one), F3 counseling direct
+writes (revoked, not reimplemented), F4 roadmap tenant isolation (tenant column
+added end to end), F5 demo credentials (rotated, then removed from the repo),
+F6 support bounds, F7 explicit privileged ACLs, F8 durable audit semantics,
+F9 schema.sql drift (generated live snapshot + drift guard). Plus the
+lower-priority least-privilege item on `schools`.
+
+**Earlier Stage 9 claims this round INVALIDATED, now corrected in place:**
+
+- "Probe fixtures create and tear down deterministically — PASS, twice, baseline
+  restored exactly" was **FALSE**. Fault injection showed 6 of 6 injected
+  provisioning failures leaked, and a live run had already left 4 posts and 2
+  course_reviews behind while residue verification reported clean, because those
+  tables were missing from the residue list and their parents are ON DELETE SET
+  NULL. Corrected in AUDIT_RECOVERY_DESIGN §6.
+- The Stage 9 probe reported several cross-tenant writes as denied when the rows
+  were in fact created: `rawFetch` dropped per-call headers so
+  `Prefer: return=representation` never reached PostgREST, and a 201 with an
+  empty body read as "denied". Separately, asking for a representation makes
+  PostgREST re-check the row against the SELECT policy and roll back, which
+  manufactured 403s for `posts` and `course_reviews` that vanish when an attacker
+  omits the header. Both fixed; write outcomes are now confirmed by service-role
+  read-back and posted without the header.
+- The Stage 9 claim that the demo-credential finding was closed by removing the
+  passwords from the bundle was **incomplete** — a published password stays
+  published. All four accounts are now rotated.
+
+**Two defects Stage 9 itself introduced, found by verifying the fixes:**
+
+- Revoking authenticated INSERT on `roadmap_revision_requests` silently broke
+  `updateOwnCourseRoadmap`, which still used the session client. Fixed (service
+  role after the existing ownership check), not by restoring the grant.
+- The append-only audit trigger rejected the `ON DELETE SET NULL` cascade, so
+  deleting a profile with audit history failed outright — the audit trail had
+  become a lock on user deletion. Fixed by dropping the FK constraints and
+  relying on the immutable snapshots.
+
+### Still open after this round
+
+- **Realtime delivery is UNVERIFIED.** The browser client now uses
+  `createBrowserClient` and calls `realtime.setAuth()` before subscribing and on
+  every auth-state change, and the `sb-<ref>-auth-token` cookie was confirmed
+  present on an authenticated page. But the channel is off by default
+  (`enableRealtime` false, desktop only), so no subscription was opened and
+  end-to-end delivery — own notifications, same-tenant broadcasts, cross-tenant
+  denial — is not demonstrated. **DEFERRED — Stage 10.**
+- **The durable audit emit paths are UNVERIFIED at runtime.** The table's
+  security properties are proven live (11/11) and the three call sites (`sso.*`,
+  `admin.broadcast_sent`, `admin.revision_*`) are code-wired, typechecked and
+  awaited, but no run triggered an SSO exchange, a tenant broadcast or a revision
+  approval.
+- **`schema.sql` is not regenerated.** `supabase db dump` needs Docker, which is
+  unavailable here. **BLOCKED — Docker required.** The file now carries a
+  NON-AUTHORITATIVE header naming each defect, and
+  `supabase/security-snapshot.json` is generated from live state instead.
+- **Audit history begins 2026-08-14.** Nothing before that date is recorded.
+- **`security_events` DELETE remains available to service_role** so retention
+  pruning stays possible. A compromised service-role key can therefore still
+  remove history. No tamper-proofing is claimed.
+- **Composite foreign keys for tenant consistency are still absent.** Stage 9
+  closed every reachable path, but cross-tenant rows remain structurally
+  creatable by a service-role writer.
+- Everything else listed below (erasure path, pdf-parse, `next` patch bump, raw
+  DB error logging, AI prompt payloads, client storage bleed, per-user session
+  revocation) is unchanged by this round.
+
+
+### Codex security review round 3 (2026-08-14) — status changes
+
+Twelve findings (F1–F12). All twelve were verified against the repository, the
+migrations, the installed dependencies and live metadata **before** any change,
+and **all twelve were confirmed**. All twelve are closed.
+
+**Two were not what the report said, and are recorded that way rather than
+accepted at face value:**
+
+- **F2.** The reported cross-tenant `course_id` move returned 403, which reads
+  as protection. It was not: PostgREST was rejecting the row because the SELECT
+  policy could not see the post-update row, not because anything constrained the
+  column. A same-tenant `courseAlt` control fixture showed the same move
+  succeeding with **204** — `course_id` was entirely unconstrained, and the 403
+  was an artifact of the reporter's fixture crossing a tenant boundary. The real
+  defect was wider than reported. **A denial produced by a visibility side
+  effect is not an authorization control.**
+- **F11.** The reported `recipient_id` filter was real, but it was one of two
+  defects; the auth handshake also raced the subscription. Fixing only the
+  reported half would have left a channel that authenticates by luck.
+
+**A defect round 3 introduced itself, found by the production build.** The F5
+fix put the transition matrix and a synchronous `legalSourcesFor` helper inside
+`admin-approval.actions.ts`, which carries `"use server"`. Every export of such
+a module becomes a remotely invocable endpoint, so Next.js refuses to build one
+that exports a non-async function — **`next build` failed**, and neither
+`tsc --noEmit` nor `next lint` caught it. Fixed by moving the matrix to
+`src/services/roadmap-transitions.ts`. A new guard,
+`src/services/server-action-contract.test.mjs`, scans every `"use server"`
+module in `src` and fails on any non-async export, so this class of defect now
+fails in the unit suite rather than at build time.
+
+**Earlier Stage 9 claims this round INVALIDATED, corrected in place:**
+
+- *"Anonymous support is preserved"* — **false.** `/support` now requires a
+  session (F8). The page already gated itself while the action did not, and a
+  sessionless submission produced a role broadcast with a NULL tenant that
+  matched no reader: every anonymous inquiry was accepted and then silently
+  unreadable by any administrator. Corrected in AUTHORIZATION_RLS_AUDIT §7.
+- *"No client role can INSERT/UPDATE/DELETE on `security_events`"* — this was
+  true of the **policies** and unverified of the **privileges**, which were
+  whatever the platform defaults happened to be. A policy-only guarantee is not
+  a guarantee. `20260814140000` states the ACL explicitly (F7).
+- *"Realtime … not working, and not fixed"* — superseded; see the entry above.
+- *"The four passwords still require rotation"* — stale; they were rotated in
+  round 2, commit `6a3037e`.
+- The round-2 result counts (85 probe checks, 11 audit checks, 348 tests) are
+  superseded by the round-3 numbers in SECURITY_TEST_MATRIX.md.
+
+**Still open, newly recorded this round:**
+
+- **Rendered browser QA does not cover the round-3 UI changes.**
+  **UNVERIFIED — the browser preview tool was blocked by the session's
+  permission classifier, so no page was rendered.** Four user-visible paths
+  changed and have build, typecheck and unit-guard coverage but no rendered
+  evidence: `/support` sessionless refusal (F8), the `/admin` `result=stale`
+  banner (F5), the `/professor` assistant workspace (F9), and the notification
+  bell's Realtime channel (F11). **Prerequisite for merge.**
+- **Probe crash safety is NOT claimed.** SIGINT and SIGTERM run cleanup exactly
+  once and exit 130/143, verified with an injected process handle and against a
+  real spawned runner. SIGKILL, power loss or a host crash leave ledgered
+  fixtures behind; the next run's residue verification is what catches that.
+  Recovery is operator-run: `node scripts/security/rls-probe.mjs --sweep`.
+- **Three subprocess signal tests SKIP on Windows**, with an explicit reason —
+  POSIX signals are not deliverable to a child process there. The same behaviour
+  is covered platform-independently by `lib/probe-lifecycle.test.mjs`. A skip is
+  never reported as a pass.
+- **Audit test events are permanent.** `service_role` holds only INSERT and
+  SELECT on `security_events`, so `audit-trail-probe.mjs` cannot delete the
+  events it writes; it reports them instead. Production append-only behaviour
+  was deliberately **not** weakened to make the harness tidy.
+- **The `security_events` DELETE note above is now stale in one respect:**
+  `20260814140000` revokes DELETE from `service_role` entirely. Retention
+  pruning therefore requires a privileged out-of-band operation, which is the
+  intended trade. Tamper-proofing is still not claimed — no hash chain, no
+  signature, and a database owner can still rewrite history.
+
+### Codex security review round 4 (2026-08-14) — status changes
+
+Nine substantive findings. Every one was verified against the code, the
+migrations and live metadata before any change, and every one was confirmed.
+All are closed.
+
+**Closed this round.** Per-recipient notification read state; student-only
+course reviews; the exact-enrollment atomic AI transition; the probe's
+quiesce/deadline/sweep gaps; effective EXECUTE in the security snapshot;
+`course_notice` DELETE (verified at runtime, not deferred); the audit probe's
+transport and cleanup; and this document plus the other seven.
+
+**Two were WIDER than reported, and both were found by building the check
+rather than by trusting the report:**
+
+- Adding effective `has_function_privilege` coverage to the snapshot
+  immediately caught two demo-era RPCs `anon` could still execute
+  (`replace_student_course_schedule_slots`,
+  `replace_student_custom_course_schedule_slots`). `20260814010000` closed the
+  anon surface by revoking TABLE privileges and asserted that as its
+  postcondition — function privileges were never in scope. The postcondition
+  was true and the property was false.
+- Verifying that a student cannot delete an official notice turned up
+  `authenticated` holding TRUNCATE on 31 of 54 public tables. TRUNCATE is not
+  subject to RLS and fires no row triggers.
+
+**Earlier Stage 9 claims this round INVALIDATED, corrected in place:**
+
+- *"The probe's results are trustworthy by construction"* — **overstated.**
+  Round 3's deadline only fired if the transport honoured an abort signal, and
+  its signal handler began destructive cleanup while requests were still in
+  flight. Both fixed; the wording now names the specific guarantees and their
+  limits. Corrected in CURRENT_STAGE, D-027 and SECURITY_TEST_MATRIX.
+- *"`anon` holds exactly one privilege in `public`"* — true of TABLES, false
+  overall until `20260814190000`. Corrected in AUTHORIZATION_RLS_AUDIT §3,
+  D-024 and HANDOFF.
+- *"Reads and writes share one notification predicate, so a user is never shown
+  a notification they cannot mark read"* — still true, but the predicate itself
+  matched a SHARED row whose read state belonged to the whole cohort.
+- The round-3 counts (96 probe checks, 6 notification checks) are superseded.
+
+**Still open, newly recorded this round:**
+
+- **Rendered browser QA remains UNVERIFIED** — the browser preview tool was
+  blocked by the session's permission classifier, so no page was rendered.
+  Round 4 added two more user-visible changes to the list needing QA:
+  `/reviews` refusing a non-student, and per-person notification read state.
+  **Prerequisite for merge.**
+- **POSIX signal DELIVERY on Windows — UNVERIFIED.** Narrowed, not closed. The
+  handler is now proven on every platform (injected emitter, plus an IPC-cancel
+  test driving the real runner in a real child process); what cannot be
+  exercised on Windows is whether the OS routes Ctrl-C to it.
+- **The audit probe leaves permanent rows BY DESIGN.** `service_role` holds only
+  INSERT and SELECT on `security_events`, so the probe cannot delete the events
+  it writes and no DELETE was granted to let it. After each run the trail
+  contains rows whose `event` begins `stage9-audit-probe.`; they carry no
+  personal data and are reported with their count at the end of every run.
+  Removing them needs a privileged out-of-band operation — the same constraint
+  a real retention policy will face.
+- **`student_courses` uniqueness includes `status`.** `UNIQUE (student_id,
+  course_id, status)` means several enrollments per (student, course) are
+  representable and the app writes at least two statuses. Round 4 made the AI
+  transition name an exact row, and authorization picks deterministically
+  (newest `updated_at`, `id` as tiebreak). Whether multiple concurrent
+  enrollments per course are intended at all is a PRODUCT question, unresolved,
+  and every other reader of `student_courses` still uses a broad predicate.
+- **Course reviews have no enrolment requirement.** Deliberately not invented:
+  no repository or product evidence requires a reviewer to have taken the
+  course. A product decision, recorded here rather than smuggled into a
+  security fix.
+
+### Codex security review round 5 (2026-08-14) — status changes
+
+Eleven findings. Every one was verified against the code, the migrations and
+live metadata before any change, and every one was confirmed. All are closed.
+
+**RETRACTION — the `108/0` probe figure is WITHDRAWN.** The anon-read ALLOW
+branch passed a literal `true` as its verdict, so four checks could only pass;
+one recorded PASS against an HTTP 401. Any total including them was not
+evidence. The then-replacement **115 checks, 0 failed** is also withdrawn by
+round 6 because its private denies still lacked positive sentinel proof. See
+the round-6 section below for the corrected execution.
+
+That defect concealed a second: three of the four entries described
+`course_reviews`, `faqs` and `notices` as anon-readable, which Stage 9 closed in
+`20260814010000`. The probe's own metadata contradicted the shipped design and
+nothing failed, because the branch reading it could not fail.
+
+**Round 4's F9 fix did not work.** `alter default privileges … revoke execute
+from anon` removed nothing, because anon's EXECUTE came through PUBLIC. Default
+privileges are also keyed on the CREATING role, and this database has more than
+one. Now enforced by an event trigger instead (D-038).
+
+**Defects found while fixing, that nobody reported:**
+
+- The first draft of the F1 booking test reused one base time, so the EXCLUDE
+  constraint rejected two attempts that had collided with rows the same loop had
+  just created — reading as "protected" while nothing had authorized anything.
+- Rolling out run-scoped markers broke `assertScopedFilter` (it recognised only
+  the legacy string) and produced HTTP 500 on every residue read (a bare `%` in
+  a query string is a malformed percent-escape). F7's new fatal exit caught both
+  by failing the run rather than passing it.
+- A `%=X/%` ACL check matches `postgres=X/postgres`, the owner's own grant, and
+  failed a migration against a function that was already correct.
+
+**Newly recorded this round:**
+
+- **The `--sweep` recovery command now requires a target.** `--run <marker>` for
+  one execution, `--family` for the shared prefix. Every run prints its own
+  recovery command on startup; keep that line if a run is interrupted, because
+  the sweep no longer guesses.
+- **Two rendered-QA flows remain UNVERIFIED**: roadmap feedback (student allowed
+  / staff refused) and professor course settings (own course allowed / foreign
+  refused). Both are covered by `privileged-action-authorization.test.mjs`
+  driving the REAL actions against fakes that record every write, but neither
+  was exercised in a browser. The four flows that WERE rendered are listed in
+  HANDOFF round 5.
+- **11 inert UPDATE grants remain.** `authenticated` holds table UPDATE on 11
+  tables that have no UPDATE policy at all, so RLS denies every row. Left alone
+  deliberately: revoking changes no behaviour today and could silently break a
+  future intended policy. Recorded rather than tidied.
+- **`supabase_admin`'s default ACL still grants anon EXECUTE on new functions**
+  in `public`. It cannot be changed from a migration (the connection is not a
+  member of that role). The event trigger is what makes it harmless, and a
+  snapshot guard records the dependency so the trigger is not removed on the
+  belief that defaults suffice.
+- **Course reviews and roadmap feedback have no enrolment requirement.**
+  Deliberately not invented in either round; a product decision.
+
+### Codex security review round 6 remediation (2026-08-15)
+
+Five verification/recovery blockers were confirmed and are now closed.
+
+- **The round-5 `115/0` result is WITHDRAWN.** Private-table checks still
+  accepted absence as protection. A fresh corrected live run also reports
+  **115 checks, 0 failed**, but only after exact service-role sentinel proof and
+  reason-specific anon semantics. The equal total is coincidental.
+- **Late mutations remain recoverable.** Underlying mutation attempts are
+  registered separately from wrapper timeouts. A late settlement causes an
+  exact-run second sweep and zero-residue verification. Permanent uncertainty
+  exits non-zero with the immutable marker and recovery command; remote
+  cancellation is not claimed.
+- **Family cleanup is separate from exact ownership.** `--run
+  <pacemate-probe-32hex>` targets one run. `--family` validates complete run
+  identifiers plus per-table fixture structure before exact-id deletion and is
+  only for an operator when no probe is active. Similar bystanders survive.
+- **Temporary credentials are per-run random secrets.** No reusable live-probe
+  password remains in the repository, output, snapshot or documentation.
+- **Event-trigger drift binds the exact handler.** Handler schema/name/args,
+  owner, definition hash, mode, config and effective ACL are recorded along
+  with the event trigger's event, tags, definition and enabled state. Three
+  consecutive live dumps were byte-identical.
+
+Corrected evidence: live RLS **115/0** with exact residue clean; live
+notification RLS **12/0** with exact residue clean; repository suite **626
+total / 620 pass / 3 KI-002 fail / 3 Windows POSIX-delivery skip**. Stage
+5/6/7/8 groups are **48/48 / 10/10 / 62/62 / 36/36**.
+
+The environmental limits below are unchanged. In particular, no SIGKILL/OOM/
+power-loss/host-crash guarantee is claimed.
+
+### BLOCKED on something outside the repository
+
+- **There is no verified recovery point of any kind.** `supabase backups list`
+  returns `pitr_enabled: false` and `backups: []`; no dump script, cron or CI
+  exists anywhere in the repo; there are no down migrations. Whether plan-tier
+  daily logical backups exist is **BLOCKED — Supabase dashboard → Project
+  Settings → Database → Backups**. No RPO/RTO is claimed. RECOVERY_RUNBOOK.md
+  §7 lists the five prerequisites.
+- **The schema-drift repair is UNVERIFIED end to end.** `20260814020000` plus
+  the guard in `20260812070000` should make the chain rebuildable, but Docker is
+  not running, there is no `supabase/config.toml`, and the only Supabase project
+  is live production, so a fresh rebuild has never been executed. Guarded by
+  unit assertions only.
+- **Demo account passwords: RESOLVED 2026-08-14 — rotated, not blocked.** All
+  four (including professor and admin) were rotated through the Supabase Auth
+  admin API and verified in both directions: the new credential signs in, the old
+  one is rejected. They were rotated a second time the same day after an operator
+  transcript exposed the first set. The repository now holds no credential at
+  all — passwords come from `PACEMATE_DEMO_PASSWORDS` at runtime, and a 6-test
+  regression guard fails the build if one reappears. Still worth doing:
+  **deleting the `admin1@` demo account outright**, since a privileged demo
+  account is a standing risk with no product purpose.
+- **SSO end-to-end remains BLOCKED** (KI-020, unchanged): no institution
+  configuration exists. The app-side boundary is covered by 43 green tests.
+
+### Deferred with reasoning
+
+- **No composite foreign keys for tenant consistency.** A course in university A
+  can still be linked to a professor in university B at the DATABASE level; the
+  same is true for offerings, counseling requests, weekly progress, and
+  notification `school_id`. Stage 9 closed every reachable application and RLS
+  path, but the structural fix is `unique (id, school_id)` + composite FKs
+  across seven tables with backfill — not something to attempt in the same stage
+  as an RLS overhaul, with one live tenant and no rehearsal database.
+- **No erasure path, no retention, no export.** `deleteAiTutorSession` is the
+  only user-invocable deletion of personal content in the application. A correct
+  account-deletion action needs an audit of cascade behaviour across ~20 FK
+  relationships (`schema.sql` mixes `cascade` and `set null`) plus the
+  `syllabus-files` bucket, rehearsed on a non-production database that does not
+  exist. P1, first candidate once a scratch project exists.
+- **`pdf-parse@1.1.1` vendors pdf.js v1.10.100 (2018)** — verified in
+  `node_modules/pdf-parse/lib/pdf-parse.js:42`. Unmaintained since 2021; that
+  vintage predates CVE-2024-4367. Professor-uploaded PDFs are parsed
+  (`syllabus-ingestion.service.ts:125`) in a process holding
+  `SUPABASE_SERVICE_ROLE_KEY`, with **no page cap** (`max` defaults to 0) and
+  **no timeout**. Two-line mitigation available without a dependency change:
+  pass `{ max: 40 }` and wrap in a `Promise.race` timeout. Requires a professor
+  account and an owned offering, which bounds likelihood, not blast radius.
+- **`next` 15.5.20 → 15.5.21 not applied.** GHSA-955p-x3mx-jcvp
+  (unauthenticated disclosure of internal Server Function endpoints) is directly
+  relevant to an app that authorizes at the action boundary. Deferred because a
+  framework bump landing alongside an RLS overhaul makes any regression
+  un-attributable. First Stage 10 action. The other five audit findings
+  (postcss, sharp, nanoid, js-yaml, brace-expansion) are dev-only or
+  non-reachable — defer.
+- **Realtime notifications — three defects, all now fixed; delivery still
+  UNVERIFIED.** (1) Stage 8 left `notification-menu.tsx` subscribing through a
+  bare `createClient(url, publishableKey)` that never read the auth cookie, so
+  the socket authenticated as `anon`, which has had no SELECT policy on
+  `user_notifications` since `20260813030000`. (2) Round 2 gave it the user JWT
+  but left the handshake fire-and-forget, so the socket could subscribe before
+  `setAuth()` ran. (3) Round 3 (F11) found the subscription also filtered on
+  `recipient_id`, which can never match a role broadcast — those carry a NULL
+  recipient — so tenant-wide announcements were structurally excluded whatever
+  RLS permitted. Now: `await getSession()` → `setAuth(token)` → `.subscribe()`,
+  unfiltered, with RLS doing the filtering and the client-side recipient check
+  kept only as defence in depth. **RLS was never weakened**, asserted by
+  `notification-realtime.test.mjs`. The channel is off by default
+  (`enableRealtime`, desktop only), so **live delivery is UNVERIFIED — it needs
+  a real socket and a real INSERT, for both a direct notification and a role
+  broadcast.** DEFERRED — Stage 10.
+- **Rate limiting still not implemented.** KI-021's reasoning was re-checked and
+  holds. `/support` is now a constrained boundary rather than an open INSERT,
+  and as of round 3 (F8) it also requires a session — which bounds abuse to
+  accounts rather than to the open internet. Volume control still needs a shared
+  store.
+
+### Recorded with evidence, bounded impact
+
+- **Raw `PostgrestError` objects are still logged around sensitive tables.**
+  `professor.service.ts:299,324` (a query selecting counseling `topic` plus
+  `student:profiles(name, identifier)`), `personalized-weekly-roadmap.server.ts:551`
+  (selects `private_note`), `ai-tutor.actions.ts:165,182,225`,
+  `course-settings.actions.ts:121,225`, `student-community.actions.ts:222,305,355`,
+  `session.service.ts:72,92`. Postgres `detail`/`hint` can embed row values.
+  `admin-notifications.actions.ts` was converted this stage as the pattern to
+  follow; the rest is a mechanical substitution against `classifyPostgresError`.
+- **The log allowlist governs 6 of ~116 `console.*` sites.** `logEvent` enforces
+  it at runtime, but the cheap path — raw `console.error(err)` — is unguarded
+  and `.eslintrc.json` sets no `no-console` rule. Adding that rule with a narrow
+  override is the mechanism the allowlist currently lacks.
+- **Over-broad AI prompt payloads.** `personalized-weekly-roadmap.server.ts:361,401`
+  passes the whole onboarding row (career goal, interests, weaknesses, free-text
+  completed-courses transcript) to OpenAI; `ai-tutor.actions.ts:139`
+  interpolates `interests` and `target_career` into a syllabus-progress prompt
+  that does not need them. The consent mechanism to extend already exists in the
+  same file (`use_private_note_for_ai`). Not changed because narrowing alters
+  what students are shown.
+- **Service-role sites that still substitute for authorization** (no live
+  exploit; each has a single well-behaved caller):
+  `student-weekly-progress.server.ts:31,106` (resolves a course by name
+  globally; trusts a `studentId` parameter), `weekly-roadmap.server.ts:89`
+  (active term with no `school_id` filter — wrong the moment a second tenant
+  exists), `curriculum-query.server.ts` (no `server-only` marker, department
+  matched by display name across schools), `course-notices.server.ts:9`
+  (trusts `studentId`), `syllabus-ingestion.service.ts:72,86,105`.
+  Also `updateStudentWeeklyProgress` writes without an enrolment check, unlike
+  its sibling in `student-roadmap.actions.ts`.
+- **Two unguarded service-role scripts.** `scripts/ensure-demo-operator-auth.mjs`
+  and `scripts/verify-notification-rls.mjs` mutate live data with no
+  environment guard — the Stage 8 protection stops at the `scripts/loadtest/`
+  directory boundary. `scripts/security/` has its own guard
+  (`probe-guard.mjs`, 9 tests).
+- **Client storage bleeds across accounts on shared devices** (carried from
+  KI-019): `pacemate_student_todos`, `_todo_done`,
+  `pacemate.dismissed-course-notices.v1` are unkeyed and never cleared on
+  logout; the zustand `cachedSessions` store (AI question titles) survives the
+  client-side logout navigation.
+- **`supabase/schema.sql` is stale and partly corrupt** and must stop being
+  cited as authoritative. Beyond KI-005's duplicate `day_of_week`, commit
+  `570d7df` injected that column into four more tables that do not have it live;
+  the file has a `$$$` delimiter typo, mojibake comments, two tables that do not
+  exist (`timetables`, `course_weekly_missions`), a `profiles.password_hash`
+  column that does not exist, and it omits 25 live tables. Stage 9 used the live
+  database as ground truth throughout and did not rely on this file.
+- **`profiles.password_hash` is a dead column** — zero references in `src/` or
+  any migration. A credential-shaped column with no owner is a trap; drop it
+  after confirming it is empty.
+- **The audit trail's application emit paths are UNVERIFIED at runtime.** The
+  table's security properties are verified live (5/5) and the three call sites
+  (`sso.*`, `admin.broadcast_sent`, `admin.revision_*`) are code-wired and
+  typechecked, but no run this session triggered an SSO event, a tenant
+  broadcast, or a revision approval.
+- **The in-session revocation limit is unchanged.** The HMAC app session remains
+  valid until its 8h expiry; there is no server-side store, so the only mass
+  revocation is rotating `PACEMATE_SESSION_SECRET`. Tenant *suspension* is now
+  enforced at request time (new this stage), but per-user revocation is not.
+
+### Resolved by Stage 9 — corrections to earlier notes
+
+- **KI-014 is CLOSED**, and was worse than recorded: availability writes were
+  reachable with no session at all, and the anon RLS policy provided no
+  backstop. Both actions now authorize; `anon` has no privilege on the table.
+- **KI-011 is CLOSED** — the SECURITY DEFINER helpers moved to `app_private`
+  with `search_path = ''` and are no longer PostgREST RPC endpoints.
+- **KI-007 is CLOSED** — the pre-mapping identity predicates are repaired
+  platform-wide (D-024), not just for login.
+- **KI-019's anon-read family is CLOSED** — `anon` now holds exactly one
+  privilege in `public`: SELECT on `schools`.
+- **KI-006's remaining open item is CLOSED** — `supabase migration list
+  --linked` shows all 55 local migrations with matching remote entries;
+  `20260812000000` is recorded and no `migration repair` is pending.
+- **KI-015's schema-drift claims are CONFIRMED and repaired** (D-026); the note
+  understated the problem — seven `posts` columns were affected, not only the
+  three `counseling_requests` ones.
+- **One discovery-agent claim was WRONG and no change was made:**
+  `answer_professor_questions` was reported as letting any assistant answer any
+  tenant's questions. The report cited the superseded 2026-07-14 definition; the
+  live function is the Stage 6 rewrite, whose assistant branch already requires
+  a tenant match.
+
 ## KI-021 — Stage 8 scale/reliability: findings deferred by design
 
 Status: OPEN (documented 2026-08-13; full evidence in docs/upgrade/stage-08/).

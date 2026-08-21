@@ -111,7 +111,7 @@ export async function processSsoCallback(code: string): Promise<SsoCallbackResul
       await supabase.auth.signOut().catch(() => undefined);
     }
     await destroyDemoSession().catch(() => undefined);
-    emitSsoAuditEvent({ event: "sso_login_denied", reason, requestId, ...context });
+    await emitSsoAuditEvent({ event: "sso_login_denied", reason, requestId, ...context });
     return { ok: false, redirectTo: `/login?error=sso_${reason}` };
   };
 
@@ -244,7 +244,7 @@ export async function processSsoCallback(code: string): Promise<SsoCallbackResul
     if (insertError || !created) {
       return denied("identity_conflict", auditContext);
     }
-    emitSsoAuditEvent({
+    await emitSsoAuditEvent({
       event: "sso_jit_provisioned",
       profileId: (created as SsoProfileRow).id,
       schoolId: decision.tenantId,
@@ -269,7 +269,7 @@ export async function processSsoCallback(code: string): Promise<SsoCallbackResul
   }
 
   if (linkedThisLogin) {
-    emitSsoAuditEvent({
+    await emitSsoAuditEvent({
       event: "sso_account_linked",
       profileId: allowedProfileId,
       schoolId: decision.tenantId,
@@ -280,7 +280,7 @@ export async function processSsoCallback(code: string): Promise<SsoCallbackResul
   // Fresh app session minted ONLY after the full decision (session-fixation
   // discipline): a new HMAC cookie value, never a reused pre-auth one.
   await issueAppSessionCookie({ profileId: allowedProfileId, role: allowedRole });
-  emitSsoAuditEvent({
+  await emitSsoAuditEvent({
     event: "sso_login_ok",
     profileId: allowedProfileId,
     schoolId: decision.tenantId,

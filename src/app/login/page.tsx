@@ -13,6 +13,7 @@ import { PendingSubmitButton } from "@/components/ui/pending-submit-button";
 import { createDemoSession } from "@/services/demo-auth.service";
 import { getRoleHomePath, getSignedDemoProfile } from "@/services/session.service";
 import { DemoLoginButton } from "@/components/login/demo-login-button";
+import { listDemoAccounts } from "@/config/demo-accounts.server";
 
 type LoginPageProps = {
   searchParams?: Promise<{
@@ -87,7 +88,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               </PendingSubmitButton>
             </form>
             
-            <DemoLoginButton />
+            <DemoLoginButton accounts={listDemoAccounts()} />
           </CardContent>
         </Card>
 

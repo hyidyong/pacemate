@@ -1,0 +1,449 @@
+// Codex round 3, F1 — once-only, signal-aware cleanup.
+//
+// The subprocess tests drive the real runner, but Node on Windows cannot
+// deliver POSIX signals to a child process, so the signal paths there are
+// skipped with an explicit reason rather than silently passing. These tests
+// cover the same logic deterministically on every platform by injecting a fake
+// process emitter and an `onExit` spy.
+
+import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import test from "node:test";
+
+import { boundedRequest, createAbortScope } from "./probe-http.mjs";
+import { EXIT, createProbeLifecycle } from "./probe-lifecycle.mjs";
+
+const quietLogger = { error() {}, log() {} };
+
+function harness({ cleanup, timeoutMs = 5_000, abortWork, quiesceTimeoutMs }) {
+  const processRef = new EventEmitter();
+  const exits = [];
+  const lifecycle = createProbeLifecycle({
+    cleanup,
+    abortWork,
+    timeoutMs,
+    quiesceTimeoutMs,
+    logger: quietLogger,
+    onExit: (code) => exits.push(code),
+    processRef,
+  });
+  return { lifecycle, processRef, exits };
+}
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+test("cleanup runs exactly once on a normal completion", async () => {
+  let calls = 0;
+  const { lifecycle } = harness({ cleanup: async () => (calls += 1, { ok: true }) });
+
+  const result = await lifecycle.run(async () => "done");
+
+  assert.equal(calls, 1);
+  assert.equal(result.value, "done");
+  assert.equal(result.bodyError, null);
+  assert.deepEqual(result.cleanup, { ok: true });
+});
+
+test("cleanup runs exactly once when the body throws, and the error is preserved", async () => {
+  let calls = 0;
+  const { lifecycle } = harness({ cleanup: async () => (calls += 1, { ok: true }) });
+
+  const result = await lifecycle.run(async () => {
+    throw new Error("probe blew up");
+  });
+
+  assert.equal(calls, 1);
+  assert.match(result.bodyError.message, /probe blew up/);
+  assert.equal(result.cleanup.ok, true);
+});
+
+test("cleanup failure is reported as failure, not swallowed", async () => {
+  const { lifecycle } = harness({ cleanup: async () => ({ ok: false, detail: "residue remains" }) });
+
+  const result = await lifecycle.run(async () => "ok");
+
+  assert.equal(result.cleanup.ok, false);
+  assert.match(result.cleanup.detail, /residue remains/);
+});
+
+test("a cleanup that throws is a failure, not an unhandled rejection", async () => {
+  const { lifecycle } = harness({
+    cleanup: async () => {
+      throw new Error("delete refused");
+    },
+  });
+
+  const result = await lifecycle.run(async () => "ok");
+
+  assert.equal(result.cleanup.ok, false);
+  assert.match(result.cleanup.detail, /delete refused/);
+});
+
+test("a hung cleanup is bounded and reported, rather than hanging the runner", async () => {
+  const { lifecycle } = harness({
+    cleanup: () => new Promise(() => {}), // never settles
+    timeoutMs: 80,
+  });
+
+  const result = await lifecycle.run(async () => "ok");
+
+  assert.equal(result.cleanup.ok, false);
+  assert.match(result.cleanup.detail, /exceeded 80ms/);
+});
+
+for (const [signal, expected] of [
+  ["SIGINT", EXIT.sigint],
+  ["SIGTERM", EXIT.sigterm],
+]) {
+  test(`${signal} triggers cleanup once and exits ${expected}`, async () => {
+    let calls = 0;
+    const { lifecycle, processRef, exits } = harness({
+      cleanup: async () => (calls += 1, { ok: true }),
+    });
+
+    const running = lifecycle.run(async () => {
+      processRef.emit(signal);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      return "body finished";
+    });
+    await running;
+    await tick();
+
+    assert.equal(calls, 1, `cleanup ran ${calls} times`);
+    assert.deepEqual(exits, [expected]);
+    assert.deepEqual(lifecycle.signalsSeen, [signal]);
+  });
+}
+
+test("a repeated signal does not start a second destructive cleanup pass", async () => {
+  let calls = 0;
+  const { lifecycle, processRef, exits } = harness({
+    cleanup: async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return { ok: true };
+    },
+  });
+
+  await lifecycle.run(async () => {
+    processRef.emit("SIGINT");
+    processRef.emit("SIGINT");
+    processRef.emit("SIGTERM");
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  });
+  await tick();
+
+  assert.equal(calls, 1, `cleanup ran ${calls} times for 3 signals`);
+  assert.deepEqual(lifecycle.signalsSeen, ["SIGINT", "SIGINT", "SIGTERM"]);
+  // Every signal still resolves to an exit, and none of them reports success.
+  assert.ok(exits.length >= 1);
+  assert.ok(exits.every((code) => code !== EXIT.ok));
+});
+
+test("a signal during a FAILING cleanup exits non-zero, not with the signal code", async () => {
+  const { lifecycle, processRef, exits } = harness({
+    cleanup: async () => ({ ok: false, detail: "could not delete" }),
+  });
+
+  await lifecycle.run(async () => {
+    processRef.emit("SIGINT");
+    await new Promise((resolve) => setTimeout(resolve, 60));
+  });
+  await tick();
+
+  assert.deepEqual(exits, [EXIT.failure]);
+});
+
+test("signal listeners are removed when the run finishes", async () => {
+  const { lifecycle, processRef } = harness({ cleanup: async () => ({ ok: true }) });
+
+  assert.equal(processRef.listenerCount("SIGINT"), 0);
+  const running = lifecycle.run(async () => {
+    assert.equal(processRef.listenerCount("SIGINT"), 1);
+    assert.equal(processRef.listenerCount("SIGTERM"), 1);
+    return "ok";
+  });
+  await running;
+
+  assert.equal(processRef.listenerCount("SIGINT"), 0, "SIGINT listener leaked");
+  assert.equal(processRef.listenerCount("SIGTERM"), 0, "SIGTERM listener leaked");
+});
+
+// ---------------------------------------------------------------------------
+// Codex round 4, 4A — QUIESCE BEFORE DESTROYING.
+//
+// The previous handler began destructive cleanup the moment a signal arrived,
+// while the probe body was still running. A create request already on the wire
+// could commit AFTER cleanup had enumerated and deleted, leaving a resource
+// alive that nothing would look at again. Ordering must now be:
+// abort the scope -> wait for the body to stop -> then delete.
+// ---------------------------------------------------------------------------
+
+test("4A — a signal aborts the work scope BEFORE cleanup runs", async () => {
+  const order = [];
+  const { lifecycle, processRef } = harness({
+    abortWork: () => order.push("abort"),
+    cleanup: async () => (order.push("cleanup"), { ok: true }),
+  });
+
+  const run = lifecycle.run(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    order.push("body-finished");
+  });
+  await tick();
+  processRef.emit("SIGINT");
+  await run;
+
+  assert.deepEqual(
+    order,
+    ["abort", "body-finished", "cleanup"],
+    `cleanup must run last; got ${order.join(" -> ")}`,
+  );
+});
+
+test("4A — cleanup WAITS for an in-flight body rather than racing it", async () => {
+  // The body models a create that is still on the wire when the signal lands.
+  let bodyDone = false;
+  let cleanupSawBodyDone = null;
+  const { lifecycle, processRef } = harness({
+    abortWork: () => {},
+    cleanup: async () => {
+      cleanupSawBodyDone = bodyDone;
+      return { ok: true };
+    },
+  });
+
+  const run = lifecycle.run(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    bodyDone = true;
+  });
+  await tick();
+  processRef.emit("SIGTERM");
+  await run;
+
+  assert.equal(
+    cleanupSawBodyDone,
+    true,
+    "cleanup started while the body could still be creating resources",
+  );
+});
+
+test("4A — a body that refuses to stop still gets cleanup, but the run FAILS", async () => {
+  // A late cleanup beats none. What must not happen is reporting success when
+  // we could not prove the body had stopped creating things.
+  let cleaned = false;
+  const { lifecycle, processRef, exits } = harness({
+    quiesceTimeoutMs: 50,
+    abortWork: () => {},
+    cleanup: async () => ((cleaned = true), { ok: true }),
+  });
+
+  let release;
+  const stuck = new Promise((resolve) => {
+    release = resolve;
+  });
+  const run = lifecycle.run(() => stuck);
+  await tick();
+  processRef.emit("SIGINT");
+
+  // Give quiesce time to give up and cleanup time to run.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(cleaned, true, "cleanup must still happen");
+  assert.deepEqual(exits, [EXIT.failure], "an unquiesced body must not exit 130 as if it were clean");
+
+  release();
+  await run;
+});
+
+test("4A — abortWork is called even when cleanup itself fails", async () => {
+  let aborted = false;
+  const { lifecycle, processRef, exits } = harness({
+    abortWork: () => (aborted = true),
+    cleanup: async () => ({ ok: false, detail: "residue" }),
+  });
+
+  const run = lifecycle.run(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  await tick();
+  processRef.emit("SIGINT");
+  await run;
+  // The handler's exit happens on its own async continuation, after the run
+  // promise settles; give it a turn rather than asserting into a race.
+  await tick();
+
+  assert.equal(aborted, true);
+  assert.deepEqual(exits, [EXIT.failure]);
+});
+
+test("4A — a normal run does not abort the scope", async () => {
+  let aborted = false;
+  const { lifecycle } = harness({
+    abortWork: () => (aborted = true),
+    cleanup: async () => ({ ok: true }),
+  });
+
+  await lifecycle.run(async () => "done");
+
+  assert.equal(aborted, false, "an uninterrupted run must not cancel its own requests");
+});
+
+test("an ambiguous late commit is swept again after the underlying mutation settles", async () => {
+  const scope = createAbortScope();
+  const rows = [];
+  const order = [];
+  let releaseServer;
+  const server = new Promise((resolve) => {
+    releaseServer = () => {
+      rows.push({ id: "owned-late-row" });
+      order.push("server-commit");
+      resolve({ status: 201, headers: new Headers(), text: async () => "{}" });
+    };
+  });
+
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => {
+      order.push("cleanup");
+      rows.splice(0);
+      return { ok: true, detail: "first pass complete" };
+    },
+    awaitMutations: (ms) => scope.settled(ms),
+    quiesceTimeoutMs: 20,
+    recoverAmbiguous: async () => {
+      order.push("recovery-wait");
+      const settled = await scope.settled(200);
+      if (!settled.ok) return { ok: false, detail: "still unsettled" };
+      order.push("recovery-sweep");
+      rows.splice(0);
+      return { ok: true, detail: "late mutation recovered" };
+    },
+    logger: quietLogger,
+  });
+
+  setTimeout(releaseServer, 70);
+  const result = await lifecycle.run(async () => {
+    await assert.rejects(
+      boundedRequest(
+        "https://probe.test/late",
+        { method: "POST" },
+        { timeoutMs: 10, fetchImpl: () => server, scope },
+      ),
+      /exceeded 10ms/,
+    );
+  });
+
+  assert.deepEqual(order, [
+    "cleanup",
+    "recovery-wait",
+    "server-commit",
+    "recovery-sweep",
+  ]);
+  assert.deepEqual(rows, [], "the late-owned row must be removed by the recovery pass");
+  assert.equal(result.cleanup.ok, true);
+});
+
+test("a rejected mutation latches ambiguity and exact-run recovery removes its later commit only", async () => {
+  const scope = createAbortScope();
+  const rows = [{ id: "bystander-row", owner: "unrelated-run" }];
+  let recoveryCalls = 0;
+
+  const removeOwnedRows = () => {
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      if (rows[index].owner === "this-run") rows.splice(index, 1);
+    }
+  };
+
+  // The client observes a broken connection immediately. The independent
+  // server-side operation nevertheless commits after that rejected Promise,
+  // which is the outcome an HTTP client can no longer observe or await.
+  const rejectBeforeLateCommit = () => {
+    setTimeout(() => rows.push({ id: "owned-late-row", owner: "this-run" }), 40);
+    return Promise.reject(new TypeError("connection closed before response"));
+  };
+
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => {
+      removeOwnedRows();
+      return { ok: true, detail: "initial exact-run pass complete" };
+    },
+    awaitMutations: (ms) => scope.settled(ms),
+    quiesceTimeoutMs: 20,
+    recoverAmbiguous: async () => {
+      recoveryCalls += 1;
+      const settled = await scope.settled(80);
+      removeOwnedRows();
+      return {
+        ok: settled.ok,
+        detail: settled.ok
+          ? "exact-run recovery clean"
+          : "unacknowledged mutation remains ambiguous after exact-run recovery",
+      };
+    },
+    logger: quietLogger,
+  });
+
+  const result = await lifecycle.run(() =>
+    boundedRequest(
+      "https://probe.test/reject-before-commit",
+      { method: "POST" },
+      { timeoutMs: 100, fetchImpl: rejectBeforeLateCommit, scope },
+    ),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  assert.equal(result.bodyError?.ambiguous, true, "the transport outcome is ambiguous");
+  assert.equal(scope.pendingMutations, 0, "the rejected client Promise is no longer pending");
+  assert.equal(scope.ambiguousMutations, 1, "the unacknowledged mutation must remain latched");
+  assert.equal(result.quiesce.ambiguous, true, "lifecycle must consume the ambiguity latch");
+  assert.equal(recoveryCalls, 1, "the exact-run recovery path must run once");
+  assert.equal(result.cleanup.ok, false, "a persistent unacknowledged mutation cannot report clean");
+  assert.deepEqual(rows, [{ id: "bystander-row", owner: "unrelated-run" }]);
+});
+
+test("an ambiguous body error triggers recovery even after the mutation registry drains", async () => {
+  let recoveryCalls = 0;
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => ({ ok: true, detail: "initial pass complete" }),
+    awaitMutations: async () => ({ ok: true, outstanding: 0 }),
+    recoverAmbiguous: async () => {
+      recoveryCalls += 1;
+      return { ok: false, detail: "unacknowledged mutation requires exact-run recovery" };
+    },
+    logger: quietLogger,
+  });
+  const ambiguousError = Object.assign(new Error("client rejected the mutation"), {
+    ambiguous: true,
+  });
+
+  const result = await lifecycle.run(async () => {
+    throw ambiguousError;
+  });
+
+  assert.equal(result.bodyError, ambiguousError);
+  assert.equal(result.quiesce.ambiguous, true);
+  assert.equal(recoveryCalls, 1);
+  assert.equal(result.cleanup.ok, false);
+});
+
+test("a permanently unsettled mutation fails with durable recovery information", async () => {
+  let recoveryCalls = 0;
+  const lifecycle = createProbeLifecycle({
+    cleanup: async () => ({ ok: true, detail: "first pass complete" }),
+    awaitMutations: async () => ({ ok: false, outstanding: 1 }),
+    quiesceTimeoutMs: 10,
+    recoverAmbiguous: async () => {
+      recoveryCalls += 1;
+      return {
+        ok: false,
+        detail: "run pacemate-probe-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa remains recoverable",
+      };
+    },
+    logger: quietLogger,
+  });
+
+  const result = await lifecycle.run(async () => {});
+
+  assert.equal(recoveryCalls, 1);
+  assert.equal(result.cleanup.ok, false);
+  assert.match(result.cleanup.detail, /pacemate-probe-[a-f0-9]{32}/);
+});

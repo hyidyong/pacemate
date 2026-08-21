@@ -3,7 +3,11 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+// Stage 9: onboarding writes the caller's tenant and department onto their
+// profile. `profiles` UPDATE is now restricted to the `name` column for
+// session roles (20260814010000), so these writes run under the service
+// role AFTER getProfileId() has established who the caller is.
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { readDemoSession } from "@/lib/auth/demo-session";
 import type { StudentType } from "@/services/onboarding.service";
 import type { DemoProfile } from "@/services/session.service";
@@ -103,7 +107,7 @@ export async function saveStudentOnboarding(formData: FormData) {
 
   await ensureDefaultSchoolAndDepartment(profileId);
 
-  const { error } = await supabase.from("student_profiles").upsert(
+  const { error } = await createSupabaseAdminClient().from("student_profiles").upsert(
     {
       profile_id: profileId,
       user_types: userTypes,
@@ -149,7 +153,7 @@ export async function completeStudentOnboarding(formData: FormData) {
 
   await ensureDefaultSchoolAndDepartment(profileId, department);
 
-  const { data: currentProfile } = await supabase
+  const { data: currentProfile } = await createSupabaseAdminClient()
     .from("student_profiles")
     .select("user_types")
     .eq("profile_id", profileId)
@@ -161,7 +165,7 @@ export async function completeStudentOnboarding(formData: FormData) {
       })
     : [];
 
-  const { error } = await supabase.from("student_profiles").upsert(
+  const { error } = await createSupabaseAdminClient().from("student_profiles").upsert(
     {
       profile_id: profileId,
       user_types: existingTypes.length ? existingTypes : ["current_student"],
@@ -187,13 +191,13 @@ export async function completeStudentOnboarding(formData: FormData) {
 }
 
 async function ensureDefaultSchoolAndDepartment(profileId: string, departmentKey = "law") {
-  const { data: profile } = await supabase
+  const { data: profile } = await createSupabaseAdminClient()
     .from("profiles")
     .select("school_id, department_id")
     .eq("id", profileId)
     .maybeSingle();
 
-  const { data: school } = await supabase
+  const { data: school } = await createSupabaseAdminClient()
     .from("schools")
     .select("id")
     .eq("name", "계명대학교")
@@ -205,14 +209,14 @@ async function ensureDefaultSchoolAndDepartment(profileId: string, departmentKey
   }
 
   const departmentName = departmentKey === "electronic-engineering" ? "전자공학과" : "법학과";
-  const { data: department } = await supabase
+  const { data: department } = await createSupabaseAdminClient()
     .from("departments")
     .select("id")
     .eq("school_id", schoolId)
     .eq("name", departmentName)
     .maybeSingle();
 
-  await supabase
+  await createSupabaseAdminClient()
     .from("profiles")
     .update({
       school_id: schoolId,

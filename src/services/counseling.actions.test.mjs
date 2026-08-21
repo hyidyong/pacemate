@@ -11,6 +11,14 @@ const { transpileModule, ModuleKind, ScriptTarget } = require("typescript");
 // convention (see counseling.query-count.test.mjs). Two independent fake
 // clients model the RLS reality: the SESSION client sees only the caller's own
 // counseling_requests rows; the ADMIN (service-role) client sees every row.
+//
+// Codex round 5, F1 moved the booking INSERT from the session client to the
+// admin client, because `authenticated` no longer holds INSERT on
+// counseling_requests — a student could otherwise skip every Stage 5 invariant
+// by POSTing straight to PostgREST. Reads still go through the session client,
+// so the RLS-visibility modelling below is unchanged. Only the client the
+// INSERT lands on moved; every property these tests protect is asserted
+// exactly as before, against `admin.state.inserts`.
 // Interleavings are controlled by manually-released insert thenables — no
 // wall-clock sleeps anywhere.
 
@@ -273,15 +281,15 @@ const SLOT_NOT_AVAILABLE = "선택한 상담 시간을 예약할 수 없습니�
 
 test("characterization: a booking against a free slot inserts, notifies, and revalidates", async () => {
   const { actions, service, domain } = await loadModules();
-  const { session } = setupWorld();
+  const { admin } = setupWorld();
   try {
     const { slot, slotId } = await firstLiveSlot(service, domain);
     const result = await actions.createCounselingRequest(bookingForm(slotId));
 
     assert.equal(result.ok, true, result.message);
     assert.match(result.message, /상담 신청을 보냈습니다/);
-    assert.equal(session.state.inserts.length, 1);
-    const inserted = session.state.inserts[0];
+    assert.equal(admin.state.inserts.length, 1);
+    const inserted = admin.state.inserts[0];
     assert.equal(inserted.table, "counseling_requests");
     assert.deepEqual(
       {
@@ -319,7 +327,7 @@ test("M1/M3: a slot held by ANOTHER student is rejected before any insert", asyn
     const result = await actions.createCounselingRequest(bookingForm(slotId));
 
     assert.equal(
-      session.state.inserts.length,
+      admin.state.inserts.length,
       0,
       "booking reached the INSERT although the slot is already consumed — server revalidation is blind to other students' rows",
     );
@@ -356,10 +364,10 @@ test("M3: the page's displayed slot list excludes slots consumed by other studen
 
 test("M1: losing the insert race (23P01) yields the slot-conflict message and revalidate, not a generic retry", async () => {
   const { actions, service, domain } = await loadModules();
-  const { session } = setupWorld();
+  const { admin } = setupWorld();
   try {
     const { slotId } = await firstLiveSlot(service, domain);
-    session.state.insertHandler = () => ({
+    admin.state.insertHandler = () => ({
       data: null,
       error: {
         code: "23P01",
@@ -399,7 +407,7 @@ test("M2: a duplicate of the caller's own committed booking is acknowledged, not
     session.state.fixtures.counseling_requests.push({ ...ownRow });
     // Tripwire: with an authoritative busy feed the duplicate must be caught
     // at revalidation — reaching the INSERT at all would be a regression.
-    session.state.insertHandler = () => {
+    admin.state.insertHandler = () => {
       throw new Error("duplicate retry must not reach the INSERT");
     };
 
@@ -411,7 +419,7 @@ test("M2: a duplicate of the caller's own committed booking is acknowledged, not
       `retry of an already-committed booking reported failure: ${result.message}`,
     );
     assert.match(result.message, /이미 신청된 상담 시간/);
-    assert.equal(session.state.inserts.length, 0, "no second row may be attempted");
+    assert.equal(admin.state.inserts.length, 0, "no second row may be attempted");
   } finally {
     teardownWorld();
   }
@@ -424,7 +432,7 @@ test("M2 interleaving: two concurrent submissions of one intent — exactly one 
     const { slot, slotId } = await firstLiveSlot(service, domain);
 
     const gate = [];
-    session.state.insertHandler = () =>
+    admin.state.insertHandler = () =>
       new Promise((resolve) => {
         gate.push(resolve);
       });
@@ -461,7 +469,7 @@ test("M2 interleaving: two concurrent submissions of one intent — exactly one 
       `duplicate in-flight submission reported failure although the intent committed: ${secondResult.message}`,
     );
     assert.match(secondResult.message, /이미 신청된 상담 시간/);
-    assert.equal(session.state.inserts.length, 2, "both requests reached the INSERT (TOCTOU window confirmed)");
+    assert.equal(admin.state.inserts.length, 2, "both requests reached the INSERT (TOCTOU window confirmed)");
   } finally {
     teardownWorld();
   }
@@ -577,10 +585,10 @@ test("M9: only students can use the cancel action", async () => {
 
 test("unknown insert failures keep the generic retryable message and structured log", async () => {
   const { actions, service, domain } = await loadModules();
-  const { session } = setupWorld();
+  const { admin } = setupWorld();
   try {
     const { slotId } = await firstLiveSlot(service, domain);
-    session.state.insertHandler = () => ({
+    admin.state.insertHandler = () => ({
       data: null,
       error: { code: "42501", message: "permission denied", details: null, hint: null },
     });

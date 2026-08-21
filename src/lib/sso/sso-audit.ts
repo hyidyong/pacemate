@@ -1,15 +1,15 @@
 // Stage 7 (SSO readiness) — identity audit event emitter.
 //
-// A structured, field-ALLOWLISTED emitter for identity events. No durable
-// audit table exists yet (Stage 8/9 outbox family owns that); this module is
-// the seam — every identity event goes through ONE function whose output
-// shape is frozen by tests, so a later durable sink swaps in here.
+// A structured, field-ALLOWLISTED emitter for identity events. It was built as
+// the seam for a durable sink, and Stage 9 filled it in: every identity event
+// still goes through ONE function whose output shape is frozen by tests, and
+// that function now also appends to public.security_events (20260814030000).
 //
 // Never logged: tokens, authorization codes, raw claims, emails, names, or
 // any free-form payload. Subjects appear only as a truncated keyed hash.
 
 import { createHash } from "node:crypto";
-import { logEvent } from "@/lib/observability/log";
+import { recordSecurityEvent } from "@/lib/observability/security-audit";
 
 export type SsoAuditEventName =
   | "sso_login_ok"
@@ -50,7 +50,7 @@ const ALLOWED_FIELDS = [
   "requestId",
 ] as const;
 
-export function emitSsoAuditEvent(event: SsoAuditEvent): void {
+export async function emitSsoAuditEvent(event: SsoAuditEvent): Promise<void> {
   const record: Record<string, string> = {};
   for (const field of ALLOWED_FIELDS) {
     const value = event[field];
@@ -64,14 +64,26 @@ export function emitSsoAuditEvent(event: SsoAuditEvent): void {
   // else. The allowlist above still runs first and is unchanged — it is
   // narrower than the logger's, and the pseudonymous subjectHash rides in
   // `detail` rather than widening the shared field set.
-  logEvent({
+  const outcome = record.event === "sso_login_denied" ? "denied" : "ok";
+  const detail = [record.reason, record.providerSlug, record.subjectHash]
+    .filter(Boolean)
+    .join(" ");
+
+  // Stage 9 / Codex F8: AWAITED, not fire-and-forget. A durable write that the
+  // caller never waits on is not durable — the serverless invocation can end
+  // before it lands, and a failure is invisible. Identity creation and binding
+  // are the events most worth keeping past a log window, so the caller waits.
+  // recordSecurityEvent still emits the operational line first and degrades to
+  // `audit.write_failed` rather than throwing, so an audit outage cannot break a
+  // login; what it will never do is silently claim success.
+  await recordSecurityEvent({
     event: `sso.${record.event ?? "unknown"}`,
-    outcome: record.event === "sso_login_denied" ? "denied" : "ok",
-    requestId: record.requestId,
-    profileId: record.profileId,
-    tenantId: record.schoolId,
-    detail: [record.reason, record.providerSlug, record.subjectHash]
-      .filter(Boolean)
-      .join(" "),
+    outcome,
+    actorProfileId: record.profileId ?? null,
+    schoolId: record.schoolId ?? null,
+    subjectType: record.subjectHash ? "sso_subject" : null,
+    subjectId: record.subjectHash ?? null,
+    requestId: record.requestId ?? null,
+    detail: detail || null,
   });
 }

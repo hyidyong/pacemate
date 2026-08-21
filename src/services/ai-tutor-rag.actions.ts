@@ -92,11 +92,19 @@ export async function askAiTutor(message: string, courseId: string, sessionId?: 
     return unavailableResult("학습 자료 연결을 준비하지 못했습니다. 교수님께 질문을 전달해 주세요.");
   }
 
+  // Stage 9: enrollment alone was the whole authorization, and enrollments could
+  // be created for ANY course id (addCourseToSchedule did not check the tenant),
+  // so a student could enrol in another university's course and then read its
+  // syllabus, weekly plans, notices and FAQs back through the tutor's grounded
+  // answer. The sibling path in ai-tutor.actions.ts already joins the tenant;
+  // this one now does too, so the read path no longer depends on the write path
+  // having been careful.
   const { data: enrollment, error: enrollmentError } = await admin
     .from("student_courses")
-    .select("course_id, offering_id")
+    .select("course_id, offering_id, course:courses!inner(school_id)")
     .eq("student_id", profile.id)
     .eq("course_id", selectedCourseId)
+    .eq("course.school_id", profile.school_id)
     .limit(1);
   if (enrollmentError || !enrollment?.length) {
     return unavailableResult("수강 중인 과목만 AI 튜터에게 질문할 수 있습니다.");

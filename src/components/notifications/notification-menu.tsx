@@ -87,18 +87,76 @@ export function NotificationMenu({
     // the desktop instance should subscribe and surface live toasts.
     if (!enableRealtime || !profileId) return;
 
-    const channel = supabase
-      .channel(`in-app-notifications:${profileId}:${channelInstanceId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_notifications", filter: `recipient_id=eq.${profileId}` }, (payload) => {
-        const next = asNotification(payload.new as Record<string, unknown>);
-        if (!next) return;
-        setItems((current) =>
-          dedupeMenuNotifications([next, ...current.filter((item) => item.id !== next.id)]).slice(0, 20),
-        );
-        setToast(next);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Codex round 3, F11 — two defects in the previous wiring.
+    //
+    // 1. The auth handshake RACED the subscription. `void authorise()` was
+    //    fire-and-forget, so `.subscribe()` could open the socket before
+    //    setAuth() had run and the channel would evaluate RLS as `anon`.
+    //    Subscription now happens AFTER the token is installed.
+    // 2. The filter was `recipient_id=eq.<me>`, which structurally EXCLUDED
+    //    role broadcasts, because those carried `recipient_id IS NULL`.
+    //    Tenant-wide announcements could never arrive. The filter was removed:
+    //    Realtime evaluates the SELECT policy per subscriber, so the socket
+    //    receives exactly the rows this user may read and nothing else. RLS is
+    //    the boundary; it is not weakened here.
+    //
+    // Codex round 4, finding 1 changed what those rows ARE. Broadcasts are now
+    // fanned out into one row per recipient, so `recipient_id` is NOT NULL and
+    // every row the socket can deliver is addressed to exactly one profile.
+    // The subscription stays unfiltered — RLS is still the boundary, and
+    // re-adding a client-side filter is the shape that caused defect 2 — but
+    // the guard below is now an EXACT match rather than "mine or nobody's".
+    // A NULL recipient can no longer exist, so accepting one would mean
+    // trusting a row the current schema says is impossible.
+    let cancelled = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const applyToken = (token: string | undefined) => {
+      if (token) supabase.realtime.setAuth(token);
+    };
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      // A refresh must not silently downgrade the channel back to `anon`.
+      applyToken(session?.access_token);
+    });
+
+    void (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      applyToken(data.session?.access_token);
+
+      channel = supabase
+        .channel(`in-app-notifications:${profileId}:${channelInstanceId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "user_notifications" },
+          (payload) => {
+            const row = payload.new as Record<string, unknown>;
+            const next = asNotification(row);
+            if (!next) return;
+            // Defence in depth, not the boundary: RLS already decided what this
+            // socket may see. Since finding 1 every notification is addressed
+            // to exactly one profile, so this is an exact match — a row with a
+            // missing or foreign recipient is dropped. `recipient_id` is read
+            // from the raw row because the shared UI type deliberately omits it.
+            const recipientId = typeof row.recipient_id === "string" ? row.recipient_id : null;
+            if (recipientId !== profileId) return;
+
+            setItems((current) =>
+              dedupeMenuNotifications([next, ...current.filter((item) => item.id !== next.id)]).slice(0, 20),
+            );
+            setToast(next);
+          },
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      cancelled = true;
+      authListener?.subscription?.unsubscribe();
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [channelInstanceId, enableRealtime, profileId]);
   useEffect(() => {
     if (!toast) return;

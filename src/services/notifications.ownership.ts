@@ -1,54 +1,42 @@
 import type { DemoProfile } from "@/services/session.service";
 
 /**
- * The single tenant-aware ownership predicate for user_notifications
- * (Stage 8, review finding 3).
+ * The single ownership predicate for user_notifications, shared by every read
+ * and every write (Stage 8, review finding 3).
  *
- * Previously two predicates existed: bulk writes got a tenant-scoped one and
- * targeted (by-id) writes kept an untenanted one, so knowing a UUID from
- * another university was enough to mark that row read — and
- * markNotificationReadAndGo additionally followed its target_href. Reads used a
- * third, entirely unscoped shape. One definition now serves every read and
- * every write.
+ * ## Codex round 4, finding 1 — this predicate used to have a second branch
  *
- * ## Semantics
+ * It previously read:
  *
- * A notification row is addressed in exactly one of two ways:
+ * ```
+ * recipient_id.eq.<me>,and(recipient_role.eq.<my role>,school_id.eq.<my tenant>)
+ * ```
  *
- * - **Self-addressed** (`recipient_id = <profile>`): belongs to that profile by
- *   construction. It cannot name anyone else, so it needs no tenant check and
- *   is matched regardless of `school_id`. This also means a row whose
- *   `school_id` was never stamped still reaches its intended recipient.
+ * The second branch matched ROLE-ADDRESSED rows: a single row with
+ * `recipient_id = NULL` that every holder of that role in that tenant shared.
+ * Because `is_read` is a column on the row, the branch also made a peer's read
+ * state writable — one student opening a tenant announcement marked it read for
+ * the entire cohort. Measured live: 14 shared rows, 12 already flipped to read.
  *
- * - **Role-addressed** (`recipient_id IS NULL`, `recipient_role = <role>`):
- *   a shared row for everyone holding that role. It is only in scope when its
- *   `school_id` equals the caller's tenant.
+ * Broadcasts are now fanned out into one row per recipient at creation time
+ * (`notifications.create.service.ts`), `recipient_id` is NOT NULL
+ * (`20260814150000`), and the RLS policies match on identity alone. So the role
+ * branch has no rows left to match and is deleted rather than narrowed — the
+ * predicate is now exactly "rows addressed to me".
  *
- * ## NULL school_id — explicit decision
+ * This is strictly narrower than what it replaces. Nothing a user could
+ * legitimately see or mark before is lost: the broadcast they used to share is
+ * now their own copy of it.
  *
- * `user_notifications.school_id` is nullable by design (D-018): several ungated
- * writers can leave it NULL. A role-addressed row with NULL `school_id` is
- * therefore treated as **undirected legacy data, not a platform-global
- * broadcast** — it matches nothing here, for reads or writes alike. Rationale:
- * a row that cannot be proven to belong to the caller's tenant must not be
- * exposed to it, which is the same fail-closed stance as resolveTenantContext
- * (D-021). Verified at implementation time: 0 such rows exist live, and every
- * role-addressed row carries a school_id.
+ * ## Why the tenant term is gone too
+ *
+ * It is subsumed. A notification is addressed to exactly one profile, and a
+ * profile belongs to exactly one tenant, so matching the recipient already
+ * settles tenancy. The tenant term existed only to bound the role branch.
  *
  * Because reads and writes share this predicate, a user is never shown a
  * notification they would then be unable to mark read.
- *
- * Making `school_id` NOT NULL, so "undirected" becomes unrepresentable, belongs
- * to the D-018 / KI-019 follow-up.
  */
 export function notificationOwnershipFilter(profile: DemoProfile): string {
-  const selfAddressed = `recipient_id.eq.${profile.id}`;
-
-  if (!profile.school_id) {
-    // A tenant-less profile can only ever own self-addressed rows; matching role
-    // broadcasts here would match them platform-wide.
-    return selfAddressed;
-  }
-
-  return `${selfAddressed},and(recipient_role.eq.${profile.role},school_id.eq.${profile.school_id})`;
+  return `recipient_id.eq.${profile.id}`;
 }

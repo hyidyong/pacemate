@@ -35,6 +35,25 @@ const LOG_CAPTURE_STUB = toDataUrl(
    export const classifyPostgresError = () => 'fault';`,
 );
 
+// Stage 9: emitSsoAuditEvent now appends to the durable audit table as well as
+// to stdout, through recordSecurityEvent. The captured "event" for these
+// propagation assertions is still the operational one, so the stub records the
+// same shape and additionally exposes the durable rows for inspection.
+const SECURITY_AUDIT_STUB = toDataUrl(
+  `export const recordSecurityEvent = async (event) => {
+     (globalThis.__capturedAuditRows ??= []).push(event);
+     (globalThis.__capturedEvents ??= []).push({
+       event: event.event,
+       outcome: event.outcome,
+       requestId: event.requestId ?? undefined,
+       profileId: event.actorProfileId ?? undefined,
+       tenantId: event.schoolId ?? undefined,
+       detail: event.detail ?? undefined,
+     });
+   };
+   export const buildSecurityEventRow = () => ({});`,
+);
+
 function captured() {
   return globalThis.__capturedEvents ?? [];
 }
@@ -47,6 +66,7 @@ test("SSO identity events carry the server-minted request id", async () => {
   resetCapture();
   const audit = await compile("../sso/sso-audit.ts", [
     ['from "@/lib/observability/log"', `from ${JSON.stringify(LOG_CAPTURE_STUB)}`],
+    ['from "@/lib/observability/security-audit"', `from ${JSON.stringify(SECURITY_AUDIT_STUB)}`],
   ]);
 
   audit.emitSsoAuditEvent({
@@ -66,6 +86,7 @@ test("the SSO audit allowlist still refuses identity material while carrying the
   resetCapture();
   const audit = await compile("../sso/sso-audit.ts", [
     ['from "@/lib/observability/log"', `from ${JSON.stringify(LOG_CAPTURE_STUB)}`],
+    ['from "@/lib/observability/security-audit"', `from ${JSON.stringify(SECURITY_AUDIT_STUB)}`],
   ]);
 
   audit.emitSsoAuditEvent({

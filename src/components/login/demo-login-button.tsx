@@ -1,30 +1,34 @@
 "use client";
 
-import { useState } from "react";
-import demoUsers from "@/config/demo-users.json";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { signInAsDemoAccount } from "@/services/demo-login.actions";
 
-export function DemoLoginButton() {
+export type DemoLoginAccount = {
+  identifier: string;
+  name: string;
+  role: string;
+};
+
+/**
+ * Stage 9: this component used to `import demoUsers from "@/config/demo-users.json"`,
+ * which put four plaintext passwords — including the admin account's — into the
+ * public login page's JavaScript bundle. It now receives only names, roles and
+ * identifiers from the server, and the sign-in happens in a server action that
+ * looks the password up server-side.
+ */
+export function DemoLoginButton({ accounts }: { accounts: DemoLoginAccount[] }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  const handleDemoLogin = (identifier: string, pass: string) => {
-    // 폼 요소 선택 후 값 채우고 submit 트리거
-    const idInput = document.querySelector('input[name="identifier"]') as HTMLInputElement;
-    const pwInput = document.querySelector('input[name="password"]') as HTMLInputElement;
-    const form = idInput?.closest("form");
+  if (!accounts.length) {
+    return null;
+  }
 
-    if (idInput && pwInput && form) {
-      idInput.value = identifier;
-      pwInput.value = pass;
-
-      // Next.js Server Action을 정상적으로 트리거하기 위해 requestSubmit 사용
-      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
-      if (submitBtn) {
-        form.requestSubmit(submitBtn);
-      } else {
-        form.requestSubmit();
-      }
-    }
+  const handleDemoLogin = (identifier: string) => {
+    startTransition(async () => {
+      await signInAsDemoAccount(identifier);
+    });
   };
 
   return (
@@ -35,16 +39,17 @@ export function DemoLoginButton() {
           {isOpen ? "접기" : "펼치기"}
         </Button>
       </div>
-      
+
       {isOpen && (
         <div className="grid grid-cols-2 gap-2 mt-3">
-          {demoUsers.map((user, idx) => (
+          {accounts.map((user) => (
             <Button
-              key={idx}
+              key={user.identifier}
               variant="outline"
               size="sm"
               className="text-xs justify-start"
-              onClick={() => handleDemoLogin(user.identifier, user.password)}
+              disabled={isPending}
+              onClick={() => handleDemoLogin(user.identifier)}
             >
               {user.name} ({user.role})
             </Button>

@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-// The demo schema grants professor_availability/faqs writes to the anon role
-// only (see supabase/schema.sql "demo anon manage ..." policies), so those
-// writes must keep using the anon browser client until a migration adds
-// authenticated write policies for them.
-import { supabase as anonSupabase } from "@/lib/supabase/client";
+// Stage 9: the `demo anon manage ...` policies these writes used to depend on
+// are gone (20260814010000). A Next.js server action is a POST that runs BEFORE
+// any page renders, so the page-level role guards never protected them — an
+// unauthenticated caller could invoke these directly with a discovered action
+// id. Each one now resolves the caller, proves ownership, and writes under the
+// service role, which is the only role that may touch these tables.
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createUserNotification } from "@/services/notifications.create.service";
@@ -151,9 +152,40 @@ async function resolveOwnedCourse(courseValue: string, profileId?: string | null
   };
 }
 
+/**
+ * Stage 9. The professor whose scheduling data a staff caller may write.
+ *
+ * `professorId` arriving in the form identifies a REQUEST; it is never proof.
+ * A professor may only ever address their own linked `professors` row; an
+ * assistant may address a professor inside their own tenant. Anything else —
+ * no session, wrong role, no tenant, no linked professor row — fails closed.
+ */
+async function authorizeProfessorScopeWrite(requestedProfessorId: string) {
+  const profile = await getDemoProfile();
+
+  if (!profile || (profile.role !== "professor" && profile.role !== "assistant")) {
+    return { ok: false as const, message: "교수 또는 조교 계정만 이용할 수 있습니다." };
+  }
+
+  if (!requestedProfessorId) {
+    return { ok: false as const, message: "교수 정보를 찾을 수 없습니다." };
+  }
+
+  const allowedIds = await resolveCounselingWriteProfessorIds(profile);
+  if (!allowedIds || !allowedIds.includes(requestedProfessorId)) {
+    return { ok: false as const, message: "본인 담당 정보만 관리할 수 있습니다." };
+  }
+
+  return { ok: true as const, profile, professorId: requestedProfessorId };
+}
+
 export async function addProfessorAvailability(formData: FormData) {
   try {
     const professorId = text(formData.get("professorId"));
+    const authorized = await authorizeProfessorScopeWrite(professorId);
+    if (!authorized.ok) {
+      return { ok: false, message: authorized.message };
+    }
     const day = integer(formData.get("dayOfWeek"), 1);
     const specificDate = text(formData.get("specificDate"));
     const startTime = text(formData.get("startTime"), "10:00");
@@ -179,7 +211,7 @@ export async function addProfessorAvailability(formData: FormData) {
       return { ok: false, message: "상담 가능 시간은 18:00 이전으로만 등록할 수 있습니다." };
     }
 
-    const { error } = await anonSupabase.from("professor_availability").insert({
+    const { error } = await createSupabaseAdminClient().from("professor_availability").insert({
       professor_id: professorId,
       day_of_week: day,
       specific_date: specificDate || null,
@@ -202,20 +234,42 @@ export async function addProfessorAvailability(formData: FormData) {
 }
 
 export async function addProfessorFaq(formData: FormData) {
-  const profile = await getDemoProfile();
   const professorId = text(formData.get("professorId"));
+  const authorized = await authorizeProfessorScopeWrite(professorId);
+  if (!authorized.ok) {
+    return { ok: false, message: authorized.message };
+  }
+  const { profile } = authorized;
+
   const courseId = text(formData.get("courseId"));
   const question = text(formData.get("question"));
   const answer = text(formData.get("answer"));
 
-  if (!professorId || !question || !answer) {
+  if (!question || !answer) {
     return { ok: false, message: "질문과 답변을 입력해 주세요." };
   }
 
-  const isTA = profile?.role === "assistant";
+  // An approved FAQ is loaded as grounding evidence for other students' AI
+  // tutor answers (ai-tutor-rag.actions.ts), so an unverified course id here
+  // would publish attacker text as "교수 공식 Q&A" for a course the author has
+  // nothing to do with.
+  if (courseId) {
+    const { data: ownsCourse } = await createSupabaseAdminClient()
+      .from("course_professors")
+      .select("course_id")
+      .eq("professor_id", professorId)
+      .eq("course_id", courseId)
+      .maybeSingle();
+
+    if (!ownsCourse) {
+      return { ok: false, message: "담당 과목에 한해서만 FAQ를 등록할 수 있습니다." };
+    }
+  }
+
+  const isTA = profile.role === "assistant";
   const prefix = isTA ? "[조교 답변] " : "";
 
-  const { error } = await anonSupabase.from("faqs").insert({
+  const { error } = await createSupabaseAdminClient().from("faqs").insert({
     professor_id: professorId,
     course_id: courseId || null,
     question,
@@ -393,6 +447,12 @@ export async function updateCounselingDetails(formData: FormData) {
 
 export async function createRoadmapRevisionRequest(formData: FormData) {
   const profile = await getDemoProfile();
+  // Stage 9: `scope=department` skipped the ownership check entirely, and
+  // `profile` was only ever read with `?.`, so an unauthenticated POST created a
+  // curriculum-change request attributed to "교수" and paged every admin.
+  if (!profile || (profile.role !== "professor" && profile.role !== "assistant")) {
+    return { ok: false, message: "교수 또는 조교 계정만 로드맵 수정을 요청할 수 있습니다." };
+  }
   const scope = text(formData.get("scope"), "course");
   const courseValue = text(formData.get("course"));
   const departmentName = text(formData.get("departmentName"), "법학과");
@@ -424,19 +484,23 @@ export async function createRoadmapRevisionRequest(formData: FormData) {
     ...(weeklyFocus.length ? { weeklyFocus } : {}),
   };
 
-  const supabase = await createSupabaseServerClient();
+  // Session roles no longer hold INSERT on this table (20260814010000): the
+  // approval workflow it feeds publishes content into every student's roadmap,
+  // so writes go through the service role after the checks above.
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("roadmap_revision_requests")
     .insert({
       scope: scope === "department" ? "department" : "course",
+      school_id: profile.school_id,
       status: "pending",
       course_code: scope === "department" ? null : ownedCourse?.courseCode ?? null,
       course_id: scope === "department" ? null : ownedCourse?.courseId ?? null,
       department_name: departmentName,
       title,
       summary,
-      proposed_by: profile?.id ?? null,
-      proposed_by_name: profile?.name ?? "교수",
+      proposed_by: profile.id,
+      proposed_by_name: profile.name,
       source_title: sourceTitle || null,
       source_url: sourceUrl || null,
       proposed_patch: proposedPatch,
@@ -455,6 +519,7 @@ export async function createRoadmapRevisionRequest(formData: FormData) {
     title: "로드맵 수정 승인 요청",
     body: `${title} 요청이 관리자 승인을 기다립니다.`,
     targetHref: `/admin?request=${data.id}`,
+    schoolId: profile.school_id,
   });
 
   revalidatePath("/professor");
@@ -492,6 +557,13 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
     return { ok: false, message: "수정할 내용을 한 가지 이상 입력해 주세요." };
   }
 
+  // The row this writes is self-approved and enters the roadmap overlay, so it
+  // must carry a tenant. resolveOwnedCourse already proved the caller owns the
+  // course; this makes the identity requirement explicit rather than optional.
+  if (!profile?.school_id) {
+    return { ok: false, message: "소속 대학을 확인할 수 없습니다." };
+  }
+
   const proposedPatch = {
     ...(shortReason ? { shortReason } : {}),
     ...(basics.length ? { basics } : {}),
@@ -501,12 +573,18 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
   };
 
   const timestamp = new Date().toISOString();
-  const supabase = await createSupabaseServerClient();
+  // Codex F4 regression: this still used the SESSION client, and Stage 9 revoked
+  // authenticated INSERT on this table, so a professor's direct roadmap edit had
+  // silently started failing. Ownership was already proven by resolveOwnedCourse
+  // above, so the write runs under the service role — and now carries the
+  // tenant, which the approval and overlay paths scope on.
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("roadmap_revision_requests")
     .insert({
       scope: "course",
       status: "approved",
+      school_id: profile.school_id,
       course_code: ownedCourse.courseCode,
       course_id: ownedCourse.courseId,
       department_name: "법학과",
@@ -538,6 +616,11 @@ export async function updateOwnCourseRoadmap(formData: FormData) {
     title: "담당 교수 로드맵 수정 반영",
     body: `${ownedCourse.courseCode} 과목 로드맵이 교수 수정본으로 업데이트됐습니다.`,
     targetHref: "/roadmap",
+    // Codex round 3, F10: a role broadcast with a NULL school_id matches no
+    // reader — the notification read policy requires school_id IS NOT NULL AND
+    // equal to the reader's tenant — so this published to nobody. The tenant is
+    // derived server-side from the authorized professor's own profile.
+    schoolId: profile.school_id,
   });
 
   revalidatePath("/professor");
@@ -614,8 +697,20 @@ export async function deleteProfessorAdminTask(formData: FormData) {
     const id = text(formData.get("id"));
     if (!id) return { ok: false, message: "ID 누락" };
 
+    // The sibling ADD path verifies `professors.id + profile_id`; this one only
+    // checked the role, leaving RLS as the sole control over whose task is
+    // deleted. Constrain the delete to the caller's own professor row.
+    const professor = await getCurrentProfessorForAction(profile.id);
+    if (!professor?.id) {
+      return { ok: false, message: "연결된 교수 정보를 찾을 수 없습니다." };
+    }
+
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.from("professor_admin_tasks").delete().eq("id", id);
+    const { error } = await supabase
+      .from("professor_admin_tasks")
+      .delete()
+      .eq("id", id)
+      .eq("professor_id", professor.id);
     if (error) return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
 
     revalidatePath("/professor");
@@ -633,10 +728,30 @@ export async function toggleProfessorAvailability(formData: FormData) {
 
     if (!id) return { ok: false, message: "ID 누락" };
 
-    const { error } = await anonSupabase
+    // Availability row ids were anon-readable before Stage 9, so this used to be
+    // a platform-wide off switch for counseling: enumerate the ids, flip them
+    // all. Resolve the row's owner and authorize against it before writing.
+    const admin = createSupabaseAdminClient();
+    const { data: row } = await admin
+      .from("professor_availability")
+      .select("professor_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!row) {
+      return { ok: false, message: "상담 시간을 찾을 수 없습니다." };
+    }
+
+    const authorized = await authorizeProfessorScopeWrite(row.professor_id as string);
+    if (!authorized.ok) {
+      return { ok: false, message: authorized.message };
+    }
+
+    const { error } = await admin
       .from("professor_availability")
       .update({ is_active: isActive })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("professor_id", row.professor_id);
 
     if (error) return { ok: false, message: "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요." };
 

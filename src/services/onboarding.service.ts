@@ -1,4 +1,7 @@
-import { supabase } from "@/lib/supabase/client";
+// Stage 9: the `demo anon ...` policies this module relied on are gone
+// (20260814010000). Reads and writes now go through the caller's own
+// session, so RLS enforces ownership and tenancy instead of the anon role.
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DemoProfile } from "@/services/session.service";
 
 export type StudentType =
@@ -25,7 +28,7 @@ export async function getStudentOnboardingProfile(
     return null;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await (await createSupabaseServerClient())
     .from("student_profiles")
     .select(
       "user_types, grade, semester, target_career, interests, weak_basics, completed_courses_text",

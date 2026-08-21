@@ -1,0 +1,472 @@
+{
+  "results": [
+    {
+      "id": "anon-read:profiles",
+      "property": "anon must NOT read profiles (names, login identifiers, roles and tenant of every user)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:student_profiles",
+      "property": "anon must NOT read student_profiles (grade, semester, career goal, interests)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:student_courses",
+      "property": "anon must NOT read student_courses (who studies what)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:student_mission_progress",
+      "property": "anon must NOT read student_mission_progress (per-student weekly progress and free-text feedback)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:student_weekly_progress",
+      "property": "anon must NOT read student_weekly_progress (per-student reflection, private notes)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:student_course_progress",
+      "property": "anon must NOT read student_course_progress (per-student progress)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:counseling_requests",
+      "property": "anon must NOT read counseling_requests (counseling topics — confidential)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:user_notifications",
+      "property": "anon must NOT read user_notifications (closed in Stage 8; regression guard)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:chat_sessions",
+      "property": "anon must NOT read chat_sessions (AI tutor conversations)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:chat_messages",
+      "property": "anon must NOT read chat_messages (AI tutor conversation content)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:escalations",
+      "property": "anon must NOT read escalations (questions asked to professors)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:posts",
+      "property": "anon must NOT read posts (community posts (authenticated-only by design))",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:comments",
+      "property": "anon must NOT read comments (community comments)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — table is EMPTY, absence of rows is not proof of denial"
+    },
+    {
+      "id": "anon-read:post_reactions",
+      "property": "anon must NOT read post_reactions (community reactions)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:reports",
+      "property": "anon must NOT read reports (abuse reports)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — table is EMPTY, absence of rows is not proof of denial"
+    },
+    {
+      "id": "anon-read:professor_admin_tasks",
+      "property": "anon must NOT read professor_admin_tasks (a professor's private task list)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:study_roadmaps",
+      "property": "anon must NOT read study_roadmaps (per-student roadmap)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — table is EMPTY, absence of rows is not proof of denial"
+    },
+    {
+      "id": "anon-read:study_tasks",
+      "property": "anon must NOT read study_tasks (per-student tasks)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — table is EMPTY, absence of rows is not proof of denial"
+    },
+    {
+      "id": "anon-read:roadmap_requests",
+      "property": "anon must NOT read roadmap_requests (per-student roadmap requests)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — table is EMPTY, absence of rows is not proof of denial"
+    },
+    {
+      "id": "anon-read:roadmap_results",
+      "property": "anon must NOT read roadmap_results (per-student roadmap results)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — table is EMPTY, absence of rows is not proof of denial"
+    },
+    {
+      "id": "anon-read:roadmap_revision_requests",
+      "property": "anon must NOT read roadmap_revision_requests (curriculum change workflow)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:professor_question_auto_reply_rules",
+      "property": "anon must NOT read professor_question_auto_reply_rules (a professor's automation rules)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — table is EMPTY, absence of rows is not proof of denial"
+    },
+    {
+      "id": "anon-read:syllabi",
+      "property": "anon must NOT read syllabi (course material — tenant-owned)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:professor_teaching_slots",
+      "property": "anon must NOT read professor_teaching_slots (tenant timetable data)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:professor_availability",
+      "property": "anon must NOT read professor_availability (counseling availability — tenant-owned)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:course_professors",
+      "property": "anon must NOT read course_professors (tenant catalog mapping)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:course_reviews",
+      "property": "anon MAY read course_reviews (public reviews — PUBLIC-BY-DESIGN)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — public by design"
+    },
+    {
+      "id": "anon-read:faqs",
+      "property": "anon MAY read faqs (approved public FAQs — PUBLIC-BY-DESIGN)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — public by design"
+    },
+    {
+      "id": "anon-read:notices",
+      "property": "anon MAY read notices (public notices — PUBLIC-BY-DESIGN)",
+      "pass": true,
+      "detail": "status 401, ? row(s) — public by design"
+    },
+    {
+      "id": "anon-read:schools",
+      "property": "anon MAY read schools (tenant directory needed before login — PUBLIC-BY-DESIGN)",
+      "pass": true,
+      "detail": "status 200, 3 row(s) — public by design"
+    },
+    {
+      "id": "anon-read:departments",
+      "property": "anon must NOT read departments (tenant catalog)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:courses",
+      "property": "anon must NOT read courses (tenant catalog)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-read:professors",
+      "property": "anon must NOT read professors (professor directory incl. email and phone)",
+      "pass": true,
+      "detail": "status 401, ? row(s) visible with the publishable key alone"
+    },
+    {
+      "id": "anon-write:profiles.role",
+      "property": "anon must NOT be able to change a profile (role / tenant / auth binding)",
+      "pass": true,
+      "detail": "PATCH 401; name is now \"pacemate-stage9-probe student a\""
+    },
+    {
+      "id": "anon-write:profiles.insert",
+      "property": "anon must NOT be able to create a profile",
+      "pass": true,
+      "detail": "POST 401; 0 row(s) created (role=admin attempted)"
+    },
+    {
+      "id": "anon-write:professor_availability.toggle",
+      "property": "anon must NOT be able to change counseling availability",
+      "pass": true,
+      "detail": "PATCH 401; is_active is now true"
+    },
+    {
+      "id": "anon-write:professor_availability.insert",
+      "property": "anon must NOT be able to fabricate bookable counseling slots",
+      "pass": true,
+      "detail": "POST 401; 0 fabricated slot(s)"
+    },
+    {
+      "id": "anon-write:user_notifications.insert",
+      "property": "anon must NOT be able to address a notification to an arbitrary user",
+      "pass": true,
+      "detail": "POST 401; 0 spoofed notification(s) delivered"
+    },
+    {
+      "id": "anon-write:student_mission_progress",
+      "property": "anon must NOT be able to rewrite a student's progress",
+      "pass": true,
+      "detail": "PATCH 401; is_completed is now false"
+    },
+    {
+      "id": "anon-write:student_courses",
+      "property": "anon must NOT be able to change a student's enrolment",
+      "pass": true,
+      "detail": "PATCH 401; current_week is now 1"
+    },
+    {
+      "id": "anon-write:student_profiles",
+      "property": "anon must NOT be able to change a student profile",
+      "pass": true,
+      "detail": "PATCH 401; grade is now 1"
+    },
+    {
+      "id": "cross-read:counseling_requests",
+      "property": "B must not read A's counseling request",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:profiles",
+      "property": "B must not read A's profile",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:student_profiles",
+      "property": "B must not read A's student profile",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:student_courses",
+      "property": "B must not read A's enrolment",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:student_mission_progress",
+      "property": "B must not read A's progress",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:user_notifications",
+      "property": "B must not read A's direct notification",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:user_notifications(broadcast)",
+      "property": "B must not read A's tenant broadcast",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:professor_admin_tasks",
+      "property": "B must not read other tenants' professor task lists",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:syllabi",
+      "property": "B must not read other tenants' syllabi",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:courses",
+      "property": "B must not read A's catalog",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-read:professors",
+      "property": "B must not read A's professor directory",
+      "pass": true,
+      "detail": "status 200, 0 row(s)"
+    },
+    {
+      "id": "cross-write:notification",
+      "property": "B must not mark A's notification read",
+      "pass": true,
+      "detail": "PATCH 200; is_read is now false"
+    },
+    {
+      "id": "cross-write:counseling",
+      "property": "B must not cancel A's counseling request",
+      "pass": true,
+      "detail": "PATCH 200; status is now pending"
+    },
+    {
+      "id": "cross-write:availability",
+      "property": "B must not disable A's professor availability",
+      "pass": true,
+      "detail": "PATCH 200; is_active is now true"
+    },
+    {
+      "id": "cross-write:mission",
+      "property": "B must not rewrite A's mission progress",
+      "pass": true,
+      "detail": "PATCH 200; is_completed is now false"
+    },
+    {
+      "id": "cross-write:profile",
+      "property": "B must not edit A's profile",
+      "pass": true,
+      "detail": "PATCH 200; name is now \"pacemate-stage9-probe student a\""
+    },
+    {
+      "id": "allow:A-progress-own-course",
+      "property": "A CAN create progress against their own tenant's course",
+      "pass": true,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "allow:A-roadmap-own-course",
+      "property": "A CAN create a study roadmap for their own tenant's course",
+      "pass": true,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "allow:A-post-own-tenant",
+      "property": "A CAN publish a post in their own tenant",
+      "pass": true,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "allow:A-review-own-course",
+      "property": "A CAN review their own tenant's course",
+      "pass": true,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "cross-write:enrolment-foreign-course",
+      "property": "A must not enrol in tenant B's course",
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "cross-write:mission-foreign-course",
+      "property": "A must not create progress against tenant B's course",
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "cross-write:roadmap-foreign-course",
+      "property": "A must not create a study roadmap against tenant B's course",
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "cross-write:task-foreign-course",
+      "property": "A must not create a study task against tenant B's course",
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "cross-write:post-foreign-tenant",
+      "property": "A must not publish a post into tenant B",
+      "pass": false,
+      "detail": "POST 201; 1 row(s) in the database"
+    },
+    {
+      "id": "cross-write:review-foreign-course",
+      "property": "A must not review tenant B's course",
+      "pass": true,
+      "detail": "POST 403; 0 row(s) in the database"
+    },
+    {
+      "id": "allow:A-reads-own-notification",
+      "property": "A CAN read their own direct notification",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-reads-own-tenant-broadcast",
+      "property": "A CAN read their own tenant's role broadcast",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-reads-own-counseling",
+      "property": "A CAN read their own counseling request",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-reads-own-profile",
+      "property": "A CAN read their own profile",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-reads-own-student-profile",
+      "property": "A CAN read their own student profile",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-reads-own-enrolment",
+      "property": "A CAN read their own enrolment",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-reads-own-tenant-courses",
+      "property": "A CAN read their own tenant's catalog",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-reads-own-tenant-professors",
+      "property": "A CAN read their own tenant's professor directory",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-reads-own-tenant-availability",
+      "property": "A CAN read their own tenant's counseling availability",
+      "pass": true,
+      "detail": "status 200, 1 row(s)"
+    },
+    {
+      "id": "allow:A-marks-own-notification-read",
+      "property": "A CAN mark their own notification read",
+      "pass": true,
+      "detail": "PATCH 200; is_read is now true"
+    }
+  ],
+  "cleanupFailures": [],
+  "residue": {
+    "residue": [],
+    "unverifiable": [],
+    "clean": true
+  }
+}

@@ -32,6 +32,34 @@ async function getProfileId() {
   return profile?.role === "student" ? profile.id : null;
 }
 
+/**
+ * Stage 9 — a course id from a form is a request, not an entitlement.
+ *
+ * `addCourseToSchedule` and `toggleCourseFavorite` wrote `student_courses` with
+ * the SERVICE ROLE using a caller-supplied `courseId`, checking only that the
+ * caller was a student. Course ids were anon-readable, so a student could enrol
+ * in another university's course; every downstream feature that authorizes on
+ * "is enrolled" — course notices, the AI tutor's grounded answers, study guides
+ * — then treated that as permission to read the other tenant's material.
+ */
+async function resolveTenantCourse(courseId: string) {
+  const profile = await getDemoProfile();
+  if (!profile || profile.role !== "student" || !profile.school_id) {
+    return null;
+  }
+  const admin = createStudentCommunitySupabaseClient();
+  if (!admin) return null;
+
+  const { data } = await admin
+    .from("courses")
+    .select("id")
+    .eq("id", courseId)
+    .eq("school_id", profile.school_id)
+    .maybeSingle();
+
+  return data ? { profileId: profile.id, courseId: data.id as string } : null;
+}
+
 function createStudentCommunitySupabaseClient() {
   try {
     return createSupabaseAdminClient();
@@ -144,12 +172,17 @@ function normalizeJoinedStudentCourse(record: unknown): StudentCourseRecord | nu
 }
 
 export async function addCourseToSchedule(formData: FormData) {
-  const profileId = await getProfileId();
   const courseId = requiredText(formData.get("courseId"));
-
-  if (!profileId || !courseId) {
+  if (!courseId) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
+
+  const authorized = await resolveTenantCourse(courseId);
+  if (!authorized) {
+    return { ok: false, message: "우리 학교에서 제공하는 과목만 시간표에 담을 수 있습니다." };
+  }
+  const profileId = authorized.profileId;
+
   const supabase = createStudentCommunitySupabaseClient();
   if (!supabase) {
     return { ok: false, message: "시간표 데이터베이스 설정을 확인해 주세요." };
@@ -460,13 +493,21 @@ export async function toggleFavoriteCourse(formData: FormData) {
 // completed) and never touches schedule slots — favoriting is not the same
 // action as registering.
 export async function toggleCourseFavorite(formData: FormData) {
-  const profileId = await getProfileId();
   const courseId = requiredText(formData.get("courseId"));
   const nextValue = formData.get("nextValue") === "true";
 
-  if (!profileId || !courseId) {
+  if (!courseId) {
     return { ok: false, message: "로그인이 필요합니다." };
   }
+
+  // Same reasoning as addCourseToSchedule: this can INSERT a student_courses
+  // row, so the course must be one this tenant offers.
+  const authorized = await resolveTenantCourse(courseId);
+  if (!authorized) {
+    return { ok: false, message: "우리 학교에서 제공하는 과목만 즐겨찾기할 수 있습니다." };
+  }
+  const profileId = authorized.profileId;
+
   const supabase = createStudentCommunitySupabaseClient();
   if (!supabase) {
     return { ok: false, message: "시간표 데이터베이스 설정을 확인해 주세요." };

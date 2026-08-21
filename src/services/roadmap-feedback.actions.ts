@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase/client";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createUserNotification } from "@/services/notifications.create.service";
 import { getDemoProfile } from "@/services/session.service";
 
@@ -20,6 +20,23 @@ function looksLikeNoise(value: string) {
 
 export async function submitRoadmapFeedback(formData: FormData) {
   const profile = await getDemoProfile();
+  // Stage 9: this action wrote a curriculum-revision row and paged every admin
+  // while treating `profile` as optional, so an unauthenticated POST could
+  // attribute a report to "학생 익명 제보" without limit. A session is now
+  // required, and the course must belong to the caller's own university.
+  if (!profile) {
+    return { ok: false, message: "로그인 후 이용해 주세요." };
+  }
+
+  // Codex round 5, F3. A session was required and the tenant was checked, but
+  // never the ROLE — so a professor, assistant or admin could file a report
+  // that is stored and displayed as "학생 익명 제보" (an anonymous STUDENT
+  // report) and pages every admin. The route is student-facing, but a server
+  // action runs before any page renders, so the route guard protected nothing
+  // here. Same shape as the course-review finding in round 4.
+  if (profile.role !== "student") {
+    return { ok: false, message: "학생만 로드맵 오류를 제보할 수 있습니다." };
+  }
   const courseId = text(formData.get("courseId"));
   const courseCode = text(formData.get("courseCode"));
   const courseName = text(formData.get("courseName"), "과목");
@@ -33,21 +50,33 @@ export async function submitRoadmapFeedback(formData: FormData) {
     return { ok: false, message: "수정이 필요한 내용을 한 문장으로 조금만 더 적어 주세요." };
   }
 
+  const admin = createSupabaseAdminClient();
+  const { data: course } = await admin
+    .from("courses")
+    .select("id, school_id")
+    .eq("id", courseId)
+    .maybeSingle();
+
+  if (!course || course.school_id !== profile.school_id) {
+    return { ok: false, message: "과목 정보를 찾을 수 없습니다." };
+  }
+
   const title = `로드맵 오류 제보: ${courseName}`;
   const summary = reason.slice(0, 500);
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from("roadmap_revision_requests")
     .insert({
       scope: "course",
+      school_id: profile.school_id,
       status: "pending",
       course_code: courseCode,
       course_id: courseId,
       department_name: "법학과",
       title,
       summary,
-      proposed_by: profile?.id ?? null,
-      proposed_by_name: profile?.name ?? "학생 익명 제보",
+      proposed_by: profile.id,
+      proposed_by_name: profile.name,
       source_title: "학생 로드맵 오류 제보",
       source_url: `/roadmap/${courseId}`,
       proposed_patch: {},
@@ -66,6 +95,7 @@ export async function submitRoadmapFeedback(formData: FormData) {
     title: "학생 로드맵 오류 제보",
     body: `${courseName} 로드맵 수정 제보가 들어왔습니다.`,
     targetHref: `/admin?request=${data.id}`,
+    schoolId: profile.school_id,
   });
 
   revalidatePath("/admin");

@@ -15,6 +15,7 @@ import { ProfessorProfileSummary } from "@/components/professor/professor-profil
 // preloaded with the page) and its Suspense seam left direct GETs stuck on the
 // loading fallback. Heavy report internals lazy-load inside the workspace instead.
 import { ProfessorWorkspace } from "@/components/professor/professor-workspace";
+import { AssistantWorkspace } from "@/components/professor/assistant-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,19 @@ export default async function ProfessorPage({
             professorQuestionInbox={professorQuestionInbox}
             roadmapRequests={data.roadmapRequests}
             teachingSlots={data.teachingSlots}
+          />
+        ) : profile?.role === "assistant" ? (
+          /* Codex round 5, F10. `requireRoles` above admits assistants, and the
+             service scopes real tenant counseling data to them — but this
+             branch used to tell them to "log in as a professor", which is both
+             false and an instruction to use somebody else's account. An
+             assistant has no professors row BY DESIGN (KI-017 B-24), so they
+             get a workspace built for that, not the professor one with a
+             fabricated identity. */
+          <AssistantWorkspace
+            schoolName={null}
+            counselingRequests={data.counselingRequests}
+            roadmapRequests={data.roadmapRequests}
           />
         ) : (
           <section className="section">

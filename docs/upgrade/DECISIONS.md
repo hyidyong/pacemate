@@ -1,5 +1,338 @@
 # Architectural Decisions
 
+## D-027 — A test harness that mutates a live project owns a cleanup ledger, and cannot pass without proving it cleaned up
+
+Status: Accepted (Stage 9, Codex review round, 2026-08-14)
+
+Context: the Stage 9 probe built its fixture list locally and only handed it to
+the caller on success, so any mid-provision failure orphaned everything already
+created — including Auth users. Measured with fault injection: 6 of 6 injected
+failures leaked. Cleanup errors were swallowed, residue was printed but never
+affected the exit code, and no network call had a timeout.
+
+Decision: the ledger belongs to the CALLER, not the provisioner. Every resource
+is recorded the instant it exists and before the next operation that can fail;
+the runner's top-level `try` encloses provisioning itself; cleanup is strict LIFO
+(dependency-safe by construction, because children are created after parents);
+nothing is swallowed; and the run exits non-zero on any cleanup failure, any
+residue, or any residue check that could not be PERFORMED. All network calls are
+bounded.
+
+Reason: "we clean up in a finally" is not a safety property when the finally
+cannot see what was created. A probe that cannot prove it cleaned up is not safe
+to point at a live project, whatever its security checks said.
+
+Consequences: fault injection at every provisioning boundary is part of the
+suite (27 tests, offline). NO CRASH SAFETY IS CLAIMED — `finally` does not run on
+SIGKILL; the independent recovery mechanism is the operator-run
+`rls-probe.mjs --sweep`. Any new table the probe can write to must also be added
+to the residue list, which a live leak (4 posts, 2 course_reviews) proved is not
+optional.
+
+**Amended in review round 3 (F1).** This decision claimed "all network calls are
+bounded". That was **not true as written**: the timeout covered the response
+headers only, so a server that sent headers and then stalled mid-body held the
+probe open indefinitely — with the ledger un-run. Three further gaps were found
+at the same time: SIGINT/SIGTERM abandoned the ledger entirely; the GoTrue admin
+listing read only its first page, so residue beyond it reported clean; and the
+host guard accepted any hostname ending in `.supabase.co`, including a lookalike
+such as `<ref>.supabase.co.attacker.example`, which would have sent a
+service-role key to an attacker-controlled host.
+
+The decision now reads: **bounded means the deadline covers the body read**
+(`lib/probe-http.mjs` is the single transport), **cleanup is signal-aware and
+runs exactly once** (`lib/probe-lifecycle.mjs`, latched on a promise, exiting
+130/143), **enumeration pages to exhaustion or throws**, and **the destination
+host is validated exactly**, not by suffix. Crash safety is still not claimed.
+
+## D-030 — Provenance is enforced by column privilege, not by policy predicate
+
+Status: Accepted (Stage 9, Codex review round 3, 2026-08-14)
+
+Context: `course_reviews` and `posts` had UPDATE policies that established
+ownership — "you may update the row you authored". Ownership is a property of
+the *caller*; it says nothing about which row the caller is now claiming to have
+authored. A legitimate owner could rewrite `course_id`, `author_id`,
+`school_id`, `community_type` and `board_key`: the columns that decide where the
+row lives, who wrote it, and how much the reader should trust it. The concrete
+attack is content integrity rather than data theft — a student-authored post
+promoting itself into `course_notice`, which renders to students as official
+course communication.
+
+The obvious fix is a policy predicate comparing new to old. It was rejected.
+
+Decision: revoke table-wide UPDATE from the client roles and grant UPDATE on
+exactly the mutable columns.
+
+```sql
+revoke update on public.course_reviews from authenticated, anon;
+grant update (difficulty, workload, grading_style, team_project, content,
+              updated_at)
+  on public.course_reviews to authenticated;
+```
+
+Reason: three things, in order of importance.
+
+1. **It cannot be reasoned about wrongly.** A predicate expresses "this column
+   must not change" as a comparison that has to be correct for every path —
+   including paths that do not name the column. A privilege expresses it as
+   absence. There is no expression to audit.
+2. **It survives a new policy.** Someone adding a policy later cannot
+   accidentally widen what a role may write, because the grant is the ceiling.
+3. **It is visible in the snapshot.** Column privileges are now dumped and
+   asserted, so re-granting `UPDATE` table-wide fails a test.
+
+The finding that produced this decision is also the reason to distrust the
+alternative. The reported F2 exploit returned 403 and looked blocked. It was
+not: PostgREST was re-checking the post-update row against the SELECT policy and
+rejecting it there. A same-tenant control fixture made the same move succeed
+with 204. **A denial produced by a visibility side effect is not an
+authorization control** — and a policy-predicate fix would have been validated
+against exactly that kind of misleading signal.
+
+Consequences: adding a legitimately mutable column to either table now requires
+a migration to grant it, which will look like friction the first time it
+happens. That is the intended cost. `supabase/security-snapshot.test.mjs`
+asserts the provenance columns are ungranted, so the invariant fails a test
+rather than a review.
+
+## D-031 — An operation that cannot prove it won must not have effects
+
+Status: Accepted (Stage 9, Codex review round 3, 2026-08-14)
+
+Context: two independent lost-update races, found as F5 and F6.
+`updateRoadmapRevisionStatus` matched on id and tenant with no expected prior
+state, so two admins deciding simultaneously **both** succeeded — last write
+wins in the table, but both had already fanned out a student-facing
+notification, and a terminal `approved` could be walked back to
+`assistant_reviewed`. `submitProgressFeedback` advanced a student's week without
+checking the week it read was still current, so a racing submission paid for a
+second AI generation and produced a duplicate guide.
+
+Both would ordinarily be filed as concurrency defects. They are recorded as
+security decisions because in each case **the loser still acted**.
+
+Decision: any state transition whose success has an external effect —
+a notification, an AI call, a publication — is a compare-and-set that names its
+expected prior state, and the effect is conditional on the matched-row evidence:
+
+```ts
+const { data: updated } = await client.from("roadmap_revision_requests")
+  .update(patch)
+  .eq("id", requestId).eq("school_id", profile.school_id)
+  .in("status", legalSources)
+  .select("id, title, course_id, course_code");
+
+if (!updated || updated.length !== 1) redirect(`/admin?result=stale&...`);
+```
+
+Zero matched rows means **stale**, never success. The user is told
+("이미 처리된 요청입니다"), the notification is not sent, and the AI call is not
+made.
+
+Reason: "the update returned no error" is not evidence that the update happened.
+PostgREST reports a zero-row UPDATE as a successful request, so an action that
+ignores the row count cannot distinguish winning from losing — and will
+cheerfully notify students about a decision it did not make. Requiring the
+matched row makes the difference impossible to ignore.
+
+Consequences: legal transitions are now data
+(`src/services/roadmap-transitions.ts`), which makes them reviewable and
+testable in isolation. The fakes in the tests model the CAS honestly — they
+return an empty array for a loser, so the tests can fail. A user who loses a
+race sees a new message rather than a silent no-op, which is a deliberate,
+finding-driven UX change.
+
+## D-032 — Every export of a `"use server"` module is a public endpoint, so pure helpers live elsewhere
+
+Status: Accepted (Stage 9, Codex review round 3, 2026-08-14)
+
+Context: the D-031 fix put the transition matrix and a synchronous
+`legalSourcesFor` helper in `admin-approval.actions.ts`, which carries
+`"use server"`. `next build` failed: *"Server Actions must be async functions."*
+Neither `tsc --noEmit` nor `next lint` caught it — only the production build
+did.
+
+Decision: a `"use server"` module exports **only** async server actions. Any
+pure helper it needs lives in a plain module it imports.
+
+Reason: this is not a style rule dressed up as a build constraint. Next.js
+compiles every export of a `"use server"` module into a remotely invocable
+endpoint with a generated action id that ships in the client bundle. Exporting
+an internal authorization table there asks the framework to publish it as a
+callable surface; the framework refuses to build rather than emit something
+half-callable. Given that Stage 9's central finding was *server actions are
+reachable before any page guard runs*, treating this as a build annoyance rather
+than as a boundary would be exactly the wrong lesson.
+
+Consequences: `src/services/server-action-contract.test.mjs` scans every
+`"use server"` module under `src` and fails on any export that is not an async
+function, allowing `export type`/`interface` (erased) and
+`export const f = async () =>`. It was written RED first and reproduced exactly
+the one offender the build named. The class of defect now fails in the unit
+suite in under a second instead of at the end of a production build.
+
+## D-028 — Ownership is not authorization for a row that references a tenant resource
+
+Status: Accepted (Stage 9, Codex review round, 2026-08-14)
+
+Context: Stage 9 scoped reads by tenant and writes by ownership. "Is this row
+mine?" is perfectly true of an enrolment in another university's course, and
+every feature that authorizes on "is enrolled" then treats that row as
+permission to read the other tenant's material. Five tables were live-exploitable
+over direct PostgREST: student_courses, student_mission_progress, study_roadmaps,
+study_tasks and posts.
+
+Decision: any caller-owned row that references a tenant resource must carry a
+tenant term in WITH CHECK — `app_private.course_in_current_tenant()` /
+`offering_in_current_tenant()`, SECURITY DEFINER with `search_path = ''`. The
+same rule applies to parent references (a study task must hang off a roadmap the
+caller owns). Server-side validation is an additional layer, never the only one,
+because PostgREST bypasses it.
+
+Reason: the app-layer gate added in the same stage was bypassed by a single curl.
+
+Consequences: `supabase/security-snapshot.test.mjs` fails the build if an owning
+policy loses its tenant term. Probes must post WITHOUT
+`Prefer: return=representation` — asking for a representation makes PostgREST
+re-check the row against the SELECT policy and roll back, which manufactures
+403s that vanish when a real attacker omits the header.
+
+## D-029 — Mutations with a workflow are server-only; audit records reference nothing that can damage them
+
+Status: Accepted (Stage 9, Codex review round, 2026-08-14)
+
+Context (a): Stage 5 built a transition matrix, a compare-and-set and a
+notification fan-out for counseling. Stage 9 then authorized the professor
+UPDATE policy by ownership alone, so a professor could PATCH status, times and
+even reassign the request to another tenant's student — bypassing all of it.
+
+Decision (a): revoke, do not reimplement. Every counseling UPDATE already runs
+through the service role after a server-side check, so no client role needs it.
+Restating the Stage 5 matrix as a column-and-state RLS policy would create two
+implementations of one rule that can drift apart.
+
+Context (b): `security_events` used nullable FKs with ON DELETE SET NULL, so
+deleting a profile erased the attribution of every historical event about it.
+
+Decision (b): attribution is an immutable snapshot (`actor_ref`, `school_ref`,
+`actor_role_ref`) written by a BEFORE INSERT trigger, and the FK CONSTRAINTS are
+dropped. Append-only is enforced by a BEFORE UPDATE trigger. Privileged ACLs are
+granted explicitly rather than inherited from platform defaults, and verified in
+both directions.
+
+Reason (b): a nullable FK is a convenience pointer, not a historical record. The
+first attempt kept the FKs and added the append-only trigger, which made a SET
+NULL cascade fail and turned the audit trail into a LOCK ON USER DELETION —
+worse than the original defect, and directly in the way of the erasure path this
+project still owes.
+
+Consequences: audit history begins 2026-08-14. The SSO audit write is now
+awaited rather than fire-and-forget. DELETE remains available to service_role for
+retention pruning, so a compromised service-role key can still remove history —
+stated, not implied. No tamper-proofing is claimed.
+
+## D-024 — Identity is `profiles.auth_user_id`, resolved by private SECURITY DEFINER helpers; the anon role is an explicit one-table allowlist
+
+Status: Accepted (Stage 9, 2026-08-14)
+
+Context: every authenticated RLS policy written before this stage compared
+`auth.uid()` (the GoTrue user id) to a column holding `profiles.id`. Measured
+live: 27 profiles, 4 with `id = auth_user_id`, 19 with no auth user; 0 of 3
+professors where `profiles.auth_user_id = professors.profile_id`. Those
+predicates matched almost nobody. The application worked only because the same
+tables also carried `demo anon ... for all` policies, so the browser fell
+through to the `anon` role. The probe proved it: before the fix a signed-in
+student could not read their own `student_profiles` row.
+
+Decision: one definition of "who is calling", in a schema PostgREST does not
+expose. `app_private.current_profile_id()`, `current_school_id()`,
+`current_user_role()`, `current_professor_id()` — all SECURITY DEFINER with
+`set search_path = ''`, EXECUTE granted to `authenticated` only, resolving
+through `profiles.auth_user_id`. Every repaired policy goes through them.
+`is_professor_of_offering` / `is_student_of_offering` moved into the same schema
+(closing KI-011). The `anon` role then keeps exactly one TABLE privilege in
+`public` — see the round-4 amendment at the end of this decision —:
+SELECT on `schools`, the tenant registry a caller needs before it has an
+identity. The migration asserts that as a postcondition rather than trusting the
+statements above it.
+
+Reason: the ordering is forced. Dropping the anon policies first would have left
+a platform where nobody could read their own data, because the authenticated
+layer had never worked. Repairing identity first makes the authenticated layer
+real, and only then is the anon surface removable.
+
+Consequences: any future policy that writes `auth.uid() = <some profile id
+column>` is a bug; `supabase/migrations/stage9_rls.test.mjs` fails the build if
+that shape returns. Server-side code may no longer use the anon browser client —
+reads go through the session client, and writes that legitimately need a bypass
+go through the service role after an explicit check. A session holding only the
+app cookie without a live GoTrue session now resolves to no profile and is
+redirected to login; that is fail-closed and intended.
+
+## D-025 — Security audit records are a separate, append-oriented table written through the existing logging chokepoints; not tamper-proof, and honestly scoped
+
+Status: Accepted (Stage 9, 2026-08-14)
+
+Context: Stage 8 (D-023) gave the platform structured operational logging to
+stdout. That answers "is the system healthy"; it does not answer "who bound this
+external identity to this profile, and when", which is asked months later. Some
+privileged actions — tenant-wide admin broadcasts, curriculum approvals, hard
+deletes — emitted no record at all.
+
+Decision: `public.security_events`, written only through the two functions that
+already exist as chokepoints (`emitSsoAuditEvent`, and `recordSecurityEvent`
+wrapping `logEvent`), so no call site changes shape. Scope is deliberately
+narrow: events that change identity, privilege, tenant configuration or
+correctness-critical state — never page requests, never per-denial rows. No
+client role holds INSERT, UPDATE or DELETE, and no non-SELECT policy exists;
+reads are limited to a tenant admin's own tenant. `detail` is a short
+classification string bounded to 200 characters so the column cannot become an
+accidental PII sink. The write is best-effort: the operational line is emitted
+first and unconditionally, and a failed insert degrades to `audit.write_failed`
+rather than breaking the audited action.
+
+Reason: option A (platform logs only) was rejected because retention is outside
+our control, events cannot be queried by tenant, and it does nothing for actions
+that emit nothing. Option B costs one table and no call-site churn.
+
+Consequences: the trail is best-effort, not guaranteed, and **is not claimed to
+be tamper-proof** — there is no hash chain and no signature. A compromised
+service-role key can write false rows; it cannot quietly edit or delete true
+ones through anything the browser reaches. History begins 2026-08-14.
+
+## D-026 — Hand-applied schema is repaired at its first point of use, even when that means amending an already-applied migration
+
+Status: Accepted (Stage 9, 2026-08-14)
+
+Context: ten columns existed in the live database and in `supabase/schema.sql`
+but were created by no migration — `posts.school_id`, `board_key`,
+`display_mode`, `anonymous_alias`, `view_count`, `is_resolved`,
+`resolved_by_post_id`, and `counseling_requests.suggested_start`,
+`suggested_end`, `location`. Seven are load-bearing in `src/`, and
+`posts.school_id` is the tenant column that `20260812070000` asserts on and
+`20260813010000` indexes. A database built from the chain therefore aborted at
+migration 41 of 55, which is why no staging environment and no restore rehearsal
+were ever possible.
+
+Decision: the nine columns nothing depends on are added by a new idempotent
+migration (`20260814020000`). `posts.school_id` is added by an
+`add column if not exists` inserted into `20260812070000` itself — the first
+migration that depends on it — because a column created later cannot help a
+fresh rebuild. That edit is a strict no-op on any database where the migration
+has already run, and it does not change what the migration does.
+
+Reason: the alternative (accepting the break) leaves the project with no
+disaster-recovery path and no way to create a non-production database, which is
+the precondition for almost every other deferred item.
+
+Consequences: an already-applied migration file was amended, which is normally
+avoided; the reason is written at the top of that file and guarded by
+`stage9_rls.test.mjs`, which asserts the column is added before it is asserted
+on. **The rebuild itself is UNVERIFIED** — Docker is unavailable, there is no
+`supabase/config.toml`, and the only project is live production. The repair is
+reasoned and unit-guarded, not proven by execution.
+
 ## D-022 — Scalability is bounded queries, bounded requests, and evidence-justified indexes; no new infrastructure
 
 Status: Accepted (Stage 8, 2026-08-13)
@@ -483,3 +816,286 @@ flaky CI.
 Consequences: `npm run build && node scripts/check-bundle-budgets.mjs` is the
 bundle gate; budgets must be revised deliberately in the same commit as an
 intentional size change.
+
+## D-035 — When an invariant cannot be expressed as a policy, move the boundary; do not duplicate it
+
+Status: Accepted (Stage 9, Codex review round 5, 2026-08-14)
+
+Context: `authenticated` held INSERT on `counseling_requests`, and the INSERT
+policy could only check the caller's identity and the professor's tenant. Stage
+5's real invariants — the slot must be canonical, inside the professor's
+availability, of that professor's slot length, within the booking horizon, and
+`status` must start pending — lived in the server action. Five direct-INSERT
+bypasses were confirmed live, all persisting with HTTP 201.
+
+The obvious response is to grow the policy. It was rejected.
+
+Decision: when an invariant cannot be expressed in SQL without reimplementing
+application logic, revoke the client's direct write and let the authorized
+server path be the only way in.
+
+Reason: encoding the slot engine as an RLS predicate means TWO definitions of
+"a valid slot" — one in TypeScript, one in SQL — that must be kept in step
+forever by people who will not remember. Two definitions that can disagree is a
+worse failure mode than the one being fixed, because the disagreement is silent.
+A single authoritative boundary is checkable; two are only hopeful.
+
+Consequences: reads still go through the caller's session, so RLS still bounds
+what a student can SEE — this decision is about writes only. Database
+constraints keep doing what they are good at: the EXCLUDE constraint still
+arbitrates concurrent bookings, because the service role does not bypass
+constraints. And the probe now asserts the five invariants against the Data API
+directly, so a future re-grant fails a security check rather than a unit test.
+
+The same shape already applied to notifications and roadmap revisions in earlier
+rounds. This makes it explicit.
+
+## D-036 — A test that cannot fail is worse than no test
+
+Status: Accepted (Stage 9, Codex review round 5, 2026-08-14)
+
+Context: the security probe's anon-read loop passed the literal `true` as the
+verdict for every table marked "public by design":
+
+```js
+check(`anon-read:${table}`, `anon MAY read ${table}`, true, …)
+```
+
+Four checks could only pass. One recorded PASS against an HTTP 401. They were
+counted in a headline figure — `108/0` — that was then cited across eight
+documents as evidence the platform was safe.
+
+It also hid a second defect. Three of those four entries described tables as
+anon-readable that Stage 9 had deliberately closed. The probe's own metadata
+contradicted the shipped design, and nothing failed, because the branch that
+read the metadata could not fail.
+
+Decision: an assertion whose verdict is a constant `true` is forbidden, and a
+guard scans every probe for the pattern. An allow-path check must prove access —
+a success status AND a specific row the run itself created. A deny-path check
+must have a positive sentinel proving the resource was reachable to begin with.
+
+Reason: a passing test is a claim. A test that cannot fail makes the claim
+without checking it, and does so invisibly, because green is the expected
+colour. The damage is not the missing coverage — it is the confidence.
+
+Consequences: the literal `false` IS allowed, and appears in the
+"read-back FAILED — cannot verify" branches. A constant that can only fail is
+honest: it reports that verification did not happen. A constant that can only
+pass is the bug. The guard flags only `true`, and says why.
+
+Every figure derived from the old loop is withdrawn rather than adjusted. The
+round-5 replacement was 115 checks, 0 failed, but round 6 later withdrew that
+evidence too because private denials still lacked positive sentinel proof. See
+the D-036 round-6 amendment.
+
+## D-037 — Cleanup ownership must be provable, not probable
+
+Status: Accepted (Stage 9, Codex review round 5, 2026-08-14)
+
+Context: every probe run shared one fixed marker string and swept with
+`like.*marker*` — a SUBSTRING match. A genuine post, FAQ or course review whose
+text merely CONTAINED the phrase was a deletion candidate for any run, against
+the live production database. Two concurrent runs could not be told apart, so
+one run's recovery sweep would delete the other's live fixtures mid-flight.
+
+Decision: every execution mints a 128-bit random marker, every fixture carries
+it, and ownership is matched by PREFIX. Auth enumeration is `startsWith`, not
+`includes`, and refuses a prefix shorter than 16 characters. The operator sweep
+must be told what to target — `--run <marker>` for one execution or `--family`
+for the shared prefix — and refuses to guess.
+
+Reason: a destructive operation against a live database should be able to
+demonstrate that each row it deletes belongs to it. "Probably ours" is not a
+property a sweep can have while remaining safe; "created by this execution" is.
+Every run prints its own recovery command on startup, so an interrupted run
+leaves the operator with the exact token rather than a category.
+
+Consequences: recovering from a run whose marker nobody recorded now needs
+`--family`, which is deliberate friction on the only path that can touch more
+than one run's rows. A test seeds bystander rows containing the legacy marker,
+the family prefix and a DIFFERENT run's full marker, and asserts all three
+survive a complete run.
+
+## D-038 — An enforced invariant beats a configured default
+
+Status: Accepted (Stage 9, Codex review round 5, 2026-08-14)
+
+Context: PostgreSQL's built-in default for a FUNCTION is EXECUTE TO PUBLIC, and
+every role inherits PUBLIC. Round 4 responded with `ALTER DEFAULT PRIVILEGES …
+REVOKE EXECUTE ON FUNCTIONS FROM anon`. It had no effect: anon's access came
+through PUBLIC, not through an anon grant, so there was nothing to revoke.
+
+Worse, a default ACL is keyed on the role that CREATES the object, and
+`pg_default_acl` holds separate rows here for `postgres` and `supabase_admin`.
+The migration connection is not a member of the latter, so one creation path
+could not be configured at all. After setting the postgres default correctly, a
+newly created function STILL arrived with `=X/postgres`.
+
+Decision: enforce the invariant with an event trigger on `ddl_command_end` that
+revokes EXECUTE from PUBLIC and anon after every CREATE/ALTER FUNCTION in the
+schemas this repository owns. Default privileges are still set where we have
+membership, as defence in depth.
+
+Reason: a default is advice to whoever creates the object. An event trigger is a
+rule about the object. When you cannot enumerate every creator — and here we
+demonstrably cannot — only the second is a control. It also fails in the safe
+direction: a function that needs anon EXECUTE requires an explicit, reviewable
+grant afterwards, rather than getting it by omission.
+
+Consequences: verification could not live in the installing migration, because
+an event trigger created in a transaction does not fire for DDL later in that
+same transaction; nor could the probe functions be created inside a `DO` block,
+where the trigger also did not fire. `20260814230000` therefore creates them as
+top-level statements in its own transaction and asks the database who may
+execute them. The snapshot captures `pg_default_acl` and `pg_event_trigger`, and
+one guard deliberately RECORDS that the supabase_admin default still grants
+anon — so nobody removes the trigger believing the defaults are sufficient.
+
+## D-033 — A shared row cannot carry per-person state
+
+Status: Accepted (Stage 9, Codex review round 4, 2026-08-14)
+
+Context: a tenant-wide notification was stored ONCE, with
+`recipient_id = NULL`, `recipient_role = <role>` and `school_id = <tenant>`.
+Every holder of that role read the same row — and `is_read` is a column on the
+row. So the first student to open an announcement marked it read for the entire
+cohort. Measured live: 14 shared rows, 12 of them already flipped.
+
+The RLS policy was not bypassed. Its USING and WITH CHECK both matched the role
+branch, so writing a peer's read state was the designed behaviour.
+
+Decision: state that belongs to a person lives on a row that belongs to that
+person. A broadcast is fanned out into one row per recipient at the single
+creation chokepoint, `recipient_id` is NOT NULL, and the RLS predicate is
+`recipient_id = current_profile_id()`.
+
+Reason: the alternative — keeping the shared payload and adding a per-profile
+receipts table — was rejected on evidence, not taste. The platform already fans
+out (`sendAdminBroadcastNotification` has always written one row per profile),
+so the shared row was the exception. Fan-out makes the defect
+UNREPRESENTABLE rather than merely fenced off: with a NOT NULL recipient there
+is no multi-recipient row for a shared flag to live on. And it lets the policy
+collapse to identity, deleting the role/tenant branch — the thing that made a
+peer's row writable — instead of narrowing it. A receipts table would have left
+the shared row in place, added a join to every read, and required the unread
+counts, mark-all-read and the Realtime subscription all to be re-verified.
+
+Consequences: N rows per broadcast instead of 1, bounded by the number of
+profiles holding one role in one tenant (tens, today). A broadcast that resolves
+to no eligible recipient now FAILS rather than silently writing nothing. The
+backfill carried the shared `is_read` forward to every recipient, which is
+knowingly imprecise — the database cannot know who actually read it — and is
+documented in the migration rather than presented as exact.
+
+## D-034 — A privilege is what the database computes, not what the ACL string says
+
+Status: Accepted (Stage 9, Codex review round 4, 2026-08-14)
+
+Context: the security snapshot captured each function's raw `proacl`. When a
+function is created without an explicit revoke, `proacl` is NULL, and the dump
+rendered that as the literal `"DEFAULT"`. PostgreSQL's default for a FUNCTION is
+EXECUTE GRANTED TO PUBLIC, and every role inherits PUBLIC. So the single most
+dangerous regression available — a new SECURITY DEFINER function callable by
+`anon` — would have appeared in the snapshot as `"DEFAULT"`, indistinguishable
+from a function nobody can call.
+
+Decision: security snapshots record COMPUTED effective privileges —
+`has_table_privilege` and `has_function_privilege` per role — alongside the raw
+grants, and the guards assert on the computed values.
+
+Reason: an ACL string is a serialisation of one grant record. The question a
+security guard needs answered is "can this role do this, by any route" —
+explicit grant, PUBLIC, or role inheritance. Only the database can answer that,
+and it will. Recording the string and hoping to interpret it later is how the
+`"DEFAULT"` blind spot existed at all.
+
+Consequences: the guard justified itself on its first run by finding two
+demo-era RPCs `anon` could still execute, which the table-only anon closure
+(`20260814010000`) had never looked at. Two further guards follow the same
+principle: no client role may hold TRUNCATE (which RLS cannot restrain and which
+no ACL-name check would have flagged as different from DELETE), and the identity
+helpers must REMAIN executable by `authenticated` — a least-privilege sweep that
+takes RLS down with it is not a fix, so the snapshot asserts both directions.
+
+## D-027 amendment (round 4) — what "bounded" and "cleaned up" actually mean
+
+Status: Amended (Stage 9, Codex review round 4, 2026-08-14)
+
+Round 3 amended this decision once already, to say that "bounded" must cover the
+body read. Round 4 found two more gaps in the same decision, both of the same
+shape — a guarantee that held only if something else co-operated:
+
+1. **The deadline depended on the transport.** It worked by aborting an
+   `AbortController`, which only helps if the `fetch` implementation honours the
+   signal. A transport that ignores it, or a body stream that never settles,
+   left the await hanging forever with the timer already fired. The timeout is
+   now raced independently of the abort, so it fires regardless.
+2. **Cleanup raced the work it was cleaning up.** The signal handler began
+   deleting the moment a signal arrived, while requests were still in flight, so
+   a create already on the wire could commit after cleanup had looked. Cleanup
+   now QUIESCES first: cancel the shared scope, wait (bounded) for the body to
+   stop, then delete. If the body will not stop, cleanup still runs but the run
+   FAILS — we cannot prove nothing was created afterwards.
+
+And one case neither covered: a mutating request that times out MAY have
+committed. "It failed" and "I do not know" are different answers. The transport
+now marks that case `ambiguous`, and teardown always runs a marker sweep after
+the ledger, so a row whose id the client never learned is still found. A run is
+clean only when the ledger, the sweep and residue verification all agree.
+
+Crash safety is still NOT claimed.
+
+## D-036 amendment (round 6) — denial evidence starts with a positive object
+
+Status: Amended (Stage 9, Codex review round 6, 2026-08-15)
+
+Round 5 removed literal-success assertions but still allowed a private read to
+pass when the table was empty, privileged verification failed, or an unrelated
+HTTP error occurred. Absence was being interpreted as isolation.
+
+Decision: every isolation denial first proves the exact controlled sentinel is
+readable by an authorized verifier. The unauthorized lookup then must match the
+specific contract for that table: exact 401/403 for the private anon checks, or
+HTTP 200 containing the exact sentinel for public `schools`. Missing data,
+malformed bodies, transport errors and generic 400/500 responses fail.
+
+Consequences: the round-5 `115/0` evidence is withdrawn. A new corrected run
+also measured 115/0, but it is a separate execution and the equal total is
+coincidental.
+
+## D-027 amendment (round 6) — wrapper settlement is not remote settlement
+
+Status: Amended (Stage 9, Codex review round 6, 2026-08-15)
+
+Round 5 waited for the wrapper promise, but a non-cooperative underlying request
+could still commit after the only cleanup pass. AbortSignal is a cancellation
+request, never proof that a remote write stopped.
+
+Decision: track the underlying mutating attempt in an operation registry. On an
+ambiguous timeout, run ordinary teardown, wait only for a bounded recovery
+window, and re-sweep/re-verify the exact run after late settlement. If the
+attempt remains unresolved, exit non-zero and emit the immutable run marker and
+exact recovery command. Exact-run ownership remains strict; structured family
+recovery is a separate explicit operator path and never a broad substring
+predicate.
+
+Consequences: a late commit within the bounded recovery phase is removed and
+proven absent. A commit after process death remains operator-recoverable by its
+marker, but crash/SIGKILL/OOM/power-loss safety is not claimed.
+
+## D-038 amendment (round 6) — an event trigger is its exact handler
+
+Status: Amended (Stage 9, Codex review round 6, 2026-08-15)
+
+An unqualified handler name did not prove which function an event trigger
+executed. A same-named function in another schema could preserve apparent
+snapshot state while changing the security boundary.
+
+Decision: event-trigger snapshots bind event name/type/tags/enabled state and
+definition to the handler's schema/name/args, owner, body hash, SECURITY
+DEFINER/INVOKER mode, config/search path, raw ACL and effective EXECUTE ACL.
+
+Consequences: handler schema, body, owner, mode, config, ACL, tags, enabled
+state, definition or removal all produce drift. Three unchanged live dumps were
+byte-identical.
